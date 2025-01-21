@@ -1,0 +1,64 @@
+TODO: Implement support for Linux.
+
+TODO: Implement support for Vulkan 1.3.
+
+TODO: Unit tests.
+
+TODO: Write documentation.
+
+TODO: Helper functions/classes for common 3D rendering operations, such as parsing mesh files, provide common material shaders/pipelines, etc.
+
+TODO: Move the D3D12 and Vulkan implementations into separate files. igloD3D12.cpp and igloVulkan.cpp.
+TODO: Move the Windows and Linux implementations into separate files. igloWin32.cpp and igloLinux.cpp.
+TODO: Maybe rename the iglo source files to a more readable "iglo_utility.cpp" instead of "igloUtility.cpp"?
+
+TODO: A tool to convert a bmfont .fnt text file to an iglo PrebakedFontData struct or iglo prebaked font file.
+      iglo uses STB's font rasterizer to rasterize glyphs in real time, but BMFont can rasterize glyphs at smaller font sizes better.
+      So this would be useful for users who want to use BMFont to rasterize glyphs instead of STB.
+      BMFont webpage: https://www.angelcode.com/products/bmfont/
+
+TODO: Implement support for loading DDS textures that use BC6 and BC7 block compression formats.
+
+TODO: The BaseCamera class can probably be improved somewhat.
+
+TODO: In D3D12, using CreatePlacedResource() is faster than using CreateCommittedResource().
+      Since iglo D3D12 currently uses CreateCommittedResource, it creates textures/buffers a bit slower.
+      To make it faster, we need to write a resource heap memory manager from scratch.
+
+TODO: Ability to change window cursors and to hide window cursor.
+
+TODO: Ability for window to fully capture mouse. This is required for first person shooter games.
+
+TODO: The FrameRateLimiter class should allow you to choose how you want to limit the FPS.
+      enum class FrameRateLimiterMethod
+      {
+          CPUSpinning = 0, // Uses CPU spinning only. The most accurate method. Uses 100% CPU usage.
+          Hybrid, // The default and recommended method. Uses both CPU spinning and micro second sleeps. Good balance between CPU usage and accuracy.
+          Sleep, // Consumes no CPU usage, but is not very accurate.
+      }
+      Should 'Sleep' use one big sleep, or many small sleeps? I'm leaning towards one big sleep.
+
+TODO: For more advanced text functionality, i have two future classes in mind: ig::FormattedText and ig::InputText.
+      A single ig::Text class isn't enough for all use cases. That's why we need 2 text classes.
+      •ig::FormattedText: text.SetResourceManager(&formattedTextResourceManager);
+                          text.SetFormattedText("some <i>italic</i> text and <color=Blue>colored</color> text and <fontSize=48>large</fontSize>").
+                          Uses ScaledSprites vertices and draws with BatchRenderer.
+                          Is not meant for super large amounts of text, and is not meant for continuously appending text (such as chatboxes and logs).
+                          Supports scrolling, text.SetScrollX() and text.SetScrollY().
+                          It doesn't have to recalculate all vertices when scrolling, i think.
+                          Supports wordwrap and text alignment (such as top, topleft, center, bottom, bottomright, left, right, etc...).
+                          Supports inserting sprites in the text.
+                          Uses per-vertex scaling, so fonts of different sizes in the same text can be scaled to appear as the same font size.
+      •ig::InputText: Optimized for appending text many times and text metrics (inputboxes/textboxes).
+                      Only supports topleft alignment (and maybe also topcenter alignment) and only 1 font at a time.
+                      Doesn't have to recalculate all vertices when new text is appended.
+                      Supports scrolling (doesn't have to recalculate all vertices when scrolling, i think).
+                      Supports text metrics (such as converting XY position to character index and vice versa).
+      I haven't decided whether you should draw text like this: formattedText.Draw(batchRenderer)
+      or like this: batchRenderer.DrawFormattedText(formattedText).
+      User can manually adjust the world matrix of batchrenderer to position the text without needing to rebuild vertices.
+      When implementing ig::FormattedText, it would be a good idéa to reuse some code from the function 'DrawAlignedStringInsideRect()'
+      which already handles wordwrap and text alignment logic.
+      It's important that the texture coords used in ScaledSprite vertex is pixel based (1 unit = 1 texture pixel),
+      so that any previously built text vertices doesn't get invalidated when the font atlas texture grows in size.
+
