@@ -70,7 +70,7 @@ The Vulkan implementation is still in progress, and currently, **iglo supports o
 
 ### Requirements
 
-These are the minimum system requirements needed to run an iglo app.
+These are the minimum system requirements needed to run an iglo app:
 
 - Windows 10 (version 1909 or later)
 - Shader model 6.6 capable graphics card and graphics drivers
