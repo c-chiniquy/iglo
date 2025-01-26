@@ -21,9 +21,8 @@ This document contains my personal thoughts behind various design decisions i ha
 - iglo shouldn't support runtime shader compilation, it's a bad practice imo (needless waste of CPU).
   Windows Store doesn't support apps that compile shaders at runtime.
 
-- Exclusive fullscreen mode is a thing of the past.
+- Exclusive fullscreen mode is a thing of the past, and iglo should not support it.
   D3D12 doesn't support it, and windows 10 will "pretend" to be in exclusive fullscreen mode for games that try to enter exclusive fullscreen mode.
-  iglo should not support exclusive fullscreen mode.
 
 # Coding guidelines
 
