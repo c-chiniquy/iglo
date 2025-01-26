@@ -1,6 +1,6 @@
 # iglo
 
-iglo (Intuitive Graphics Layer Open-source) is a public domain rendering abstraction layer for low-level graphics APIs such as D3D12 and Vulkan. The goal is to make these low level graphics APIs more intuitive and fun to use, while still allowing you to take full advantage of them.
+iglo (Intuitive Graphics Layer Open-source) is a low-level, public domain C++ rendering abstraction layer for D3D12 and Vulkan. The aim of iglo is to make these low level graphics APIs more intuitive and fun to use, without limiting their full potential. iglo also manages window creation and input.
 
 The Vulkan implementation is still in progress, and currently, **iglo supports only D3D12**.
 
