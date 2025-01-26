@@ -23,7 +23,7 @@ This document contains my personal thoughts behind various design decisions i ha
 
 - Exclusive fullscreen mode is a thing of the past.
   D3D12 doesn't support it, and windows 10 will "pretend" to be in exclusive fullscreen mode for games that try to enter exclusive fullscreen mode.
-  iglo should only support borderless fullscreen mode.
+  iglo should not support exclusive fullscreen mode.
 
 # Coding guidelines
 
