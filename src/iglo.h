@@ -1553,7 +1553,7 @@ namespace ig
 
 
 #ifdef IGLO_D3D12
-		// 3 of each: Graphics, Compute, Copy
+		// One of each: Graphics, Compute, Copy
 		ComPtr<ID3D12CommandQueue> d3d12CommandQueue[3];
 		ComPtr<ID3D12Fence> d3d12Fence[3];
 		uint64_t d3d12FenceValue[3] = {};
