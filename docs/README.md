@@ -232,7 +232,7 @@ You can now build and run your iglo project!
 
 ## Contributing
 
-You contributions are greatly appreciated! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on how to contribute to this project.
+Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on how to contribute to this project.
 
 ## Authors
 
