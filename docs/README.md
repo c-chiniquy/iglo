@@ -42,7 +42,7 @@ The Vulkan implementation is still in progress, and currently, **iglo supports o
 
 ## Gallery
 
-> The `Lighting and Shadows` example project demonstrates how to render shadows.
+> The `Lighting and Shadows` example project.
 ![](images/example-projects/LightingAndShadows.png)
 
 <details>
@@ -60,7 +60,7 @@ The Vulkan implementation is still in progress, and currently, **iglo supports o
 ![](images/example-projects/HelloBatchRenderer6.png)
 ![](images/example-projects/HelloBatchRenderer7.png)
 
-> The `Hello cube` and `Hello world` example projects are the two simplest example projects.
+> The `Hello cube` and `Hello world` example projects.
 ![](images/example-projects/HelloCube.png)
 ![](images/example-projects/HelloWorld.png)
 
