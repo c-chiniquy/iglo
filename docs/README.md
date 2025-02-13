@@ -38,7 +38,7 @@ The Vulkan implementation is still in progress, and currently, **iglo supports o
   - Can load .ttf and .otf files.
   - Can load pre-baked font files (pre-rendered glyph atlases).
   - Supports signed distance fields with glow and outline effects.
-- Handles window and input (mouse/keyboard).
+- Manages the window and handles mouse/keyboard input.
 
 ## Gallery
 
