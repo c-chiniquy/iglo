@@ -61,7 +61,7 @@ Prefer using `std::vector` over `std::unique_ptr` for dynamic arrays.
 
 ### Using vectors efficiently
 
-- Move vector without any copying happening: `vectorA.swap(vectorB);`
+- Move vector without any copying happening: `vectorA.swap(vectorB);`\
   std::move does not guarantee that a pointer pointing to an element in the vector remains valid. This is why std::swap is preferred over std::move.
 - Deallocate vector:
   ```
