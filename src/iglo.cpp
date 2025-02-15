@@ -4904,10 +4904,9 @@ namespace ig
 			break;
 		}
 
-		//Disable MessageBeep on Invalid Syskeypress
+		// Disable MessageBeep on Invalid Syskeypress
 		case WM_MENUCHAR:
 			return MNC_CLOSE << 16;
-			break;
 
 		case WM_PAINT:
 			// Use the modal loop callback if there is a modal operation active
