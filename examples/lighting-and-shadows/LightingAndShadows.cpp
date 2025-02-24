@@ -631,6 +631,9 @@ void RenderUI()
 {
 	r.Begin(cmd);
 	{
+		// Use point sampling for textures
+		r.SetSamplerToPixelatedTextures();
+
 		// Draw light source as a circle
 		{
 			ig::Vector4 lightPos = ig::Vector4(light.position.x, light.position.y, light.position.z, 1.0f);
@@ -762,9 +765,27 @@ void Draw()
 		cmd.SetScissorRectangle(context.GetWidth(), context.GetHeight());
 		r.Begin(cmd);
 		{
-			// Clamping is used to prevent visual artifacts on the edges of the texture
-			// in cases were the source texture has a different size than the destination.
-			r.SetSamplerToSmoothClampedTextures();
+			if (sceneRender.GetWidth() != context.GetWidth() ||
+				sceneRender.GetHeight() != context.GetHeight())
+			{
+				// Use anisotropic filtering with clamping if source and dest texture are different sizes.
+				// Anisotropic filtering makes the texture look smooth when stretched.
+				// Clamping is used to prevent visual artifacts on the edges of the texture.
+				//
+				// In this example project, the render target texture will always have the same size as the back buffer.
+				// But for more serious projects, render targets can sometimes be lower resolution than the back buffer.
+				// An example of this is when borderless fullscreen mode is active, but user has chosen
+				// an internal rendering resolution lower than the monitor resolution.
+				// Remember, borderless fullscreen mode will force the back buffer to be the same size as the monitor resolution.
+				r.SetSamplerToSmoothClampedTextures();
+			}
+			else
+			{
+				// If source and dest texture are the same size, use point sampling (fastest).
+				// The performance difference between anisotropic filtering and point sampling isn't huge,
+				// but there are no visual differences between the two in this case, so might as well get that extra +1% FPS.
+				r.SetSamplerToPixelatedTextures();
+			}
 
 			// Either draw the resolved texture or the render texture, depending on whether MSAA is enabled or not
 			r.DrawTexture(enableMSAA ? sceneResolved : sceneRender, 0, 0, (float)context.GetWidth(), (float)context.GetHeight(),
