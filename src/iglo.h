@@ -7,7 +7,7 @@
 #pragma once
 namespace ig
 {
-	static const char* igloVersion = "iglo v0.1.0";
+	static const char* igloVersion = "iglo v0.1.1";
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////
