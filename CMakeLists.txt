@@ -97,8 +97,6 @@ function(add_example name)
         target_link_options(${name} PRIVATE "/SUBSYSTEM:WINDOWS")
         # no filter for example project source files
         source_group(" " FILES ${sources})
-        # include Agility SDK props
-        set_target_properties(${name} PROPERTIES VS_USER_PROPS ${AGILITY_SDK_PATH}/build/native/Microsoft.Direct3D.D3D12.props)
     endif()
 
     target_include_directories(${name} PRIVATE 
