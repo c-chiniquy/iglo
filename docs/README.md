@@ -77,22 +77,12 @@ These are the minimum system requirements needed to run an iglo app:
 
 ### Windows
 
-Follow these steps to build and run the iglo example projects on Windows:
+We use CMake as our build system. Follow these steps to build and run the iglo example projects on Windows:
 
-1. Download and install [Visual Studio](https://visualstudio.microsoft.com/downloads/). The minimum required version is Visual Studio 2019. Make sure to include the "Desktop development with C++" workload during installation.
+1. Ensure you have [CMake](https://cmake.org/download/) installed and accessible from the command line. Version 3.22 or higher is required.
 
-2. Download and install the Windows x64 Installer for [CMake](https://cmake.org/download/). Version 3.22 or higher is required. Ensure that CMake is accessible from the command line.
-
-3. Download [nuget.exe](https://learn.microsoft.com/en-us/nuget/install-nuget-client-tools?tabs=windows#nugetexe-cli).
-   
-4. Add `nuget.exe` to your system's environment PATH.
-
-5. Run `build.cmd` to generate the Visual Studio project files using CMake. The generated project files will appear in a folder named `build`. 
-   - **Note**: An internet connection is required during this step for NuGet to download Agility SDK (required for D3D12). The Agility SDK package will also be placed in the `build` folder.
-
-6. After the script completes, it will automatically open the Visual Studio solution file. From there, you can build and run the projects.
-
-**Other IDEs**: These steps are tailored for Visual Studio, but you can build for other IDEs if you want. Just run CMake commands manually to generate project files for your chosen IDE. Note that the compatibility with IDEs other than Visual Studio is not guaranteed, as this is the only IDE tested so far.
+2. Run `build.cmd` to generate the Visual Studio 2019 project files using CMake. The generated project files will appear in a folder named `build`. 
+   - **Note**: An internet connection is required during this step for CMake to download Agility SDK (required for D3D12). The Agility SDK package will also be placed in the `build` folder.
 
 ### Linux
 
