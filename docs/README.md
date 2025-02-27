@@ -79,10 +79,15 @@ These are the minimum system requirements needed to run an iglo app:
 
 Follow these steps to build and run the iglo example projects on Windows:
 
-1. Ensure you have [CMake](https://cmake.org/download/) installed and accessible from the command line. Version 3.22 or higher is required.
-
-2. Run `build.cmd` to generate the Visual Studio 2019 project files using CMake. The generated project files will appear in a folder named `build`. 
-   - **Note**: An internet connection is required during this step for CMake to download Agility SDK (required for D3D12). The Agility SDK package will also be placed in the `build` folder.
+- Install [CMake](https://cmake.org/download/). Version 3.22 or higher is required.
+- Ensure CMake is accessible from the command line. 
+- For Visual Studio: Run `build.cmd`. Generated project files will appear in `/build/`. 
+   - **Note**: An internet connection is required. CMake will download AgilitySDK and place it in `/build/`.
+- For other:
+  ```
+  cmake -S . -B build
+  cmake --build build --config Release
+  ```
 
 ### Linux
 
@@ -218,7 +223,7 @@ You can now build and run your iglo project!
 - [stb_truetype.h](https://github.com/nothings/stb/)
 - [stb_image.h](https://github.com/nothings/stb/)
 - [stb_image_write.h](https://github.com/nothings/stb/)
-- [Vegur font (used as iglo's default font)](https://www.fontspace.com/vegur-font-f7408)
+- [Vegur font](https://www.fontspace.com/vegur-font-f7408) (used as iglo's default font)
 
 ## Contributing
 
