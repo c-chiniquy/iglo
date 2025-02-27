@@ -85,7 +85,7 @@ Follow these steps to build and run the iglo example projects on Windows:
 - For other:
   ```
   cmake -B build
-  cmake --build build --config Release
+  cmake --build build
   ```
 - CMake will automatically download AgilitySDK if needed and place it in the build folder.
 
