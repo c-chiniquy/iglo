@@ -77,7 +77,7 @@ These are the minimum system requirements needed to run an iglo app:
 
 ### Windows
 
-We use CMake as our build system. Follow these steps to build and run the iglo example projects on Windows:
+Follow these steps to build and run the iglo example projects on Windows:
 
 1. Ensure you have [CMake](https://cmake.org/download/) installed and accessible from the command line. Version 3.22 or higher is required.
 
