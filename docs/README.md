@@ -82,12 +82,12 @@ Follow these steps to build and run the iglo example projects on Windows:
 - Install [CMake](https://cmake.org/download/). Version 3.22 or higher is required.
 - Ensure CMake is accessible from the command line. 
 - For Visual Studio: Run `build.cmd`. Generated project files will appear in `/build/`. 
-   - **Note**: An internet connection is required. CMake will download AgilitySDK and place it in `/build/`.
 - For other:
   ```
   cmake -S . -B build
   cmake --build build --config Release
   ```
+- CMake will download AgilitySDK and place it in the build folder.
 
 ### Linux
 
