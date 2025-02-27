@@ -6,9 +6,6 @@ project(iglo LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# set desired agility SDK version here
-set(AGILITY_SDK_VERSION "1.715.1-preview")
-
 # iglo source files
 set(IGLO_SOURCES
     ${CMAKE_SOURCE_DIR}/src/iglo.h
@@ -26,35 +23,56 @@ set(IGLO_SOURCES
     ${CMAKE_SOURCE_DIR}/src/igloConfig.h
 )
 
-# NuGet is required
-find_program(NUGET_EXECUTABLE nuget.exe REQUIRED)
-if (NOT NUGET_EXECUTABLE)
-    message(FATAL_ERROR "nuget.exe is required but not found. Please ensure it is in the PATH.")
-endif()
+# set Agility SDK version
+set(AGILITY_SDK_VERSION "1.715.1-preview")
 
-# download AgilitySDK
-set(AGILITY_SDK_PACKAGE_DIR "${CMAKE_BINARY_DIR}/packages")
-if (NOT EXISTS "${AGILITY_SDK_PACKAGE_DIR}")
-    execute_process(
-        COMMAND ${NUGET_EXECUTABLE} install Microsoft.Direct3D.D3D12 -Version ${AGILITY_SDK_VERSION} -Prerelease -OutputDirectory ${AGILITY_SDK_PACKAGE_DIR}
-        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+# set download URL for Agility SDK
+set(AGILITY_SDK_URL "https://www.nuget.org/api/v2/package/Microsoft.Direct3D.D3D12/${AGILITY_SDK_VERSION}")
+
+# set the path where the SDK will be downloaded and extracted
+set(AGILITY_SDK_PACKAGE_DIR "${CMAKE_BINARY_DIR}/packages/Microsoft.Direct3D.D3D12.${AGILITY_SDK_VERSION}")
+set(AGILITY_SDK_NUPKG_FILE "${CMAKE_BINARY_DIR}/Microsoft.Direct3D.D3D12.${AGILITY_SDK_VERSION}.nupkg")
+
+# download the .nupkg file if it doesn't exist
+if(NOT EXISTS "${AGILITY_SDK_NUPKG_FILE}")
+    message(STATUS "Downloading Agility SDK from NuGet...")
+    file(DOWNLOAD
+        ${AGILITY_SDK_URL}
+        ${AGILITY_SDK_NUPKG_FILE}
+        TLS_VERIFY ON
+        STATUS download_status
     )
+    list(GET download_status 0 status_code)
+    if(NOT status_code EQUAL 0)
+        message(FATAL_ERROR "Failed to download Agility SDK. Check your internet connection.")
+    endif()
+    message(STATUS "Successfully downloaded Agility SDK.")
 endif()
 
-# see if it succeeded
-set(AGILITY_SDK_PATH "${AGILITY_SDK_PACKAGE_DIR}/Microsoft.Direct3D.D3D12.${AGILITY_SDK_VERSION}")
-if (NOT EXISTS "${AGILITY_SDK_PATH}")
-    message(FATAL_ERROR "Failed to download Agility SDK. Ensure nuget.exe is correctly configured.")
+# extract the .nupkg file if it hasn't been extracted yet
+if(NOT EXISTS "${AGILITY_SDK_PACKAGE_DIR}")
+    message(STATUS "Extracting Agility SDK...")
+    file(MAKE_DIRECTORY ${AGILITY_SDK_PACKAGE_DIR})
+    execute_process(
+        COMMAND ${CMAKE_COMMAND} -E tar xzf ${AGILITY_SDK_NUPKG_FILE}
+        WORKING_DIRECTORY ${AGILITY_SDK_PACKAGE_DIR}
+        RESULT_VARIABLE result
+    )
+    if(NOT result EQUAL 0)
+        message(FATAL_ERROR "Failed to extract Agility SDK.")
+    endif()
+    message(STATUS "Successfully extracted Agility SDK.")
 endif()
+
+# set path to the extracted SDK files
+set(AGILITY_SDK_INCLUDE_DIR "${AGILITY_SDK_PACKAGE_DIR}/build/native/include")
+set(AGILITY_SDK_DLL64_DIR "${AGILITY_SDK_PACKAGE_DIR}/build/native/bin/x64")
 
 # Agility SDK files that will be copied to D3D12 folder
 set(AGILITY_SDK_DLLS
-    "${AGILITY_SDK_PATH}/build/native/bin/x64/D3D12Core.dll"
-    "${AGILITY_SDK_PATH}/build/native/bin/x64/D3D12Core.pdb"
-    "${AGILITY_SDK_PATH}/build/native/bin/x64/D3D12SDKLayers.dll"
-    "${AGILITY_SDK_PATH}/build/native/bin/x64/D3D12SDKLayers.pdb"
-    "${AGILITY_SDK_PATH}/build/native/bin/x64/DirectSR.dll"
-    "${AGILITY_SDK_PATH}/build/native/bin/x64/DirectSR.pdb"
+    "${AGILITY_SDK_DLL64_DIR}/D3D12Core.dll"
+    "${AGILITY_SDK_DLL64_DIR}/D3D12SDKLayers.dll"
+    "${AGILITY_SDK_DLL64_DIR}/DirectSR.dll"
 )
 
 function(add_example name)
@@ -85,7 +103,7 @@ function(add_example name)
 
     target_include_directories(${name} PRIVATE 
         ${CMAKE_CURRENT_SOURCE_DIR}/src
-        ${AGILITY_SDK_PATH}/build/native/include
+        ${AGILITY_SDK_INCLUDE_DIR}
     )
 
     # create 'iglo' filter
