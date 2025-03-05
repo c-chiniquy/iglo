@@ -25,7 +25,7 @@ The Vulkan implementation is still in progress, and currently, **iglo supports o
 - Written in C++17.
 - Lightweight and easy to setup.
 - Fully bindless rendering with SM6.6's ResourceDescriptorHeap and SamplerDescriptorHeap.
-- Enhanced barrers (D3D12).
+- Uses D3D12's enhanced barriers.
 - UTF-8 internal string representation.
 - Vector, matrix and quaternion classes. All with relevant math functions.
 - Helper functions for:
