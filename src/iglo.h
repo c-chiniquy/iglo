@@ -1,5 +1,5 @@
 ﻿/*
-	iglo is a low-level, public domain C++ rendering abstraction layer for D3D12 and Vulkan.
+	iglo is a public domain C++ rendering abstraction layer for low level graphics APIs.
  	https://github.com/c-chiniquy/iglo
 	See the bottom of this document for licensing details.
 */
@@ -7,7 +7,7 @@
 #pragma once
 namespace ig
 {
-	static const char* igloVersion = "iglo v0.1.1";
+	static const char* igloVersion = "iglo v0.2.0";
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////

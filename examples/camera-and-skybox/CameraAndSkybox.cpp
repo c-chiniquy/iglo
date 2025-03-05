@@ -392,6 +392,10 @@ void Update(double elapsedSeconds)
 	camera.Update(context, elapsedSeconds);
 }
 
+void FixedUpdate()
+{
+}
+
 void Draw()
 {
 	if (generationProgress < MaxObjectCount)
@@ -399,7 +403,7 @@ void Draw()
 		float floatProgress = (float)generationProgress / (float)MaxObjectCount;
 		std::string strProgress = ig::ToString(generationProgress, "/", MaxObjectCount);
 		bar.DrawAndPresent(context, cmd, r, vegur, strProgress, floatProgress);
-		ig::SleepMilliseconds(10); // Lower GPU and CPU usage on this thread while the other thread generates instance data.
+		ig::BasicSleep(10); // Lower GPU and CPU usage on this thread while the other thread generates instance data.
 		return;
 	}
 	else
@@ -577,7 +581,7 @@ int main(int argc, char** argv)
 		ig::WindowSettings(sampleName, 1280, 720, true, true),
 		ig::RenderSettings(ig::PresentMode::Immediate, ig::Format::BYTE_BYTE_BYTE_BYTE)))
 	{
-		mainloop.Run(context, Start, OnLoopExited, Draw, Update, OnEvent);
+		mainloop.Run(context, Start, OnLoopExited, Draw, Update, FixedUpdate, OnEvent);
 	}
 	return 0;
 }

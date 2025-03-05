@@ -3,6 +3,10 @@
 
 namespace ig
 {
+	MainLoop::MainLoop()
+	{
+		SetFixedUpdateFrameRate(60);
+	}
 
 	void MainLoop::MeasureTimePassed()
 	{
@@ -48,20 +52,20 @@ namespace ig
 
 		//-------------- Fixed time step Physics --------------//
 		if (!mainLoopRunning || !context->IsLoaded()) return;
-		if (callbackPhysics)
+		if (callbackFixedUpdate)
 		{
-			if (fixedPhysicsFrameRate > 0)
+			if (fixedUpdateFrameRate > 0)
 			{
 				timeAccumulator += elapsedSeconds;
-				const double physicsTargetTime = (1.0 / fixedPhysicsFrameRate);
-				const double maxTime = physicsTargetTime * maxPhysicsStepsInARow;
+				const double physicsTargetTime = (1.0 / fixedUpdateFrameRate);
+				const double maxTime = physicsTargetTime * maxFixedUpdatesInARow;
 				if (timeAccumulator > maxTime) timeAccumulator = maxTime;
 				while (timeAccumulator >= physicsTargetTime)
 				{
 					timeAccumulator -= physicsTargetTime;
-					if (callbackPhysics) callbackPhysics();
+					if (callbackFixedUpdate) callbackFixedUpdate();
 				}
-				physicsFrameInterpolation = timeAccumulator / physicsTargetTime;
+				fixedUpdateFrameInterpolation = timeAccumulator / physicsTargetTime;
 			}
 		}
 
@@ -69,16 +73,16 @@ namespace ig
 		if (!mainLoopRunning || !context->IsLoaded()) return;
 		if (context->GetWindowMinimized())
 		{
-			if (minimizedWindowBehaviour == MinimizedWindowBehaviour::None)
+			if (windowMinimizedBehaviour == WindowMinimizedBehaviour::None)
 			{
 				if (callbackDraw) callbackDraw();
 			}
-			if (minimizedWindowBehaviour == MinimizedWindowBehaviour::SkipDraw)
+			if (windowMinimizedBehaviour == WindowMinimizedBehaviour::SkipDraw)
 			{
 			}
-			if (minimizedWindowBehaviour == MinimizedWindowBehaviour::SkipDrawAndSleep1MilliSecond)
+			if (windowMinimizedBehaviour == WindowMinimizedBehaviour::SkipDrawAndSleep)
 			{
-				ig::SleepMilliseconds(1);
+				BasicSleep(1);
 			}
 		}
 		else
@@ -94,7 +98,8 @@ namespace ig
 	}
 
 	void MainLoop::Run(IGLOContext& context, CallbackStart callback_Start, CallbackOnLoopExited callback_OnLoopExited,
-		CallbackDraw callback_Draw, CallbackUpdate callback_Update, CallbackOnEvent callback_OnEvent, bool useModalLoopCallback)
+		CallbackDraw callback_Draw, CallbackUpdate callback_Update, CallbackFixedUpdate callback_FixedUpdate,
+		CallbackOnEvent callback_OnEvent, bool useModalLoopCallback)
 	{
 		if (!context.IsLoaded())
 		{
@@ -118,13 +123,14 @@ namespace ig
 		this->callbackOnLoopExited = callback_OnLoopExited;
 		this->callbackDraw = callback_Draw;
 		this->callbackUpdate = callback_Update;
+		this->callbackFixedUpdate = callback_FixedUpdate;
 		this->callbackOnEvent = callback_OnEvent;
 
 		this->timer.Reset();
 		this->elapsedSeconds = 0;
 		this->framesPerSecond = 0;
 		this->timeAccumulator = 0;
-		this->physicsFrameInterpolation = 0;
+		this->fixedUpdateFrameInterpolation = 0;
 
 		this->avgFPS_numFrames = 0;
 		this->avgFPS_totalElapsedSeconds = 0;
@@ -173,17 +179,15 @@ namespace ig
 		this->idleMode = enable; 
 	}
 
-	void MainLoop::SetFixedTimeStepPhysicsCallback(CallbackPhysics callbackPhysics, double fixedPhysicsFrameRate,
-		unsigned int maxPhysicsStepsInARow)
+	void MainLoop::SetFixedUpdateFrameRate(double fixedUpdateFrameRate, uint32_t maxFixedUpdatesInARow)
 	{
-		this->callbackPhysics = callbackPhysics;
-		this->fixedPhysicsFrameRate = fixedPhysicsFrameRate;
-		this->maxPhysicsStepsInARow = maxPhysicsStepsInARow;
+		this->fixedUpdateFrameRate = fixedUpdateFrameRate;
+		this->maxFixedUpdatesInARow = maxFixedUpdatesInARow;
 	}
 
-	void MainLoop::SetMinimizedWindowBehaviour(MinimizedWindowBehaviour behaviour)
+	void MainLoop::SetWindowMinimizedBehaviour(WindowMinimizedBehaviour behaviour)
 	{
-		this->minimizedWindowBehaviour = behaviour;
+		this->windowMinimizedBehaviour = behaviour;
 	}
 
 

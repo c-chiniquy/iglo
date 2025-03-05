@@ -35,7 +35,14 @@ void OnLoopExited()
 	context.WaitForIdleDevice(); // Wait for GPU to finish all remaining work before resources get released
 }
 
+// This is called once per frame.
 void Update(double elapsedSeconds)
+{
+}
+
+// This is a frame-rate independent callback that allows you to decouple the game physics frame-rate from the visual frame-rate.
+// This is called with a fixed timestep.
+void FixedUpdate()
 {
 }
 
@@ -88,7 +95,7 @@ int main(int argc, char** argv)
 		ig::WindowSettings("Hello world!", 640, 480),
 		ig::RenderSettings(ig::PresentMode::Vsync)))
 	{
-		mainloop.Run(context, Start, OnLoopExited, Draw, Update, OnEvent);
+		mainloop.Run(context, Start, OnLoopExited, Draw, Update, FixedUpdate, OnEvent);
 	}
 	// The iglo objects declared on the stack get released here in the reverse order they were declared
 	return 0;

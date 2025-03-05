@@ -119,102 +119,111 @@ You can now build and run your iglo project!
 
 <details>
 <summary>Click to show code</summary>
-  
-    #include "iglo.h"
-    #include "igloFont.h"
-    #include "igloBatchRenderer.h"
-    #include "igloMainLoop.h"
-    
-    #ifdef IGLO_D3D12
-    // Agility SDK path and version. Support for enhanced barriers and shader model 6.6 is required.
-    extern "C" { __declspec(dllexport) extern const UINT D3D12SDKVersion = 715; }
-    extern "C" { __declspec(dllexport) extern const char* D3D12SDKPath = u8".\\D3D12\\"; }
-    #endif
-    
-    ig::IGLOContext context;
-    ig::CommandList cmd;
-    ig::Font defaultFont;
-    ig::BatchRenderer r;
-    ig::MainLoop mainloop;
-    
-    void Start()
-    {
-    	cmd.Load(context, ig::CommandListType::Graphics);
-    
-    	cmd.Begin();
-    	{
-    		defaultFont.LoadAsPrebaked(context, cmd, ig::GetDefaultFont()); // Load embedded prebaked font
-    		r.Load(context, cmd, context.GetBackBufferRenderTargetDesc());
-    	}
-    	cmd.End();
-    
-    	// Submit work to the GPU and wait for the work to complete before proceeding
-    	context.WaitForCompletion(context.Submit(cmd));
-    }
-    
-    void OnLoopExited()
-    {
-    	context.WaitForIdleDevice(); // Wait for GPU to finish all remaining work before resources get released
-    }
-    
-    void Update(double elapsedSeconds)
-    {
-    }
-    
-    void OnEvent(ig::Event e)
-    {
-    	if (e.type == ig::EventType::CloseRequest)
-    	{
-    		mainloop.Quit();
-    		return;
-    	}
-    }
-    
-    void Draw()
-    {
-    	cmd.Begin();
-    	{
-    		// The back buffer will now be used as a render target
-    		cmd.AddTextureBarrier(context.GetBackBuffer(), ig::SimpleBarrier::Common, ig::SimpleBarrier::RenderTarget, false);
-    		cmd.FlushBarriers();
-    
-    		cmd.SetRenderTarget(&context.GetBackBuffer());
-    		cmd.SetViewport((float)context.GetWidth(), (float)context.GetHeight());
-    		cmd.SetScissorRectangle(context.GetWidth(), context.GetHeight());
-    		cmd.ClearColor(context.GetBackBuffer(), ig::Colors::Black);
-    
-    		r.Begin(cmd);
-    		{
-    			r.DrawString(64, 64, "Hello world!", defaultFont, ig::Colors::Green);
-    		}
-    		r.End();
-    
-    		// The back buffer will now be used to present
-    		cmd.AddTextureBarrier(context.GetBackBuffer(), ig::SimpleBarrier::RenderTarget, ig::SimpleBarrier::Common, false);
-    		cmd.FlushBarriers();
-    	}
-    	cmd.End();
-    
-    	context.Submit(cmd);
-    	context.Present();
-    }
-    
-    #ifdef _WIN32
-    int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInst, LPSTR lpCmdLine, int nShow)
-    #endif
-    #ifdef __linux__
-    int main(int argc, char** argv)
-    #endif
-    {
-    	if (context.Load(
-    		ig::WindowSettings("Hello world!", 640, 480),
-    		ig::RenderSettings(ig::PresentMode::Vsync)))
-    	{
-    		mainloop.Run(context, Start, OnLoopExited, Draw, Update, OnEvent);
-    	}
-    	// The iglo objects declared on the stack get released here in the reverse order they were declared
-    	return 0;
-    }
+
+```
+#include "iglo.h"
+#include "igloFont.h"
+#include "igloBatchRenderer.h"
+#include "igloMainLoop.h"
+
+#ifdef IGLO_D3D12
+// Agility SDK path and version. Support for enhanced barriers and shader model 6.6 is required.
+extern "C" { __declspec(dllexport) extern const UINT D3D12SDKVersion = 715; }
+extern "C" { __declspec(dllexport) extern const char* D3D12SDKPath = u8".\\D3D12\\"; }
+#endif
+
+ig::IGLOContext context;
+ig::CommandList cmd;
+ig::Font defaultFont;
+ig::BatchRenderer r;
+ig::MainLoop mainloop;
+
+void Start()
+{
+	cmd.Load(context, ig::CommandListType::Graphics);
+
+	cmd.Begin();
+	{
+		defaultFont.LoadAsPrebaked(context, cmd, ig::GetDefaultFont()); // Load embedded prebaked font
+		r.Load(context, cmd, context.GetBackBufferRenderTargetDesc());
+	}
+	cmd.End();
+
+	// Submit work to the GPU and wait for the work to complete before proceeding
+	context.WaitForCompletion(context.Submit(cmd));
+}
+
+void OnLoopExited()
+{
+	context.WaitForIdleDevice(); // Wait for GPU to finish all remaining work before resources get released
+}
+
+// This is called once per frame.
+void Update(double elapsedSeconds)
+{
+}
+
+// This is a frame-rate independent callback that allows you to decouple the game physics frame-rate from the visual frame-rate.
+// This is called with a fixed timestep.
+void FixedUpdate()
+{
+}
+
+void OnEvent(ig::Event e)
+{
+	if (e.type == ig::EventType::CloseRequest)
+	{
+		mainloop.Quit();
+		return;
+	}
+}
+
+void Draw()
+{
+	cmd.Begin();
+	{
+		// The back buffer will now be used as a render target
+		cmd.AddTextureBarrier(context.GetBackBuffer(), ig::SimpleBarrier::Common, ig::SimpleBarrier::RenderTarget, false);
+		cmd.FlushBarriers();
+
+		cmd.SetRenderTarget(&context.GetBackBuffer());
+		cmd.SetViewport((float)context.GetWidth(), (float)context.GetHeight());
+		cmd.SetScissorRectangle(context.GetWidth(), context.GetHeight());
+		cmd.ClearColor(context.GetBackBuffer(), ig::Colors::Black);
+
+		r.Begin(cmd);
+		{
+			r.DrawString(64, 64, "Hello world!", defaultFont, ig::Colors::Green);
+		}
+		r.End();
+
+		// The back buffer will now be used to present
+		cmd.AddTextureBarrier(context.GetBackBuffer(), ig::SimpleBarrier::RenderTarget, ig::SimpleBarrier::Common, false);
+		cmd.FlushBarriers();
+	}
+	cmd.End();
+
+	context.Submit(cmd);
+	context.Present();
+}
+
+#ifdef _WIN32
+int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInst, LPSTR lpCmdLine, int nShow)
+#endif
+#ifdef __linux__
+int main(int argc, char** argv)
+#endif
+{
+	if (context.Load(
+		ig::WindowSettings("Hello world!", 640, 480),
+		ig::RenderSettings(ig::PresentMode::Vsync)))
+	{
+		mainloop.Run(context, Start, OnLoopExited, Draw, Update, FixedUpdate, OnEvent);
+	}
+	// The iglo objects declared on the stack get released here in the reverse order they were declared
+	return 0;
+}
+```
 
 </details>
 
@@ -245,3 +254,4 @@ iglo is in the public domain. iglo is also licensed under the MIT open source li
 [wareya's public domain utf conversion functions](https://github.com/wareya/unishim/blob/master/unishim.h)\
 [sheredom's public domain utf8 functions](https://github.com/sheredom/utf8.h/blob/master/utf8.h)\
 [littlstar's public domain DDS loading code](https://github.com/littlstar/soil/)
+[Blat Blatnik's public domain precise win32 sleep function](https://github.com/blat-blatnik/Snippets/blob/main/precise_sleep.c)
