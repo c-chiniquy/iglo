@@ -192,6 +192,10 @@ void Update(double elapsedSeconds)
 	tick += elapsedSeconds;
 }
 
+void FixedUpdate()
+{
+}
+
 void OnEvent(ig::Event e)
 {
 	if (e.type == ig::EventType::CloseRequest)
@@ -301,7 +305,7 @@ int main(int argc, char** argv)
 		ig::WindowSettings(sampleName, 640, 480, true, true),
 		ig::RenderSettings(ig::PresentMode::Immediate, ig::Format::BYTE_BYTE_BYTE_BYTE)))
 	{
-		mainloop.Run(context, Start, OnLoopExited, Draw, Update, OnEvent);
+		mainloop.Run(context, Start, OnLoopExited, Draw, Update, FixedUpdate, OnEvent);
 	}
 	return 0;
 }

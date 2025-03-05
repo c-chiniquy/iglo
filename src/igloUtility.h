@@ -117,14 +117,14 @@ namespace ig
 	public:
 		// The thread will wait inside this function until enough time as passed.
 		// Call one of these functions once per frame to limit the frame rate of your app.
-		// Example: LimitFPS(60.0) or LimitElapsedMilliseconds(1000.0 / 60.0) to limit frame rate to 60 frames per second.
+		// Example: LimitFPS(60.0) or LimitElapsedSeconds(1.0 / 60.0) to limit frame rate to 60 frames per second.
 		// A combination of microsecond sleeps and CPU spinning is used to accurately limit the time passed between each call to this function.
 		void LimitFPS(double maxFramesPerSecond);
-		void LimitElapsedMilliseconds(double milliseconds);
+		void LimitElapsedSeconds(double seconds);
 	private:
 		bool passedFirstFrame = false;
-		typedef std::chrono::duration<double, std::chrono::milliseconds::period> m_dur;
-		std::chrono::time_point<std::chrono::steady_clock, m_dur> t1;
+		typedef std::chrono::duration<double, std::chrono::seconds::period> myDur;
+		std::chrono::time_point<std::chrono::steady_clock, myDur> t1;
 	};
 
 	// 2D Vector
@@ -560,8 +560,10 @@ namespace ig
 
 	/////////////////////////// Sleep /////////////////////////////
 
-	void SleepMilliseconds(uint32_t milliseconds);
-	void SleepMicroseconds(uint32_t microseconds);
+	// Sleeps using the standard 'sleep_for' method. It's not very accurate. Expect an accuracy of roughly 15ms.
+	void BasicSleep(uint32_t milliseconds);
+	// Sleeps using a combination of many high resolution sleeps and CPU spinning. Highly accurate and low CPU usage.
+	void PreciseSleep(double seconds);
 
 	/////////////////////////// Strings /////////////////////////////
 

@@ -470,6 +470,10 @@ void Update(double elapsedSeconds)
 	if (lightDistance > lightZFar) lightDistance = lightZFar;
 }
 
+void FixedUpdate()
+{
+}
+
 void OnEvent(ig::Event e)
 {
 	if (e.type == ig::EventType::CloseRequest)
@@ -819,7 +823,7 @@ int main(int argc, char** argv)
 		ig::WindowSettings(sampleName, 1280, 720, true, true),
 		ig::RenderSettings(ig::PresentMode::Vsync, ig::Format::BYTE_BYTE_BYTE_BYTE)))
 	{
-		mainloop.Run(context, Start, OnLoopExited, Draw, Update, OnEvent);
+		mainloop.Run(context, Start, OnLoopExited, Draw, Update, FixedUpdate, OnEvent);
 	}
 	return 0;
 }

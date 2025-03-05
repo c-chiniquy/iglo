@@ -10,6 +10,7 @@
 #ifdef _WIN32
 #ifndef WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#pragma comment(lib, "Winmm.lib") // For precise sleep (timeGetDevCaps, timeBeginPeriod)
 #endif
 // Conflicts with ig::CreateDirectory
 #ifdef CreateDirectory
@@ -270,53 +271,36 @@ namespace ig
 
 	void FrameRateLimiter::LimitFPS(double maxFramesPerSecond)
 	{
-		LimitElapsedMilliseconds(1000.0 / maxFramesPerSecond);
+		LimitElapsedSeconds(1.0 / maxFramesPerSecond);
 	}
 
-	void FrameRateLimiter::LimitElapsedMilliseconds(double milliseconds)
+	void FrameRateLimiter::LimitElapsedSeconds(double seconds)
 	{
 		if (!passedFirstFrame)
 		{
-			t1 = std::chrono::steady_clock::now() + m_dur(0);
+			t1 = std::chrono::steady_clock::now() + myDur(0);
 			passedFirstFrame = true;
 			return;
 		}
-		std::chrono::steady_clock::time_point currentMoment;
-		while (true)
+		std::chrono::steady_clock::time_point currentMoment = std::chrono::steady_clock::now();
+		if (currentMoment < t1)
 		{
-			currentMoment = std::chrono::steady_clock::now();
-			if (currentMoment >= t1)
-			{
-				t1 = std::chrono::steady_clock::now() + m_dur(milliseconds);
-				return;
-			}
+			double remainingSeconds = std::chrono::duration_cast<myDur>(t1 - currentMoment).count();
+			PreciseSleep(remainingSeconds);
+		}
 
-			double remaining_ms = std::chrono::duration_cast<m_dur>(t1 - currentMoment).count();
-
-			// The actual sleep duration you get varies, but small sleeps will not go above these values most of the time.
-			// (i have tested multiple small sleeps VS one long sleep, and found that multiple small sleeps is more reliable)
-			const double upperLimitSleepMS_1us = 0.8;
-			const double upperLimitSleepMS_100us = 1.0;
-			if (remaining_ms > upperLimitSleepMS_1us)
-			{
-				uint32_t targetSleep_us = 1;
-				if (remaining_ms > upperLimitSleepMS_100us) targetSleep_us = 100;
-				SleepMicroseconds(targetSleep_us);
-			}
-			else
-			{
-				// There isn't enough time left to safely sleep without risking oversleeping.
-				// CPU Spinning is used for the remaining time.
-				while (true)
-				{
-					currentMoment = std::chrono::steady_clock::now();
-					if (currentMoment >= t1)
-					{
-						t1 = currentMoment + m_dur(milliseconds);
-						return;
-					}
-				}
-			}
+		currentMoment = std::chrono::steady_clock::now();
+		double delta = std::chrono::duration_cast<myDur>(currentMoment - t1).count();
+		const double frameSnap = 0.05;
+		if (delta >= 0 && delta <= seconds * frameSnap)
+		{
+			// If very close to target, next frame begins exactly when this frame ends.
+			t1 = t1 + myDur(seconds);
+		}
+		else
+		{
+			// If we are a bit late, the new frame starts at whatever the current time is.
+			t1 = currentMoment + myDur(seconds);
 		}
 	}
 
@@ -946,33 +930,64 @@ namespace ig
 			(byte)std::roundf(a * 255.0f));
 	}
 
-
-	void SleepMicroseconds(uint32_t microseconds)
-	{
-#ifdef _WIN32
-		if (microseconds <= 0) return;
-		LARGE_INTEGER timeToWait;
-		timeToWait.QuadPart = static_cast<int64_t>(microseconds) * -10;  // negative value for relative time
-		HANDLE timerHandle = CreateWaitableTimerExW(NULL, NULL, CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, TIMER_ALL_ACCESS);
-		if (timerHandle)
-		{
-			SetWaitableTimerEx(timerHandle, &timeToWait, 0, NULL, NULL, NULL, 0);
-			WaitForSingleObject(timerHandle, INFINITE);
-			CloseHandle(timerHandle);
-		}
-#else
-		struct timespec spec;
-		spec.tv_sec = microseconds / 1000000;
-		spec.tv_nsec = microseconds % 1000000 * 1000;
-		while (nanosleep(&spec, &spec) == -1 && errno == EINTR)
-		{
-		}
-#endif
-	}
-
-	void SleepMilliseconds(uint32_t milliseconds)
+	void BasicSleep(uint32_t milliseconds)
 	{
 		std::this_thread::sleep_for(std::chrono::milliseconds(milliseconds));
+	}
+
+	// Code taken from public domain source: https://github.com/blat-blatnik/Snippets/blob/main/precise_sleep.c
+	void PreciseSleep(double seconds)
+	{
+#ifdef _WIN32
+		static HANDLE timerHandle = NULL;
+		static int schedulerPeriodMs = 0;
+		static INT64 qpcPerSecond = 0;
+
+		if (timerHandle == NULL)
+		{
+			// Initialization
+			timerHandle = CreateWaitableTimerExW(NULL, NULL, CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, TIMER_ALL_ACCESS);
+			TIMECAPS caps;
+			timeGetDevCaps(&caps, sizeof caps);
+			timeBeginPeriod(caps.wPeriodMin);
+			schedulerPeriodMs = (int)caps.wPeriodMin;
+			LARGE_INTEGER qpf;
+			QueryPerformanceFrequency(&qpf);
+			qpcPerSecond = qpf.QuadPart;
+
+			if (timerHandle == NULL) throw std::exception(); // This shouldn't happen
+		}
+
+		LARGE_INTEGER qpc;
+		QueryPerformanceCounter(&qpc);
+		INT64 targetQpc = (INT64)(qpc.QuadPart + seconds * qpcPerSecond);
+
+		const double TOLERANCE = 0.001'02;
+		INT64 maxTicks = (INT64)schedulerPeriodMs * 9'500;
+		for (;;) // Break sleep up into parts that are lower than scheduler period.
+		{
+			double remainingSeconds = (targetQpc - qpc.QuadPart) / (double)qpcPerSecond;
+			INT64 sleepTicks = (INT64)((remainingSeconds - TOLERANCE) * 10'000'000);
+			if (sleepTicks <= 0) break;
+
+			LARGE_INTEGER due;
+			due.QuadPart = -(sleepTicks > maxTicks ? maxTicks : sleepTicks);
+			SetWaitableTimerEx(timerHandle, &due, 0, NULL, NULL, NULL, 0);
+			WaitForSingleObject(timerHandle, INFINITE);
+			QueryPerformanceCounter(&qpc);
+		}
+
+		while (qpc.QuadPart < targetQpc) // Spin for any remaining time.
+		{
+			YieldProcessor();
+			QueryPerformanceCounter(&qpc);
+		}
+
+#endif
+#ifdef __linux__
+		//TODO: implement this
+		throw std::exception();
+#endif
 	}
 
 	std::u32string utf8_to_utf32(const std::string& utf8)
@@ -2300,4 +2315,4 @@ namespace ig
 		return ((value & (value - 1)) == 0);
 	}
 
-} // namespace ig
+	} // namespace ig

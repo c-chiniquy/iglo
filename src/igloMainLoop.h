@@ -7,15 +7,15 @@ namespace ig
 	class MainLoop
 	{
 	public:
-		MainLoop() = default;
+		MainLoop();
 		~MainLoop() = default;
 
 		MainLoop& operator=(MainLoop&) = delete;
 		MainLoop(MainLoop&) = delete;
 
-		enum class MinimizedWindowBehaviour
+		enum class WindowMinimizedBehaviour
 		{
-			// MainLoop does not change its behaviour when window is minimized
+			// MainLoop does not change its behaviour when window is minimized.
 			None = 0,
 
 			// When window is minimized, MainLoop will skip the Draw() callback.
@@ -23,21 +23,21 @@ namespace ig
 
 			// When window is minimized, MainLoop will skip the Draw() callback and
 			// will sleep for 1 millisecond each frame to prevent 100% CPU usage.
-			SkipDrawAndSleep1MilliSecond,
+			SkipDrawAndSleep,
 		};
 
 		typedef void(*CallbackOnEvent)(Event e);
 		typedef void(*CallbackStart)();
 		typedef void(*CallbackOnLoopExited)();
 		typedef void(*CallbackUpdate)(double elapsedSeconds);
+		typedef void(*CallbackFixedUpdate)();
 		typedef void(*CallbackDraw)();
-		typedef void(*CallbackPhysics)();
 
 		// Enters the main application loop.
 		// The 'Start' callback is called before entering the loop, and 'OnLoopExited' is called after exiting the loop.
 		// If 'useModalLoopCallback' is true, app will not freeze when resizing/moving the window, with the trade-off being that
-		// you can't nest another MainLoop or GetEvent() loop inside Update(),Draw(),OnEvent() when window is being dragged/resized.
-		void Run(IGLOContext&, CallbackStart, CallbackOnLoopExited, CallbackDraw, CallbackUpdate, CallbackOnEvent,
+		// you can't nest another MainLoop or GetEvent() loop inside any MainLoop callbacks when window is being dragged/resized.
+		void Run(IGLOContext&, CallbackStart, CallbackOnLoopExited, CallbackDraw, CallbackUpdate, CallbackFixedUpdate, CallbackOnEvent,
 			bool useModalLoopCallback = true);
 
 		// Tells MainLoop that it should exit the loop the first chance it gets.
@@ -58,23 +58,22 @@ namespace ig
 		void EnableIdleMode(bool enable);
 		bool GetIdleModeEnabled() const { return this->idleMode; }
 
-		// Allows the physics framerate to be decoupled from the visual framerate.
-		// Useful when physics must run at a fixed rate, and you don't want higher refresh rates or Vsync to impact physics timing.
-		// The Physics callback is invoked whenever sufficient time has accumulated, based on 'fixedPhysicsFrameRate'.
-		// To disable the callback, pass 'nullptr'.
-		void SetFixedTimeStepPhysicsCallback(CallbackPhysics, double fixedPhysicsFrameRate = 60,
-			unsigned int maxPhysicsStepsInARow = 2);
+		// The FixedUpdate callback allows the game physics framerate to be decoupled from the visual framerate.
+		// This is useful for when game physics must run at a fixed rate, and you don't want higher refresh rates or Vsync to impact physics timing.
+		// The FixedUpdate callback is invoked whenever sufficient time has accumulated, based on 'fixedUpdateFrameRate'.
+		// The default value for 'fixedUpdateFrameRate' is 60.
+		void SetFixedUpdateFrameRate(double fixedUpdateFrameRate, uint32_t maxFixedUpdatesInARow = 2);
 
-		// Returns a value between 0.0 and 1.0 for interpolating between physics frames during rendering.
-		// Designed for use with the fixed time step physics callback, this enables smooth visual updates 
-		// by making physics appear to match the monitor's refresh rate, even when running at a fixed time step.
+		// Returns a value between 0.0 and 1.0 for interpolating between fixed update frames during rendering.
+		// This is meant to be used together with the fixed timestep update callback (FixedUpdate).
+		// This enables smooth visual updates by making game physics appear to match the monitor's refresh rate.
 		// A lower value indicates the frame is closer to the previous physics state, while a higher value 
 		// indicates it is closer to the next physics state.
-		double GetPhysicsFrameInterpolation() const { return physicsFrameInterpolation; }
+		double GetFixedUpdateFrameInterpolation() const { return fixedUpdateFrameInterpolation; }
 
 		// Set how MainLoop should behave when the window is minimized.
-		void SetMinimizedWindowBehaviour(MinimizedWindowBehaviour);
-		MinimizedWindowBehaviour GetMinimizedWindowBehaviour() const { minimizedWindowBehaviour; }
+		void SetWindowMinimizedBehaviour(WindowMinimizedBehaviour);
+		WindowMinimizedBehaviour GetMinimizedWindowBehaviour() const { windowMinimizedBehaviour; }
 
 		// Seconds elapsed since last frame. 60 FPS = 0.0166667 elapsed seconds per frame.
 		double GetElapsedSeconds() const { return elapsedSeconds; }
@@ -83,7 +82,7 @@ namespace ig
 		double GetFPS() const { return framesPerSecond; }
 
 		// Avarage frames per second. Rounded to nearest integer and updates only a few times every second.
-		int GetAvarageFPS() const { return avgFPS; }
+		int32_t GetAvarageFPS() const { return avgFPS; }
 	private:
 		static void CallbackTick(void* userData);
 		void Tick();
@@ -95,21 +94,21 @@ namespace ig
 		bool idleMode = false;
 
 		// Default behaviour
-		MinimizedWindowBehaviour minimizedWindowBehaviour = MinimizedWindowBehaviour::SkipDrawAndSleep1MilliSecond;
+		WindowMinimizedBehaviour windowMinimizedBehaviour = WindowMinimizedBehaviour::SkipDrawAndSleep;
 
-		// Standard callbacks
+		// Callbacks
 		CallbackOnEvent callbackOnEvent = nullptr;
 		CallbackStart callbackStart = nullptr;
 		CallbackOnLoopExited callbackOnLoopExited = nullptr;
 		CallbackUpdate callbackUpdate = nullptr;
+		CallbackFixedUpdate callbackFixedUpdate = nullptr;
 		CallbackDraw callbackDraw = nullptr;
 
-		// Fixed time step physics
+		// Fixed time step update
+		uint32_t maxFixedUpdatesInARow = 0;
+		double fixedUpdateFrameRate = 0;
+		double fixedUpdateFrameInterpolation = 0; // A value between 0.0 and 1.0
 		double timeAccumulator = 0;
-		double fixedPhysicsFrameRate = 0;
-		double physicsFrameInterpolation = 0; // Value between 0.0 and 1.0
-		unsigned int maxPhysicsStepsInARow = 0;
-		CallbackPhysics callbackPhysics = nullptr;
 
 		// Framerate limit
 		FrameRateLimiter limiter;
@@ -121,12 +120,10 @@ namespace ig
 		double elapsedSeconds = 0;
 
 		// Avarage FPS
-		unsigned int avgFPS_numFrames = 0; // The number of frames that has occured since started measuring avarage FPS
+		uint32_t avgFPS_numFrames = 0; // The number of frames that has occured since started measuring avarage FPS
 		double avgFPS_totalElapsedSeconds = 0; // The total elapsed time since started measuring avarage FPS
-		int avgFPS = 0;
+		int32_t avgFPS = 0;
 	};
-
-
 
 
 } //end of namespace ig

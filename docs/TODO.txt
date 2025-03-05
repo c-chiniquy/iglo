@@ -22,21 +22,12 @@ TODO: Implement support for loading DDS textures that use BC6 and BC7 block comp
 TODO: The BaseCamera class can probably be improved somewhat.
 
 TODO: In D3D12, using CreatePlacedResource() is faster than using CreateCommittedResource().
-      Since iglo D3D12 currently uses CreateCommittedResource, it creates textures/buffers a bit slower.
+      Since iglo D3D12 currently uses CreateCommittedResource, it creates textures/buffers a bit slower than it could.
       To make it faster, we need to write a resource heap memory manager from scratch.
 
 TODO: Ability to change window cursors and to hide window cursor.
 
 TODO: Ability for window to fully capture mouse. This is required for first person shooter games.
-
-TODO: The FrameRateLimiter class should allow you to choose how you want to limit the FPS.
-      enum class FrameRateLimiterMethod
-      {
-          CPUSpinning = 0, // Uses CPU spinning only. The most accurate method. Uses 100% CPU usage.
-          Hybrid, // The default and recommended method. Uses both CPU spinning and micro second sleeps. Good balance between CPU usage and accuracy.
-          Sleep, // Consumes no CPU usage, but is not very accurate.
-      }
-      Should 'Sleep' use one big sleep, or many small sleeps? I'm leaning towards one big sleep.
 
 TODO: For more advanced text functionality, i have two future classes in mind: ig::FormattedText and ig::InputText.
       A single ig::Text class isn't enough for all use cases. That's why we need 2 text classes.
