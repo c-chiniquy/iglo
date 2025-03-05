@@ -253,5 +253,5 @@ iglo is in the public domain. iglo is also licensed under the MIT open source li
 [Jeff Bezanson's public domain utf8 functions](https://github.com/JeffBezanson/cutef8/blob/master/utf8.c)\
 [wareya's public domain utf conversion functions](https://github.com/wareya/unishim/blob/master/unishim.h)\
 [sheredom's public domain utf8 functions](https://github.com/sheredom/utf8.h/blob/master/utf8.h)\
-[littlstar's public domain DDS loading code](https://github.com/littlstar/soil/)
+[littlstar's public domain DDS loading code](https://github.com/littlstar/soil/)\
 [Blat Blatnik's public domain precise win32 sleep function](https://github.com/blat-blatnik/Snippets/blob/main/precise_sleep.c)
