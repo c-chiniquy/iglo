@@ -7,7 +7,7 @@
 // vertex pulling for rendering quads. This shader serves as an example of how you can
 // use alternative vertex generation methods with BatchRenderer.
 
-#include "../../../src/shaders/hlsl/common/BatchRendererCommon.hlsl"
+#include "../../../shaders/common/BatchRendererCommon.hlsl"
 
 ConstantBuffer<PushConstants> pushConstants : register(b0);
 
