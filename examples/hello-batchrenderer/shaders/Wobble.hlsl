@@ -1,4 +1,4 @@
-#include "../../../src/shaders/hlsl/common/BatchRendererCommon.hlsl"
+#include "../../../shaders/common/BatchRendererCommon.hlsl"
 
 ConstantBuffer<PushConstants> pushConstants : register(b0);
 
