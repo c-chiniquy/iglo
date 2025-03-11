@@ -252,13 +252,13 @@ void Draw()
 			ig::Quaternion::Euler(0, (float)tick * 0.4f, 0), // Rotation
 			ig::Vector3(1, 1, 1)); // Scale
 
-		// Update constants
+		// Update the dynamic constants before binding them
 		MatrixConstants data;
 		data.viewProj = (proj * view).GetTransposed();
 		data.world = world.GetTransposed();
 		matrixConstants.SetDynamicData(&data);
 
-		// This is how you bind textures and constants in SM 6.6 bindless
+		// Bind the texture, sampler and constants
 		PushConstants pushConstants;
 		pushConstants.textureIndex = stoneTexture.GetDescriptor()->heapIndex;
 		pushConstants.samplerIndex = sampler.GetDescriptor()->heapIndex;

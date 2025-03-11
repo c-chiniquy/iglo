@@ -7,7 +7,7 @@
 #pragma once
 namespace ig
 {
-	static const char* igloVersion = "iglo v0.2.0";
+	static const char* igloVersion = "iglo v0.2.1";
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////
@@ -1139,6 +1139,8 @@ namespace ig
 		// Suitable for buffers that update their contents once per frame.
 		// Dynamic buffers can update their contents max once per frame, unless you wait for commands to finish executing in between.
 		// The contents of a dynamic buffer is persistent and will last between frames when not updated with new data.
+		// NOTE: The order at which you update and bind the dynamic buffer matters! Correct order: Update->Bind. Wrong order: Bind->Update.
+		// Every time you update the contents of a Dynamic buffer, it changes which internal descriptor/resource is used when binding it.
 		Dynamic,
 
 		// Enables CPU read access.

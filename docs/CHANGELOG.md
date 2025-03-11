@@ -1,6 +1,12 @@
 
 # Changelog
 
+## v0.2.1
+
+### Added or changed
+- Fixed a bug where Dynamic usage raw/structured buffers would create all descriptors for the first resource only.
+- Clarified with comments that the order at which a Dynamic buffer is updated and bound to the pipeline matters due to how Dynamic buffers work internally.
+
 ## v0.2.0
 
 ### Added or changed

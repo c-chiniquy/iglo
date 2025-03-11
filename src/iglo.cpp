@@ -5787,6 +5787,7 @@ namespace ig
 		if (size == 0)
 		{
 			Log(LogType::Error, ToString(errStr, "Size of buffer can't be zero."));
+			Unload();
 			return false;
 		}
 
@@ -5796,6 +5797,7 @@ namespace ig
 				type != BufferType::StructuredBuffer)
 			{
 				Log(LogType::Error, ToString(errStr, "Unordered access buffer usage is only supported for raw and structured buffers."));
+				Unload();
 				return false;
 			}
 		}
@@ -5949,7 +5951,7 @@ namespace ig
 						srv.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_RAW;
 					}
 
-					context.GetD3D12Device()->CreateShaderResourceView(this->d3d12Resource.at(0).Get(), &srv,
+					context.GetD3D12Device()->CreateShaderResourceView(this->d3d12Resource.at(i).Get(), &srv,
 						context.GetDescriptorHeap().GetD3D12CPUDescriptorHandleForResource(allocatedDescriptor));
 				}
 				this->descriptor.push_back(allocatedDescriptor);
