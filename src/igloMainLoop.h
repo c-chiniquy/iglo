@@ -51,7 +51,7 @@ namespace ig
 		double GetFrameRateLimit() const { return frameRateLimit; }
 
 		// Idle mode takes advantage of the behavior of WaitForEvent() to minimize CPU/GPU usage while keeping input responsiveness high. 
-		// The thread sleeps each frame until an event is received or a certain amount of time has passed.
+		// Each frame, the thread will sleep until an event is received or a certain amount of time has passed.
 		// This results in much lower FPS when no window/keyboard/mouse events occur, making it ideal for idle-heavy GUI apps 
 		// that remain inactive for extended periods.
 		// (Note: This is unrelated to the frame rate limiter.)
