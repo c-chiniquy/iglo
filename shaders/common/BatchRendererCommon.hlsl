@@ -19,6 +19,15 @@ float LinearizeDepth(float depth, float zNear, float zFar)
 	return ((2.0 * zNear) / (zFar + zNear - depth * (zFar - zNear)));
 }
 
+float4 ConvertToFloat4(uint color32)
+{
+	return float4(
+		(float)(color32 & 0xFF) / 255.0f,
+		(float)((color32 >> 8) & 0xFF) / 255.0f,
+		(float)((color32 >> 16) & 0xFF) / 255.0f,
+		(float)((color32 >> 24) & 0xFF) / 255.0f);
+}
+
 ////////////////////////////////////
 // BatchRenderer shader constants //
 ////////////////////////////////////

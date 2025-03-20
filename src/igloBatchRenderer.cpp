@@ -16,12 +16,12 @@
 #include "shaders/PS_CUV_MonoOpaque.h"
 #include "shaders/PS_CUV_MonoTransparent.h"
 #include "shaders/PS_CUV_SDF.h"
-#include "shaders/PS_InstancedCircle.h"
-#include "shaders/VS_InstancedCircle.h"
-#include "shaders/VS_InstancedRect.h"
-#include "shaders/VS_InstancedScaledSprite.h"
-#include "shaders/VS_InstancedSprite.h"
-#include "shaders/VS_InstancedTransformedSprite.h"
+#include "shaders/PS_Circle.h"
+#include "shaders/VS_StructuredCircle.h"
+#include "shaders/VS_StructuredRect.h"
+#include "shaders/VS_StructuredScaledSprite.h"
+#include "shaders/VS_StructuredSprite.h"
+#include "shaders/VS_StructuredTransformedSprite.h"
 #include "shaders/VS_XYC.h"
 #include "shaders/VS_XYCUV.h"
 
@@ -378,49 +378,6 @@ namespace ig
 			VertexElement(Format::BYTE_BYTE_BYTE_BYTE, "COLOR"),
 			VertexElement(Format::FLOAT_FLOAT, "TEXCOORD"),
 		};
-		static const std::vector<VertexElement> layout_instanced_Rect =
-		{
-			VertexElement(Format::FLOAT_FLOAT, "POSITION", 0, 0, InputClass::PerInstance, 1),
-			VertexElement(Format::FLOAT, "WIDTH", 0, 0, InputClass::PerInstance, 1),
-			VertexElement(Format::FLOAT, "HEIGHT", 0, 0, InputClass::PerInstance, 1),
-			VertexElement(Format::BYTE_BYTE_BYTE_BYTE, "COLOR", 0, 0, InputClass::PerInstance, 1),
-		};
-		static const std::vector<VertexElement> layout_instanced_Sprite =
-		{
-			VertexElement(Format::FLOAT_FLOAT, "POSITION", 0, 0, InputClass::PerInstance, 1),
-			VertexElement(Format::UINT16_NotNormalized, "WIDTH", 0, 0, InputClass::PerInstance, 1),
-			VertexElement(Format::UINT16_NotNormalized, "HEIGHT", 0, 0, InputClass::PerInstance, 1),
-			VertexElement(Format::UINT16_UINT16_NotNormalized, "TEXCOORD", 0, 0, InputClass::PerInstance, 1),
-			VertexElement(Format::BYTE_BYTE_BYTE_BYTE, "COLOR", 0, 0, InputClass::PerInstance, 1),
-		};
-		static const std::vector<VertexElement> layout_instanced_ScaledSprite =
-		{
-			VertexElement(Format::FLOAT_FLOAT, "POSITION", 0, 0, InputClass::PerInstance, 1),
-			VertexElement(Format::FLOAT, "WIDTH", 0, 0, InputClass::PerInstance, 1),
-			VertexElement(Format::FLOAT, "HEIGHT", 0, 0, InputClass::PerInstance, 1),
-			VertexElement(Format::FLOAT_FLOAT_FLOAT_FLOAT, "TEXCOORD", 0, 0, InputClass::PerInstance, 1),
-			VertexElement(Format::BYTE_BYTE_BYTE_BYTE, "COLOR", 0, 0, InputClass::PerInstance, 1),
-		};
-		static const std::vector<VertexElement> layout_instanced_TransformedSprite =
-		{
-			VertexElement(Format::FLOAT_FLOAT, "POSITION", 0, 0, InputClass::PerInstance, 1),
-			VertexElement(Format::FLOAT, "WIDTH", 0, 0, InputClass::PerInstance, 1),
-			VertexElement(Format::FLOAT, "HEIGHT", 0, 0, InputClass::PerInstance, 1),
-			VertexElement(Format::FLOAT_FLOAT_FLOAT_FLOAT, "TEXCOORD", 0, 0, InputClass::PerInstance, 1),
-			VertexElement(Format::FLOAT_FLOAT, "ROTORIGIN", 0, 0, InputClass::PerInstance, 1),
-			VertexElement(Format::FLOAT, "ROTATION", 0, 0, InputClass::PerInstance, 1),
-			VertexElement(Format::BYTE_BYTE_BYTE_BYTE, "COLOR", 0, 0, InputClass::PerInstance, 1),
-		};
-		static const std::vector<VertexElement> layout_instanced_Circle =
-		{
-			VertexElement(Format::FLOAT_FLOAT, "POSITION", 0, 0, InputClass::PerInstance, 1),
-			VertexElement(Format::FLOAT, "RADIUS", 0, 0, InputClass::PerInstance, 1),
-			VertexElement(Format::FLOAT, "SMOOTHING", 0, 0, InputClass::PerInstance, 1),
-			VertexElement(Format::FLOAT, "BORDERTHICKNESS", 0, 0, InputClass::PerInstance, 1),
-			VertexElement(Format::BYTE_BYTE_BYTE_BYTE, "INNERCOLOR", 0, 0, InputClass::PerInstance, 1),
-			VertexElement(Format::BYTE_BYTE_BYTE_BYTE, "OUTERCOLOR", 0, 0, InputClass::PerInstance, 1),
-			VertexElement(Format::BYTE_BYTE_BYTE_BYTE, "BORDERCOLOR", 0, 0, InputClass::PerInstance, 1),
-		};
 		static const std::vector<BlendDesc> blend_straightAlpha = { BlendDesc::StraightAlpha };
 		static const std::vector<BlendDesc> blend_premultipliedAlpha = { BlendDesc::PremultipliedAlpha };
 		static const std::vector<BlendDesc> blend_disabled = { BlendDesc::BlendDisabled };
@@ -483,13 +440,13 @@ namespace ig
 			break;
 
 		case StandardBatchType::Rects:
-			out.batchDesc.vertGenMethod = BatchDesc::VertexGenerationMethod::Instancing;
-			out.batchDesc.primitive = Primitive::TriangleStrip;
+			out.batchDesc.vertGenMethod = BatchDesc::VertexGenerationMethod::VertexPullingStructured;
+			out.batchDesc.primitive = Primitive::TriangleList;
 			out.batchDesc.inputVerticesPerPrimitive = 1;
-			out.batchDesc.outputVerticesPerPrimitive = 4;
+			out.batchDesc.outputVerticesPerPrimitive = 6;
 			out.batchDesc.bytesPerVertex = sizeof(Vertex_Rect);
-			out.pipelineDesc.vertexLayout = layout_instanced_Rect;
-			out.pipelineDesc.VS = SHADER_VS(g_VS_InstancedRect);
+			out.pipelineDesc.vertexLayout = {};
+			out.pipelineDesc.VS = SHADER_VS(g_VS_StructuredRect);
 			out.pipelineDesc.PS = SHADER_PS(g_PS_C);
 			break;
 
@@ -497,13 +454,13 @@ namespace ig
 		case StandardBatchType::Sprites_MonoOpaque:
 		case StandardBatchType::Sprites_MonoTransparent:
 		case StandardBatchType::Sprites_SDF:
-			out.batchDesc.vertGenMethod = BatchDesc::VertexGenerationMethod::Instancing;
-			out.batchDesc.primitive = Primitive::TriangleStrip;
+			out.batchDesc.vertGenMethod = BatchDesc::VertexGenerationMethod::VertexPullingStructured;
+			out.batchDesc.primitive = Primitive::TriangleList;
 			out.batchDesc.inputVerticesPerPrimitive = 1;
-			out.batchDesc.outputVerticesPerPrimitive = 4;
+			out.batchDesc.outputVerticesPerPrimitive = 6;
 			out.batchDesc.bytesPerVertex = sizeof(Vertex_Sprite);
-			out.pipelineDesc.vertexLayout = layout_instanced_Sprite;
-			out.pipelineDesc.VS = SHADER_VS(g_VS_InstancedSprite);
+			out.pipelineDesc.vertexLayout = {};
+			out.pipelineDesc.VS = SHADER_VS(g_VS_StructuredSprite);
 			out.pipelineDesc.PS = SHADER_PS(g_PS_CUV);
 			if (type == StandardBatchType::Sprites_MonoOpaque) out.pipelineDesc.PS = SHADER_PS(g_PS_CUV_MonoOpaque);
 			if (type == StandardBatchType::Sprites_MonoTransparent) out.pipelineDesc.PS = SHADER_PS(g_PS_CUV_MonoTransparent);
@@ -517,13 +474,13 @@ namespace ig
 		case StandardBatchType::ScaledSprites_DepthBuffer:
 		case StandardBatchType::ScaledSprites_PremultipliedAlpha:
 		case StandardBatchType::ScaledSprites_BlendDisabled:
-			out.batchDesc.vertGenMethod = BatchDesc::VertexGenerationMethod::Instancing;
-			out.batchDesc.primitive = Primitive::TriangleStrip;
+			out.batchDesc.vertGenMethod = BatchDesc::VertexGenerationMethod::VertexPullingStructured;
+			out.batchDesc.primitive = Primitive::TriangleList;
 			out.batchDesc.inputVerticesPerPrimitive = 1;
-			out.batchDesc.outputVerticesPerPrimitive = 4;
+			out.batchDesc.outputVerticesPerPrimitive = 6;
 			out.batchDesc.bytesPerVertex = sizeof(Vertex_ScaledSprite);
-			out.pipelineDesc.vertexLayout = layout_instanced_ScaledSprite;
-			out.pipelineDesc.VS = SHADER_VS(g_VS_InstancedScaledSprite);
+			out.pipelineDesc.vertexLayout = {};
+			out.pipelineDesc.VS = SHADER_VS(g_VS_StructuredScaledSprite);
 			out.pipelineDesc.PS = SHADER_PS(g_PS_CUV);
 			if (type == StandardBatchType::ScaledSprites_MonoOpaque) out.pipelineDesc.PS = SHADER_PS(g_PS_CUV_MonoOpaque);
 			if (type == StandardBatchType::ScaledSprites_MonoTransparent) out.pipelineDesc.PS = SHADER_PS(g_PS_CUV_MonoTransparent);
@@ -537,13 +494,13 @@ namespace ig
 		case StandardBatchType::TransformedSprites_MonoOpaque:
 		case StandardBatchType::TransformedSprites_MonoTransparent:
 		case StandardBatchType::TransformedSprites_SDF:
-			out.batchDesc.vertGenMethod = BatchDesc::VertexGenerationMethod::Instancing;
-			out.batchDesc.primitive = Primitive::TriangleStrip;
+			out.batchDesc.vertGenMethod = BatchDesc::VertexGenerationMethod::VertexPullingStructured;
+			out.batchDesc.primitive = Primitive::TriangleList;
 			out.batchDesc.inputVerticesPerPrimitive = 1;
-			out.batchDesc.outputVerticesPerPrimitive = 4;
+			out.batchDesc.outputVerticesPerPrimitive = 6;
 			out.batchDesc.bytesPerVertex = sizeof(Vertex_TransformedSprite);
-			out.pipelineDesc.vertexLayout = layout_instanced_TransformedSprite;
-			out.pipelineDesc.VS = SHADER_VS(g_VS_InstancedTransformedSprite);
+			out.pipelineDesc.vertexLayout = {};
+			out.pipelineDesc.VS = SHADER_VS(g_VS_StructuredTransformedSprite);
 			out.pipelineDesc.PS = SHADER_PS(g_PS_CUV);
 			if (type == StandardBatchType::TransformedSprites_MonoOpaque) out.pipelineDesc.PS = SHADER_PS(g_PS_CUV_MonoOpaque);
 			if (type == StandardBatchType::TransformedSprites_MonoTransparent) out.pipelineDesc.PS = SHADER_PS(g_PS_CUV_MonoTransparent);
@@ -551,14 +508,14 @@ namespace ig
 			break;
 
 		case StandardBatchType::Circles:
-			out.batchDesc.vertGenMethod = BatchDesc::VertexGenerationMethod::Instancing;
-			out.batchDesc.primitive = Primitive::TriangleStrip;
+			out.batchDesc.vertGenMethod = BatchDesc::VertexGenerationMethod::VertexPullingStructured;
+			out.batchDesc.primitive = Primitive::TriangleList;
 			out.batchDesc.inputVerticesPerPrimitive = 1;
-			out.batchDesc.outputVerticesPerPrimitive = 4;
+			out.batchDesc.outputVerticesPerPrimitive = 6;
 			out.batchDesc.bytesPerVertex = sizeof(Vertex_Circle);
-			out.pipelineDesc.vertexLayout = layout_instanced_Circle;
-			out.pipelineDesc.VS = SHADER_VS(g_VS_InstancedCircle);
-			out.pipelineDesc.PS = SHADER_PS(g_PS_InstancedCircle);
+			out.pipelineDesc.vertexLayout = {};
+			out.pipelineDesc.VS = SHADER_VS(g_VS_StructuredCircle);
+			out.pipelineDesc.PS = SHADER_PS(g_PS_Circle);
 			break;
 		}
 

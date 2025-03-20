@@ -1,4 +1,4 @@
-#include "../../../shaders/common/BatchRendererCommon.hlsl"
+#include "../common/BatchRendererCommon.hlsl"
 
 ConstantBuffer<PushConstants> pushConstants : register(b0);
 
@@ -18,34 +18,15 @@ struct PixelInput
 
 PixelInput VSMain(uint vertexID : SV_VertexID)
 {
-	#ifdef STRUCTURED_BUFFER
 	StructuredBuffer<VertexInput> buffer = ResourceDescriptorHeap[pushConstants.rawOrStructuredBufferIndex];
-	#endif
-
-	#ifdef RAW_BUFFER
-	ByteAddressBuffer buffer = ResourceDescriptorHeap[pushConstants.rawOrStructuredBufferIndex];
-	#endif
-
 	ConstantBuffer<MatrixConstant> world = ResourceDescriptorHeap[pushConstants.worldMatrixIndex];
 	ConstantBuffer<MatrixConstant> viewProj = ResourceDescriptorHeap[pushConstants.viewProjMatrixIndex];
 
 	uint elementSize = 5 * 4;
 	uint elementIndex = (vertexID / 6);
 	uint cornerIndex = (vertexID % 6);
-	uint offset = elementSize * elementIndex;
 
-	VertexInput input;
-
-#ifdef RAW_BUFFER
-	input.position = asfloat(buffer.Load2(offset));
-	input.width = asfloat(buffer.Load(offset + 8));
-	input.height = asfloat(buffer.Load(offset + 12));
-	input.color = buffer.Load(offset + 16);
-#endif
-
-#ifdef STRUCTURED_BUFFER
-	input = buffer[elementIndex]; 
-#endif
+	VertexInput input = buffer[elementIndex];
 
 	float2 quad[6] = { float2(0, 0), float2(input.width, 0), float2(0, input.height),
 					   float2(0, input.height), float2(input.width, 0), float2(input.width, input.height) };
