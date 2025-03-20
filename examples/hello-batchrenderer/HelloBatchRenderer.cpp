@@ -3,14 +3,22 @@
 #include "igloBatchRenderer.h"
 #include "igloMainLoop.h"
 
+#include "shaders/compiled/PS_Color.h"
+#include "shaders/compiled/PS_Texture.h"
+#include "shaders/compiled/PS_Wobble.h"
+#include "shaders/compiled/VS_ScaledSpriteFloatColor.h"
+#include "shaders/compiled/VS_InstancedRect.h"
+#include "shaders/compiled/VS_InstancedSprite.h"
 #include "shaders/compiled/VS_RawRect.h"
 #include "shaders/compiled/VS_RawSprite.h"
 #include "shaders/compiled/VS_StructuredRect.h"
 #include "shaders/compiled/VS_StructuredSprite.h"
-#include "shaders/compiled/PS_Wobble.h"
 
 #include "AdvDrawStringFuncs.h"
 #include <array>
+
+#define SHADER_VS(a) ig::Shader(a, sizeof(a), "VSMain")
+#define SHADER_PS(a) ig::Shader(a, sizeof(a), "PSMain")
 
 // Agility SDK path and version
 extern "C" { __declspec(dllexport) extern const UINT D3D12SDKVersion = 715; }
@@ -66,12 +74,14 @@ uint32_t demoCakeSides = 12;
 
 ig::BatchType batchFloatColor = 0; // Uses floating point per-vertex colors
 ig::BatchType batchFloatColorMono = 0; // Uses floating point per-vertex colors. For monochrome textures.
+ig::BatchType batchInstancedRects = 0; // Uses instancing.
+ig::BatchType batchInstancedSprites = 0; // Uses instancing.
 ig::BatchType batchRawRects = 0; // Uses vertex pulling with a raw buffer.
 ig::BatchType batchRawSprites = 0; // Uses vertex pulling with a raw buffer.
 ig::BatchType batchStructuredRects = 0; // Uses vertex pulling with a structured buffer.
 ig::BatchType batchStructuredSprites = 0; // Uses vertex pulling with a structured buffer.
-ig::BatchType batchIndexedRects = 0; // Uses indexing
-ig::BatchType batchIndexedSprites = 0; // Uses indexing
+ig::BatchType batchIndexedRects = 0; // Uses indexing.
+ig::BatchType batchIndexedSprites = 0; // Uses indexing.
 ig::BatchType batchCustomPixelShaderSprites = 0;
 ig::BatchType batchCustomBlendSprites = 0;
 ig::Buffer quadIndexBuffer;
@@ -287,47 +297,80 @@ void Start()
 		// In this case, the batch type 'ScaledSprites' is the most similar to what we want.
 		ig::BatchParams params = ig::GetStandardBatchParams(ig::StandardBatchType::ScaledSprites, context.GetBackBufferRenderTargetDesc());
 
-		// This custom batch will use a slightly different vertex layout.
-		// Floating point colors is used instead of 32-bit colors.
+		// This custom batch will use a vertex shader that expects floating point colors instead of 32-bit colors.
 		// This will allow us to draw hdr textures with brightness higher than 1.0.
-		params.pipelineDesc.vertexLayout.at(4).format = ig::Format::FLOAT_FLOAT_FLOAT_FLOAT;
+		params.pipelineDesc.VS = SHADER_VS(g_VS_ScaledSpriteFloatColor);
 		params.batchDesc.bytesPerVertex = sizeof(Vertex_ScaledSpriteFloatColor);
 		batchFloatColor = batchRenderer.CreateBatchType(params);
 
 		// Do the same thing as before but with an opaque monochrome shader, for drawing monochrome textures.
 		params = ig::GetStandardBatchParams(ig::StandardBatchType::ScaledSprites_MonoOpaque, context.GetBackBufferRenderTargetDesc());
-		params.pipelineDesc.vertexLayout.at(4).format = ig::Format::FLOAT_FLOAT_FLOAT_FLOAT;
+		params.pipelineDesc.VS = SHADER_VS(g_VS_ScaledSpriteFloatColor);
 		params.batchDesc.bytesPerVertex = sizeof(Vertex_ScaledSpriteFloatColor);
 		batchFloatColorMono = batchRenderer.CreateBatchType(params);
 
-		// Now create custom batch types that use alternative vertex generation methods for drawing quads.
-		// (BatchRenderer uses instancing by default for drawing quads)
-		params = ig::GetStandardBatchParams(ig::StandardBatchType::Rects, context.GetBackBufferRenderTargetDesc());
+		// Create custom batch types that draw quads using methods such as instancing, vertex pulling, and indexing.
+		// (BatchRenderer draws quads with vertex pulling by default)
+		static const std::vector<ig::VertexElement> layout_instanced_Rect =
+		{
+			ig::VertexElement(ig::Format::FLOAT_FLOAT, "POSITION", 0, 0, ig::InputClass::PerInstance, 1),
+			ig::VertexElement(ig::Format::FLOAT, "WIDTH", 0, 0, ig::InputClass::PerInstance, 1),
+			ig::VertexElement(ig::Format::FLOAT, "HEIGHT", 0, 0, ig::InputClass::PerInstance, 1),
+			ig::VertexElement(ig::Format::BYTE_BYTE_BYTE_BYTE, "COLOR", 0, 0, ig::InputClass::PerInstance, 1),
+		};
+		static const std::vector<ig::VertexElement> layout_instanced_Sprite =
+		{
+			ig::VertexElement(ig::Format::FLOAT_FLOAT, "POSITION", 0, 0, ig::InputClass::PerInstance, 1),
+			ig::VertexElement(ig::Format::UINT16_NotNormalized, "WIDTH", 0, 0, ig::InputClass::PerInstance, 1),
+			ig::VertexElement(ig::Format::UINT16_NotNormalized, "HEIGHT", 0, 0, ig::InputClass::PerInstance, 1),
+			ig::VertexElement(ig::Format::UINT16_UINT16_NotNormalized, "TEXCOORD", 0, 0, ig::InputClass::PerInstance, 1),
+			ig::VertexElement(ig::Format::BYTE_BYTE_BYTE_BYTE, "COLOR", 0, 0, ig::InputClass::PerInstance, 1),
+		};
+		params = ig::BatchParams();
+		params.batchDesc.vertGenMethod = ig::BatchDesc::VertexGenerationMethod::Instancing;
+		params.batchDesc.inputVerticesPerPrimitive = 1;
+		params.batchDesc.outputVerticesPerPrimitive = 4;
+		params.batchDesc.bytesPerVertex = sizeof(ig::Vertex_Rect);
+		params.batchDesc.primitive = ig::Primitive::TriangleStrip;
+		params.pipelineDesc.primitiveTopology = params.batchDesc.primitive;
+		params.pipelineDesc.vertexLayout = layout_instanced_Rect;
+		params.pipelineDesc.VS = SHADER_VS(g_VS_InstancedRect);
+		params.pipelineDesc.PS = SHADER_PS(g_PS_Color);
+		params.pipelineDesc.rasterizerState = ig::RasterizerDesc::NoCull;
+		params.pipelineDesc.blendStates = { ig::BlendDesc::StraightAlpha };
+		params.pipelineDesc.depthState = ig::DepthDesc::DepthDisabled;
+		params.pipelineDesc.renderTargetDesc = context.GetBackBufferRenderTargetDesc();
+		batchInstancedRects = batchRenderer.CreateBatchType(params);
+
+		params.pipelineDesc.VS = SHADER_VS(g_VS_InstancedSprite);
+		params.pipelineDesc.PS = SHADER_PS(g_PS_Texture);
+		params.pipelineDesc.vertexLayout = layout_instanced_Sprite;
+		batchInstancedSprites = batchRenderer.CreateBatchType(params);
+
+		params.batchDesc = ig::BatchDesc();
+		params.batchDesc.vertGenMethod = ig::BatchDesc::VertexGenerationMethod::VertexPullingRaw;
 		params.batchDesc.inputVerticesPerPrimitive = 1;
 		params.batchDesc.outputVerticesPerPrimitive = 6;
-		params.batchDesc.vertGenMethod = ig::BatchDesc::VertexGenerationMethod::VertexPullingRaw;
+		params.batchDesc.bytesPerVertex = sizeof(ig::Vertex_Rect);
 		params.batchDesc.primitive = ig::Primitive::TriangleList;
-		params.pipelineDesc.primitiveTopology = ig::Primitive::TriangleList;
+		params.pipelineDesc.primitiveTopology = params.batchDesc.primitive;
 		params.pipelineDesc.vertexLayout = {};
-		params.pipelineDesc.VS = ig::Shader(g_VS_RawRect, sizeof(g_VS_RawRect), "VSMain");
+		params.pipelineDesc.VS = SHADER_VS(g_VS_RawRect);
+		params.pipelineDesc.PS = SHADER_VS(g_PS_Color);
 		batchRawRects = batchRenderer.CreateBatchType(params);
 
 		params.batchDesc.vertGenMethod = ig::BatchDesc::VertexGenerationMethod::VertexPullingStructured;
-		params.pipelineDesc.VS = ig::Shader(g_VS_StructuredRect, sizeof(g_VS_StructuredRect), "VSMain");
+		params.pipelineDesc.VS = SHADER_VS(g_VS_StructuredRect);
 		batchStructuredRects = batchRenderer.CreateBatchType(params);
 
-		params = ig::GetStandardBatchParams(ig::StandardBatchType::Sprites, context.GetBackBufferRenderTargetDesc());
-		params.batchDesc.inputVerticesPerPrimitive = 1;
-		params.batchDesc.outputVerticesPerPrimitive = 6;
 		params.batchDesc.vertGenMethod = ig::BatchDesc::VertexGenerationMethod::VertexPullingRaw;
-		params.batchDesc.primitive = ig::Primitive::TriangleList;
-		params.pipelineDesc.primitiveTopology = ig::Primitive::TriangleList;
-		params.pipelineDesc.vertexLayout = {};
-		params.pipelineDesc.VS = ig::Shader(g_VS_RawSprite, sizeof(g_VS_RawSprite), "VSMain");
+		params.batchDesc.bytesPerVertex = sizeof(ig::Vertex_Sprite);
+		params.pipelineDesc.VS = SHADER_VS(g_VS_RawSprite);
+		params.pipelineDesc.PS = SHADER_PS(g_PS_Texture);
 		batchRawSprites = batchRenderer.CreateBatchType(params);
 
 		params.batchDesc.vertGenMethod = ig::BatchDesc::VertexGenerationMethod::VertexPullingStructured;
-		params.pipelineDesc.VS = ig::Shader(g_VS_StructuredSprite, sizeof(g_VS_StructuredSprite), "VSMain");
+		params.pipelineDesc.VS = SHADER_VS(g_VS_StructuredSprite);
 		batchStructuredSprites = batchRenderer.CreateBatchType(params);
 
 		params = ig::GetStandardBatchParams(ig::StandardBatchType::Triangles_XYC, context.GetBackBufferRenderTargetDesc());
@@ -521,7 +564,7 @@ void Draw()
 				// Draw a portion of the leaf with blue color.
 				r.DrawTexture(leafTexture, 260, 50, 140, 256, ig::FloatRect(0, 0, 140, 256), ig::Color32(32, 64, 255));
 				// Draw a leaf that fades in and out
-				r.DrawTexture(leafTexture, 290, 100, 100, 100, ig::Color32(255, 255, 255, byte((sinf((float)tick)+1.0f)*128.f)));
+				r.DrawTexture(leafTexture, 290, 100, 100, 100, ig::Color32(255, 255, 255, byte((sinf((float)tick) + 1.0f) * 128.f)));
 				// Draw a leaf that rotates around topleft origin
 				r.DrawTransformedSprite(leafTexture, 520, 100, 64, 64, ig::FloatRect(0, 0, 256, 256), ig::Vector2(0, 0), (float)tick * 2);
 				// Draw a leaf that rotates around center origin
@@ -844,8 +887,9 @@ void Draw()
 				r.DrawString(x, y - 50, "Drawing rectangles:", trimSDF, ig::Colors::White);
 
 				{
-					// BatchRenderer uses instancing by default for quads
-					r.DrawRectangle(x, y, quadSize, quadSize, ig::Colors::Green);
+					r.UsingBatch(batchInstancedRects);
+					ig::Vertex_Rect V = { ig::Vector2(x, y), quadSize, quadSize, ig::Colors::Green };
+					r.AddPrimitive(&V);
 					r.DrawString(x + 38, y + 7, "<-- Using instancing", defaultFont, ig::Colors::White);
 				}
 
@@ -886,7 +930,10 @@ void Draw()
 				r.DrawString(x, y - 50, "Drawing sprites:", trimSDF, ig::Colors::White);
 
 				{
-					r.DrawSprite(appleTexture, x, y, (uint16_t)quadSize, (uint16_t)quadSize, 0, 0);
+					r.UsingBatch(batchInstancedSprites);
+					r.UsingTexture(appleTexture);
+					ig::Vertex_Sprite V = { ig::Vector2(x, y), (uint16_t)quadSize, (uint16_t)quadSize, 0, 0, ig::Colors::White };
+					r.AddPrimitive(&V);
 					r.DrawString(x + 72, y + 20, "<-- Using instancing", defaultFont, ig::Colors::White);
 				}
 				{

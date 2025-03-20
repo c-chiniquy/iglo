@@ -1,12 +1,3 @@
-
-// This vertex shader demonstrates vertex pulling, a technique that can be used to draw quads.
-// In vertex pulling, vertex data is stored in a raw or structured buffer.
-// The vertex shader directly accesses this data to compute the vertices on the fly.
-// By default, BatchRenderer instead uses instancing to render quads such as sprites.
-// On most modern hardware, instancing is at least as fast or slightly faster than
-// vertex pulling for rendering quads. This shader serves as an example of how you can
-// use alternative vertex generation methods with BatchRenderer.
-
 #include "../../../shaders/common/BatchRendererCommon.hlsl"
 
 ConstantBuffer<PushConstants> pushConstants : register(b0);
@@ -29,11 +20,11 @@ struct PixelInput
 PixelInput VSMain(uint vertexID : SV_VertexID)
 {
 	#ifdef STRUCTURED_BUFFER
-	StructuredBuffer<VertexInput> buffer = ResourceDescriptorHeap[pushConstants.rawOrStructuredBufferIndex]; // Structured buffer
+	StructuredBuffer<VertexInput> buffer = ResourceDescriptorHeap[pushConstants.rawOrStructuredBufferIndex];
 	#endif
 
 	#ifdef RAW_BUFFER
-	ByteAddressBuffer buffer = ResourceDescriptorHeap[pushConstants.rawOrStructuredBufferIndex]; // Raw buffer
+	ByteAddressBuffer buffer = ResourceDescriptorHeap[pushConstants.rawOrStructuredBufferIndex];
 	#endif
 
 	ConstantBuffer<MatrixConstant> world = ResourceDescriptorHeap[pushConstants.worldMatrixIndex];
@@ -69,10 +60,7 @@ PixelInput VSMain(uint vertexID : SV_VertexID)
 	output.position = mul(pos4, world.m);
 	output.position = mul(output.position, viewProj.m);
 	output.texCoord = ((float2)uv + quad[cornerIndex]) * textureConstants.inverseTextureSize;
-	output.color = float4((input.color & 0xFF) / 255.0,
-		((input.color >> 8) & 0xFF) / 255.0,
-		((input.color >> 16) & 0xFF) / 255.0,
-		((input.color >> 24) & 0xFF) / 255.0);
+	output.color = ConvertToFloat4(input.color);
 
 	return output;
 }

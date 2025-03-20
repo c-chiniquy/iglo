@@ -1,6 +1,11 @@
 
 # Changelog
 
+## v0.2.2
+
+### Added or changed
+- BatchRenderer now uses the Vertex Pulling method to draw quads.
+
 ## v0.2.1
 
 ### Added or changed
