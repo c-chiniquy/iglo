@@ -31,7 +31,6 @@ PixelInput VSMain(uint vertexID : SV_VertexID)
 	ConstantBuffer<MatrixConstant> world = ResourceDescriptorHeap[pushConstants.worldMatrixIndex];
 	ConstantBuffer<MatrixConstant> viewProj = ResourceDescriptorHeap[pushConstants.viewProjMatrixIndex];
 
-	uint elementSize = 5 * 4;
 	uint elementIndex = (vertexID / 6);
 	uint cornerIndex = (vertexID % 6);
 
