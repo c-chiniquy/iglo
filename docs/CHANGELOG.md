@@ -1,6 +1,11 @@
 
 # Changelog
 
+## v0.2.3
+
+### Added or changed
+- BatchRenderer now uses Instancing to draw quads.
+
 ## v0.2.2
 
 ### Added or changed

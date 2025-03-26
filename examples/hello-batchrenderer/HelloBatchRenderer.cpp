@@ -6,7 +6,6 @@
 #include "shaders/compiled/PS_Color.h"
 #include "shaders/compiled/PS_Texture.h"
 #include "shaders/compiled/PS_Wobble.h"
-#include "shaders/compiled/VS_ScaledSpriteFloatColor.h"
 #include "shaders/compiled/VS_InstancedRect.h"
 #include "shaders/compiled/VS_InstancedSprite.h"
 #include "shaders/compiled/VS_RawRect.h"
@@ -297,20 +296,21 @@ void Start()
 		// In this case, the batch type 'ScaledSprites' is the most similar to what we want.
 		ig::BatchParams params = ig::GetStandardBatchParams(ig::StandardBatchType::ScaledSprites, context.GetBackBufferRenderTargetDesc());
 
-		// This custom batch will use a vertex shader that expects floating point colors instead of 32-bit colors.
+		// This custom batch will use a slightly different vertex layout.
+		// Floating point colors is used instead of 32-bit colors.
 		// This will allow us to draw hdr textures with brightness higher than 1.0.
-		params.pipelineDesc.VS = SHADER_VS(g_VS_ScaledSpriteFloatColor);
+		params.pipelineDesc.vertexLayout.at(4).format = ig::Format::FLOAT_FLOAT_FLOAT_FLOAT;
 		params.batchDesc.bytesPerVertex = sizeof(Vertex_ScaledSpriteFloatColor);
 		batchFloatColor = batchRenderer.CreateBatchType(params);
 
 		// Do the same thing as before but with an opaque monochrome shader, for drawing monochrome textures.
 		params = ig::GetStandardBatchParams(ig::StandardBatchType::ScaledSprites_MonoOpaque, context.GetBackBufferRenderTargetDesc());
-		params.pipelineDesc.VS = SHADER_VS(g_VS_ScaledSpriteFloatColor);
+		params.pipelineDesc.vertexLayout.at(4).format = ig::Format::FLOAT_FLOAT_FLOAT_FLOAT;
 		params.batchDesc.bytesPerVertex = sizeof(Vertex_ScaledSpriteFloatColor);
 		batchFloatColorMono = batchRenderer.CreateBatchType(params);
 
 		// Create custom batch types that draw quads using methods such as instancing, vertex pulling, and indexing.
-		// (BatchRenderer draws quads with vertex pulling by default)
+		// (BatchRenderer draws quads using instancing by default)
 		static const std::vector<ig::VertexElement> layout_instanced_Rect =
 		{
 			ig::VertexElement(ig::Format::FLOAT_FLOAT, "POSITION", 0, 0, ig::InputClass::PerInstance, 1),
