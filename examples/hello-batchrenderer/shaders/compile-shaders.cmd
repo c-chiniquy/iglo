@@ -1,5 +1,4 @@
 
-dxc.exe -WX -Qstrip_debug -Qstrip_reflect -T vs_6_6 -E VSMain -Vn "g_VS_ScaledSpriteFloatColor" -Fh "compiled/VS_ScaledSpriteFloatColor.h" "ScaledSpritesWithFloatColor.hlsl"
 dxc.exe -WX -Qstrip_debug -Qstrip_reflect -T vs_6_6 -E VSMain -Vn "g_VS_InstancedRect" -Fh "compiled/VS_InstancedRect.h" "InstancedRect.hlsl"
 dxc.exe -WX -Qstrip_debug -Qstrip_reflect -T vs_6_6 -E VSMain -Vn "g_VS_InstancedSprite" -Fh "compiled/VS_InstancedSprite.h" "InstancedSprite.hlsl"
 dxc.exe -WX -Qstrip_debug -Qstrip_reflect -T vs_6_6 -E VSMain -Vn "g_VS_RawRect" -Fh "compiled/VS_RawRect.h" "VertexPulledRect.hlsl" -D RAW_BUFFER

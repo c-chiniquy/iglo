@@ -17,6 +17,15 @@ struct PixelInput
 	float2 texCoord : TEXCOORD0;
 };
 
+float4 ConvertToFloat4(uint color32)
+{
+	return float4(
+		(float)(color32 & 0xFF) / 255.0f,
+		(float)((color32 >> 8) & 0xFF) / 255.0f,
+		(float)((color32 >> 16) & 0xFF) / 255.0f,
+		(float)((color32 >> 24) & 0xFF) / 255.0f);
+}
+
 PixelInput VSMain(uint vertexID : SV_VertexID)
 {
 	#ifdef STRUCTURED_BUFFER
