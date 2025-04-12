@@ -235,7 +235,7 @@ Libraries included with iglo:
 - [stb_image_write.h](https://github.com/nothings/stb/): Image writer.
 
 Libraries *not* included with iglo:
-- [Agility SDK](https://devblogs.microsoft.com/directx/directx12agility/): To support the latest D3D12 features. The CMake script automatically downloads this.
+- [Agility SDK](https://devblogs.microsoft.com/directx/directx12agility/): Adds the newest D3D12 features. The CMake script automatically downloads this if needed.
 
 ## Contributing
 
