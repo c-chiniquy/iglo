@@ -22,10 +22,10 @@ The Vulkan implementation is still in progress, and currently, **iglo supports o
 
 ## Features
 
-- Written in C++17.
-- Lightweight and easy to setup.
+- Written from scratch in C++17.
+- Minimal dependencies.
 - Fully bindless rendering with SM6.6's ResourceDescriptorHeap and SamplerDescriptorHeap.
-- Uses D3D12's enhanced barriers.
+- Enhanced barriers (D3D12).
 - UTF-8 internal string representation.
 - Vector, matrix and quaternion classes. All with relevant math functions.
 - Helper functions for:
@@ -227,12 +227,15 @@ int main(int argc, char** argv)
 
 </details>
 
-## Third Party Libraries/Assets
+## Third Party Libraries
 
-- [stb_truetype.h](https://github.com/nothings/stb/)
-- [stb_image.h](https://github.com/nothings/stb/)
-- [stb_image_write.h](https://github.com/nothings/stb/)
-- [Vegur font](https://www.fontspace.com/vegur-font-f7408) (used as iglo's default font)
+Below is a list of libraries included with iglo:
+- [stb_truetype.h](https://github.com/nothings/stb/): Font text rasterizer.
+- [stb_image.h](https://github.com/nothings/stb/): Image loader.
+- [stb_image_write.h](https://github.com/nothings/stb/): Image writer.
+
+Below is a list of libraries not included with iglo:
+- [Agility SDK](https://devblogs.microsoft.com/directx/directx12agility/): To support the latest D3D12 features. The CMake script automatically downloads this.
 
 ## Contributing
 
@@ -248,10 +251,15 @@ iglo is in the public domain. iglo is also licensed under the MIT open source li
 
 ## Acknowledgments
 
-[Alex Tardif's blog post on rendering abstraction layers](https://alextardif.com/RenderingAbstractionLayers.html)\
-[gingerBill's public domain math functions](https://github.com/gingerBill/gb/blob/master/gb_math.h)\
-[Jeff Bezanson's public domain utf8 functions](https://github.com/JeffBezanson/cutef8/blob/master/utf8.c)\
-[wareya's public domain utf conversion functions](https://github.com/wareya/unishim/blob/master/unishim.h)\
-[sheredom's public domain utf8 functions](https://github.com/sheredom/utf8.h/blob/master/utf8.h)\
-[littlstar's public domain DDS loading code](https://github.com/littlstar/soil/)\
-[Blat Blatnik's public domain precise win32 sleep function](https://github.com/blat-blatnik/Snippets/blob/main/precise_sleep.c)
+I found inspiration on how to design iglo from [Alex Tardif's blog post on rendering abstraction layers](https://alextardif.com/RenderingAbstractionLayers.html).
+
+Code snippets used (all of these are public domain):
+- [gingerBill's math functions](https://github.com/gingerBill/gb/blob/master/gb_math.h)
+- [Jeff Bezanson's utf8 functions](https://github.com/JeffBezanson/cutef8/blob/master/utf8.c)
+- [wareya's utf conversion functions](https://github.com/wareya/unishim/blob/master/unishim.h)
+- [sheredom's utf8 functions](https://github.com/sheredom/utf8.h/blob/master/utf8.h)
+- [littlstar's DDS loading code](https://github.com/littlstar/soil/)
+- [Blat Blatnik's precise win32 sleep function](https://github.com/blat-blatnik/Snippets/blob/main/precise_sleep.c)
+
+Assets used:
+- [Vegur font](https://www.fontspace.com/vegur-font-f7408): Used as iglo's default font.
