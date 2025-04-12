@@ -229,12 +229,12 @@ int main(int argc, char** argv)
 
 ## Third Party Libraries
 
-Below is a list of libraries included with iglo:
+Libraries included with iglo:
 - [stb_truetype.h](https://github.com/nothings/stb/): Font text rasterizer.
 - [stb_image.h](https://github.com/nothings/stb/): Image loader.
 - [stb_image_write.h](https://github.com/nothings/stb/): Image writer.
 
-Below is a list of libraries not included with iglo:
+Libraries *not* included with iglo:
 - [Agility SDK](https://devblogs.microsoft.com/directx/directx12agility/): To support the latest D3D12 features. The CMake script automatically downloads this.
 
 ## Contributing
