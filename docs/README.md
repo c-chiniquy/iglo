@@ -158,13 +158,13 @@ void OnLoopExited()
 	context.WaitForIdleDevice(); // Wait for GPU to finish all remaining work before resources get released
 }
 
-// This is called once per frame.
+// This callback is invoked once per frame.
 void Update(double elapsedSeconds)
 {
 }
 
 // This is a frame-rate independent callback that allows you to decouple the game physics frame-rate from the visual frame-rate.
-// This is called with a fixed timestep.
+// This callback is invoked at a fixed timestep.
 void FixedUpdate()
 {
 }
