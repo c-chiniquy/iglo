@@ -237,10 +237,6 @@ Libraries included with iglo:
 Libraries *not* included with iglo:
 - [Agility SDK](https://devblogs.microsoft.com/directx/directx12agility/): Adds the newest D3D12 features. The CMake script automatically downloads this if needed.
 
-## Contributing
-
-Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on how to contribute to this project.
-
 ## Authors
 
 - Initial work: [Christoffer Chiniquy](https://github.com/c-chiniquy)
