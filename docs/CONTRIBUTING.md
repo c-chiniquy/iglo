@@ -17,4 +17,4 @@ The versioning we use is [SemVer](http://semver.org/).
 
 ## Looking for things to do?
 
-If you want to contribute to this project but don't know what to work on yet, consider reading [TODO.txt](TODO.txt). The most important missing features at the moment are the Vulkan and Linux implementations.
+If you want to contribute to this project but don't know what to work on yet, consider reading [TODO.txt](TODO.txt).
