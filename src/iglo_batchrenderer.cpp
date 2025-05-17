@@ -1,8 +1,8 @@
 #pragma once
 
 #include "iglo.h"
-#include "igloFont.h"
-#include "igloBatchRenderer.h"
+#include "iglo_font.h"
+#include "iglo_batchrenderer.h"
 
 #include <cassert>
 

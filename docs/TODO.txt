@@ -8,9 +8,8 @@ TODO: Write iglo tutorials and guides.
 
 TODO: Helper functions/classes for common 3D rendering operations, such as parsing mesh files, provide common material shaders/pipelines, etc.
 
-TODO: Move the D3D12 and Vulkan implementations into separate files. igloD3D12.cpp and igloVulkan.cpp.
-TODO: Move the Windows and Linux implementations into separate files. igloWin32.cpp and igloLinux.cpp.
-TODO: Maybe rename the iglo source files to a more readable "iglo_utility.cpp" instead of "igloUtility.cpp"?
+TODO: Move the D3D12 and Vulkan implementations into separate files.
+TODO: Move the Windows and Linux implementations into separate files.
 
 TODO: A tool to convert a bmfont .fnt text file to an iglo PrebakedFontData struct or iglo prebaked font file.
       iglo uses STB's font rasterizer to rasterize glyphs in real time, but BMFont can rasterize glyphs at smaller font sizes better.

@@ -1,6 +1,6 @@
 #include "../../src/iglo.h"
-#include "../../src/igloFont.h"
-#include "../../src/igloBatchRenderer.h"
+#include "../../src/iglo_font.h"
+#include "../../src/iglo_batchrenderer.h"
 #include "AdvDrawStringFuncs.h"
 
 namespace ig

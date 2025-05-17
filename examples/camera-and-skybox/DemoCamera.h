@@ -1,5 +1,4 @@
 #pragma once
-#include "../../src/igloCamera.h"
 
 namespace ig
 {

@@ -1,5 +1,5 @@
-#include "igloUtility.h"
-#include "igloCamera.h"
+#include "iglo_utility.h"
+#include "iglo_camera.h"
 
 namespace ig
 {

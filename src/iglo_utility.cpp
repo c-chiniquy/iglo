@@ -1,5 +1,5 @@
-﻿#include "igloConfig.h"
-#include "igloUtility.h"
+﻿#include "iglo_config.h"
+#include "iglo_utility.h"
 
 #include <fstream>
 #include <sstream>
