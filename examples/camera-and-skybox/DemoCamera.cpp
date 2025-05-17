@@ -1,5 +1,5 @@
 #include "../../src/iglo.h"
-#include "../../src/igloCamera.h"
+#include "../../src/iglo_camera.h"
 #include "DemoCamera.h"
 
 namespace ig

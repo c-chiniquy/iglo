@@ -10,17 +10,17 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(IGLO_SOURCES
     ${CMAKE_SOURCE_DIR}/src/iglo.h
     ${CMAKE_SOURCE_DIR}/src/iglo.cpp
-    ${CMAKE_SOURCE_DIR}/src/igloBatchRenderer.h
-    ${CMAKE_SOURCE_DIR}/src/igloBatchRenderer.cpp
-    ${CMAKE_SOURCE_DIR}/src/igloCamera.h
-    ${CMAKE_SOURCE_DIR}/src/igloCamera.cpp
-    ${CMAKE_SOURCE_DIR}/src/igloFont.h
-    ${CMAKE_SOURCE_DIR}/src/igloFont.cpp
-    ${CMAKE_SOURCE_DIR}/src/igloMainLoop.h
-    ${CMAKE_SOURCE_DIR}/src/igloMainLoop.cpp
-    ${CMAKE_SOURCE_DIR}/src/igloUtility.h
-    ${CMAKE_SOURCE_DIR}/src/igloUtility.cpp
-    ${CMAKE_SOURCE_DIR}/src/igloConfig.h
+    ${CMAKE_SOURCE_DIR}/src/iglo_batchrenderer.h
+    ${CMAKE_SOURCE_DIR}/src/iglo_batchrenderer.cpp
+    ${CMAKE_SOURCE_DIR}/src/iglo_camera.h
+    ${CMAKE_SOURCE_DIR}/src/iglo_camera.cpp
+    ${CMAKE_SOURCE_DIR}/src/iglo_font.h
+    ${CMAKE_SOURCE_DIR}/src/iglo_font.cpp
+    ${CMAKE_SOURCE_DIR}/src/iglo_mainloop.h
+    ${CMAKE_SOURCE_DIR}/src/iglo_mainloop.cpp
+    ${CMAKE_SOURCE_DIR}/src/iglo_utility.h
+    ${CMAKE_SOURCE_DIR}/src/iglo_utility.cpp
+    ${CMAKE_SOURCE_DIR}/src/iglo_config.h
 )
 
 # set Agility SDK version

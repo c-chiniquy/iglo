@@ -1,5 +1,5 @@
 #include "iglo.h"
-#include "igloMainLoop.h"
+#include "iglo_mainloop.h"
 
 namespace ig
 {

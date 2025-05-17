@@ -69,8 +69,8 @@ namespace ig
 #include "stb/stb_image.h"
 #define STBIW_WINDOWS_UTF8
 #include "stb/stb_image_write.h"
-#include "igloConfig.h"
-#include "igloUtility.h"
+#include "iglo_config.h"
+#include "iglo_utility.h"
 #include <queue>
 #include <mutex>
 

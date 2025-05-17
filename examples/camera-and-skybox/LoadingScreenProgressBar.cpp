@@ -1,7 +1,7 @@
 #include "iglo.h"
-#include "igloFont.h"
-#include "igloBatchRenderer.h"
-#include "igloMainLoop.h"
+#include "iglo_font.h"
+#include "iglo_batchrenderer.h"
+#include "iglo_mainloop.h"
 #include "LoadingScreenProgressBar.h"
 
 
