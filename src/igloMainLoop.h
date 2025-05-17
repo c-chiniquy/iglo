@@ -50,19 +50,31 @@ namespace ig
 		void SetFrameRateLimit(double frameRateLimit);
 		double GetFrameRateLimit() const { return frameRateLimit; }
 
+		// If enabled, the frame rate will be capped and synced to the fixed update frame rate.
+		// This setting will override the frame rate set with SetFrameRateLimit().
+		// While enabled, it ensures that FixedUpdate() is called atleast once before Draw() is called every frame.
+		// It will still be possible for FixedUpdate() to be called multiple times in a row (when frames are behind schedule).
+		// This is useful for games that must run its game physics at a fixed frame rate without using frame interpolation when rendering
+		// and don't want to waste GPU resources rendering a frame with no new information in it.
+		// So if you don't want to use frame interpolation, and you still want physics to run at a fixed frame rate,
+		// then you should probably enable this setting!
+		void EnableFixedFrameRateSync(bool enable);
+		bool GetFixedFrameRateSyncEnabled() const { return enableFixedFrameRateSync; };
+
 		// Idle mode takes advantage of the behavior of WaitForEvent() to minimize CPU/GPU usage while keeping input responsiveness high. 
-		// Each frame, the thread will sleep until an event is received or a certain amount of time has passed.
+		// While enabled, each frame the thread will sleep until an event is received or a certain amount of time has passed.
 		// This results in much lower FPS when no window/keyboard/mouse events occur, making it ideal for idle-heavy GUI apps 
 		// that remain inactive for extended periods.
 		// (Note: This is unrelated to the frame rate limiter.)
 		void EnableIdleMode(bool enable);
 		bool GetIdleModeEnabled() const { return this->idleMode; }
 
-		// The FixedUpdate callback allows the game physics framerate to be decoupled from the visual framerate.
+		// The FixedUpdate callback allows the game physics frame rate to be decoupled from the visual frame rate.
 		// This is useful for when game physics must run at a fixed rate, and you don't want higher refresh rates or Vsync to impact physics timing.
 		// The FixedUpdate callback is invoked whenever sufficient time has accumulated, based on 'fixedUpdateFrameRate'.
 		// The default value for 'fixedUpdateFrameRate' is 60.
 		void SetFixedUpdateFrameRate(double fixedUpdateFrameRate, uint32_t maxFixedUpdatesInARow = 2);
+		double GetFixedUpdateFrameRate() const { return fixedUpdateFrameRate; }
 
 		// Returns a value between 0.0 and 1.0 for interpolating between fixed update frames during rendering.
 		// This is meant to be used together with the fixed timestep update callback (FixedUpdate).
@@ -113,6 +125,7 @@ namespace ig
 		// Framerate limit
 		FrameRateLimiter limiter;
 		double frameRateLimit = 0;
+		bool enableFixedFrameRateSync = false;
 
 		// Time
 		Timer timer;
@@ -120,7 +133,7 @@ namespace ig
 		double elapsedSeconds = 0;
 
 		// Avarage FPS
-		uint32_t avgFPS_numFrames = 0; // The number of frames that has occured since started measuring avarage FPS
+		uint32_t avgFPS_numFrames = 0; // Number of frames passed since start of measurement
 		double avgFPS_totalElapsedSeconds = 0; // The total elapsed time since started measuring avarage FPS
 		int32_t avgFPS = 0;
 	};

@@ -16,7 +16,7 @@ namespace ig
 		// Calculate avarage FPS
 		avgFPS_numFrames++;
 		avgFPS_totalElapsedSeconds += elapsedSeconds;
-		const double avgFPSDuration = 0.5; // Avarage FPS updates every 500 milliseconds
+		const double avgFPSDuration = 0.5; // The duration the avarage FPS is calculated
 		if (avgFPS_totalElapsedSeconds >= avgFPSDuration)
 		{
 			avgFPS = (int)round(1.0 / (avgFPS_totalElapsedSeconds / avgFPS_numFrames));
@@ -32,6 +32,31 @@ namespace ig
 
 	void MainLoop::Tick()
 	{
+		//-------------- Time --------------//
+		if (!mainLoopRunning || !context->IsLoaded()) return;
+		if (enableFixedFrameRateSync)
+		{
+			if (fixedUpdateFrameRate > 0)
+			{
+				// Sync the visual frame rate with the fixed update frame rate.
+				// This is done by sleeping the amount of time remaining in the fixed update time accumulator.
+				const double fixedTargetTime = (1.0 / fixedUpdateFrameRate);
+				double currentSecondsElapsed = timer.GetSeconds();
+				if (timeAccumulator + currentSecondsElapsed < fixedTargetTime)
+				{
+					// Not enough time has passed for FixedUpdate() to be called.
+					// Sleep here until enough time has passed.
+					PreciseSleep(fixedTargetTime - (timeAccumulator + currentSecondsElapsed));
+				}
+			}
+		}
+		else
+		{
+			// Use the independent frame rate limiter (it measures its own time).
+			if (frameRateLimit > 0) limiter.LimitFPS(frameRateLimit);
+		}
+		MeasureTimePassed();
+
 		//-------------- Events --------------//
 		Event e;
 		if (idleMode)
@@ -50,23 +75,20 @@ namespace ig
 		if (!mainLoopRunning || !context->IsLoaded()) return;
 		if (callbackUpdate) callbackUpdate(elapsedSeconds);
 
-		//-------------- Fixed time step Physics --------------//
+		//-------------- Fixed time step updates --------------//
 		if (!mainLoopRunning || !context->IsLoaded()) return;
-		if (callbackFixedUpdate)
+		if (fixedUpdateFrameRate > 0)
 		{
-			if (fixedUpdateFrameRate > 0)
+			timeAccumulator += elapsedSeconds;
+			const double fixedTargetTime = (1.0 / fixedUpdateFrameRate);
+			const double maxTime = fixedTargetTime * maxFixedUpdatesInARow;
+			if (timeAccumulator > maxTime) timeAccumulator = maxTime;
+			while (timeAccumulator >= fixedTargetTime)
 			{
-				timeAccumulator += elapsedSeconds;
-				const double physicsTargetTime = (1.0 / fixedUpdateFrameRate);
-				const double maxTime = physicsTargetTime * maxFixedUpdatesInARow;
-				if (timeAccumulator > maxTime) timeAccumulator = maxTime;
-				while (timeAccumulator >= physicsTargetTime)
-				{
-					timeAccumulator -= physicsTargetTime;
-					if (callbackFixedUpdate) callbackFixedUpdate();
-				}
-				fixedUpdateFrameInterpolation = timeAccumulator / physicsTargetTime;
+				timeAccumulator -= fixedTargetTime;
+				if (callbackFixedUpdate) callbackFixedUpdate();
 			}
+			fixedUpdateFrameInterpolation = timeAccumulator / fixedTargetTime;
 		}
 
 		//-------------- Draw --------------//
@@ -89,12 +111,6 @@ namespace ig
 		{
 			if (callbackDraw) callbackDraw();
 		}
-
-		//-------------- Time --------------//
-		if (!mainLoopRunning || !context->IsLoaded()) return;
-		if (frameRateLimit > 0) limiter.LimitFPS(frameRateLimit); // Limit frame rate
-		MeasureTimePassed();
-
 	}
 
 	void MainLoop::Run(IGLOContext& context, CallbackStart callback_Start, CallbackOnLoopExited callback_OnLoopExited,
@@ -169,14 +185,19 @@ namespace ig
 		this->mainLoopRunning = false;
 	}
 
-	void MainLoop::SetFrameRateLimit(double frameRateLimit) 
-	{ 
+	void MainLoop::SetFrameRateLimit(double frameRateLimit)
+	{
 		this->frameRateLimit = frameRateLimit;
 	}
 
+	void MainLoop::EnableFixedFrameRateSync(bool enable)
+	{
+		this->enableFixedFrameRateSync = enable;
+	}
+
 	void MainLoop::EnableIdleMode(bool enable)
-	{ 
-		this->idleMode = enable; 
+	{
+		this->idleMode = enable;
 	}
 
 	void MainLoop::SetFixedUpdateFrameRate(double fixedUpdateFrameRate, uint32_t maxFixedUpdatesInARow)
