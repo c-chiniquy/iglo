@@ -291,15 +291,15 @@ namespace ig
 
 		currentMoment = std::chrono::steady_clock::now();
 		double delta = std::chrono::duration_cast<myDur>(currentMoment - t1).count();
-		const double frameSnap = 0.05;
-		if (delta >= 0 && delta <= seconds * frameSnap)
+		const double acceptableDeviation = 0.05;
+		if (delta <= seconds * acceptableDeviation)
 		{
-			// If very close to target, next frame begins exactly when this frame ends.
-			t1 = t1 + myDur(seconds);
+			// If close enough, next frame begins as planned.
+			t1 += myDur(seconds);
 		}
 		else
 		{
-			// If we are a bit late, the new frame starts at whatever the current time is.
+			// If we are late, new frame is delayed.
 			t1 = currentMoment + myDur(seconds);
 		}
 	}
@@ -938,6 +938,8 @@ namespace ig
 	// Code taken from public domain source: https://github.com/blat-blatnik/Snippets/blob/main/precise_sleep.c
 	void PreciseSleep(double seconds)
 	{
+		if (seconds <= 0) return;
+
 #ifdef _WIN32
 		static HANDLE timerHandle = NULL;
 		static int schedulerPeriodMs = 0;
