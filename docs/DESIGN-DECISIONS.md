@@ -26,7 +26,7 @@ This document contains my personal thoughts behind various design decisions i ha
 
 # Coding guidelines
 
-- Every iglo object that must be initialized before it can be used will contain some variant of these functions:
+- All iglo objects that must be initialized before they can be used will follow this design pattern:
   - `bool Load();`\
     This initializes the object. Will replace existing instance if already loaded.
   - `void Unload();`\
@@ -125,14 +125,14 @@ Prefer using `std::vector` over `std::unique_ptr` for dynamic arrays.
 - **Minimum supported GPU**: RTX 2000-series (and AMD/Intel equivalent)
 
 # iglo Requirements
-- **Supported operating systems**:
+
+- Supported operating systems:
   - Windows 10 1909 or newer
-  - Windows 10 LTSC 2021**
+  - Windows 10 LTSC 2021
   - Windows 11
   - Ubuntu 22.04 or newer
   - Likely works on other Linux distros as well, just haven't tested them yet
-- **Minimum supported GPUs**:
+- Minimum supported GPUs:
   - GTX 1000-series (or AMD/Intel equivalent generation) for the D3D12 backend
   - RTX 2000-series (or AMD/Intel equivalent generation) for the Vulkan backend
 - The D3D12 backend requires the Agility SDK for advanced features such as Shader Model 6.6 and Enhanced Barriers.
-
