@@ -1,6 +1,6 @@
 #include "../common/BatchRendererCommon.hlsl"
 
-ConstantBuffer<PushConstants> pushConstants : register(b0);
+[[vk::push_constant]] ConstantBuffer<PushConstants> pushConstants : register(b0);
 
 float4 PSMain(float4 position : SV_POSITION, float4 color : COLOR, float2 texCoord : TEXCOORD0) : SV_TARGET
 {

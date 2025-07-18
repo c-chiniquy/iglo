@@ -1,6 +1,6 @@
 #include "../../src/iglo.h"
 #include "../../src/iglo_font.h"
-#include "../../src/iglo_batchrenderer.h"
+#include "../../src/iglo_batch_renderer.h"
 #include "AdvDrawStringFuncs.h"
 
 namespace ig
@@ -242,7 +242,8 @@ namespace ig
 		}
 		else
 		{
-			if (font.GetTexture()->GetColorChannelCount() == 1)
+			uint32_t colorChannelCount = GetFormatInfo(font.GetTexture()->GetFormat()).elementCount;
+			if (colorChannelCount == 1)
 			{
 				r.UsingBatch((BatchType)StandardBatchType::ScaledSprites_MonoTransparent);
 			}
@@ -424,7 +425,8 @@ namespace ig
 					}
 					else
 					{
-						if (font.GetTexture()->GetColorChannelCount() == 1)
+						uint32_t colorChannelCount = GetFormatInfo(font.GetTexture()->GetFormat()).elementCount;
+						if (colorChannelCount == 1)
 						{
 							r.UsingBatch((BatchType)StandardBatchType::Sprites_MonoTransparent);
 						}

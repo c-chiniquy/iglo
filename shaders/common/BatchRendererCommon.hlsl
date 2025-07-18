@@ -26,7 +26,6 @@ float LinearizeDepth(float depth, float zNear, float zFar)
 struct PushConstants
 {
 	uint textureIndex;
-	uint stencilComponentTextureIndex; // Only for depth buffers with stencil component
 	uint samplerIndex;
 	uint worldMatrixIndex;
 	uint viewProjMatrixIndex;

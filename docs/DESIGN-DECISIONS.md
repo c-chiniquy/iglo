@@ -104,19 +104,35 @@ Prefer using `std::vector` over `std::unique_ptr` for dynamic arrays.
     [Info from microsoft](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-unregisterclassw)\
     [Info from stackoverflow](https://stackoverflow.com/questions/150803/side-effects-of-calling-registerwindow-multiple-times-with-same-window-class)
 
-# Compatibility
+# Backend Technical Requirements
 
 ## Windows
+- **Agility SDK**: Requires Windows 10 version 1909 or newer
+- **Frame rate limiter**: Requires Windows 10 version 1803 or newer for high-resolution timer
 
-Agility SDK needs Windows 10 version 1909 or later.
-The frame rate limiter's high res timer needs Windows 10 version 1803 or later.
+## Linux
+- Vulkan backend confirmed working with proprietary NVIDIA drivers on Linux Mint 21.3 which runs on Ubuntu 22.04.
 
 ## D3D12
-
-Shader model 6.6 is only officially supported on Windows 11, and only works on Windows 10 if you have Agility SDK installed.
-Agility SDK is a NuGet package that can be installed in Visual Studio.
+- **Feature Level 12_1**
+- **Shader Model 6.6**: Requires Agility SDK
+- **Enhanced barriers**: Requires Agility SDK
+- **Resource Binding Tier 3**
+- **Minimum supported GPU**: GTX 1000-series (and AMD/Intel equivalent)
 
 ## Vulkan
+- Requires support for **Vulkan 1.3**, along with some additional extensions/features
+- **Minimum supported GPU**: RTX 2000-series (and AMD/Intel equivalent)
 
-Vulkan 1.3 supports bindless shader model 6.6 equivalent features.
-Windows 10 2021 LTSC with latest graphics drivers installed supports Vulkan 1.3.
+# iglo Requirements
+- **Supported operating systems**:
+  - Windows 10 1909 or newer
+  - Windows 10 LTSC 2021**
+  - Windows 11
+  - Ubuntu 22.04 or newer
+  - Likely works on other Linux distros as well, just haven't tested them yet
+- **Minimum supported GPUs**:
+  - GTX 1000-series (or AMD/Intel equivalent generation) for the D3D12 backend
+  - RTX 2000-series (or AMD/Intel equivalent generation) for the Vulkan backend
+- The D3D12 backend requires the Agility SDK for advanced features such as Shader Model 6.6 and Enhanced Barriers.
+

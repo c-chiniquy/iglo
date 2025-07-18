@@ -22,22 +22,28 @@ namespace ig
 			SkipDraw,
 
 			// When window is minimized, MainLoop will skip the Draw() callback and
-			// will sleep for 1 millisecond each frame to prevent 100% CPU usage.
+			// will sleep for a few milliseconds every frame to prevent 100% CPU usage.
 			SkipDrawAndSleep,
 		};
 
-		typedef void(*CallbackOnEvent)(Event e);
-		typedef void(*CallbackStart)();
-		typedef void(*CallbackOnLoopExited)();
-		typedef void(*CallbackUpdate)(double elapsedSeconds);
-		typedef void(*CallbackFixedUpdate)();
-		typedef void(*CallbackDraw)();
+		using CallbackOnEvent = std::function<void(Event e)>;
+		using CallbackStart = std::function<void()>;
+		using CallbackOnLoopExited = std::function<void()>;
+		using CallbackUpdate = std::function<void(double elapsedSeconds)>;
+		using CallbackFixedUpdate = std::function<void()>;
+		using CallbackDraw = std::function<void()>;
 
 		// Enters the main application loop.
 		// The 'Start' callback is called before entering the loop, and 'OnLoopExited' is called after exiting the loop.
 		// If 'useModalLoopCallback' is true, app will not freeze when resizing/moving the window, with the trade-off being that
 		// you can't nest another MainLoop or GetEvent() loop inside any MainLoop callbacks when window is being dragged/resized.
-		void Run(IGLOContext&, CallbackStart, CallbackOnLoopExited, CallbackDraw, CallbackUpdate, CallbackFixedUpdate, CallbackOnEvent,
+		void Run(IGLOContext&,
+			CallbackStart,
+			CallbackOnLoopExited,
+			CallbackDraw,
+			CallbackUpdate,
+			CallbackFixedUpdate,
+			CallbackOnEvent,
 			bool useModalLoopCallback = true);
 
 		// Tells MainLoop that it should exit the loop the first chance it gets.
@@ -85,7 +91,7 @@ namespace ig
 
 		// Set how MainLoop should behave when the window is minimized.
 		void SetWindowMinimizedBehaviour(WindowMinimizedBehaviour);
-		WindowMinimizedBehaviour GetMinimizedWindowBehaviour() const { windowMinimizedBehaviour; }
+		WindowMinimizedBehaviour GetWindowMinimizedBehaviour() const { return windowMinimizedBehaviour; }
 
 		// Seconds elapsed since last frame. 60 FPS = 0.0166667 elapsed seconds per frame.
 		double GetElapsedSeconds() const { return elapsedSeconds; }
@@ -95,11 +101,8 @@ namespace ig
 
 		// Avarage frames per second. Rounded to nearest integer and updates only a few times every second.
 		int32_t GetAvarageFPS() const { return avgFPS; }
-	private:
-		static void CallbackTick(void* userData);
-		void Tick();
-		void MeasureTimePassed();
 
+	private:
 		IGLOContext* context = nullptr;
 		bool mainLoopRunning = false;
 		bool started = false;
@@ -136,6 +139,11 @@ namespace ig
 		uint32_t avgFPS_numFrames = 0; // Number of frames passed since start of measurement
 		double avgFPS_totalElapsedSeconds = 0; // The total elapsed time since started measuring avarage FPS
 		int32_t avgFPS = 0;
+
+		void Tick();
+		void MeasureTimePassed();
+
+		static constexpr uint32_t MillisecondsToSleepWhenMinimized = 15;
 	};
 
 

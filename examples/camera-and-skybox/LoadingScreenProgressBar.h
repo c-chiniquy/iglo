@@ -10,9 +10,7 @@ namespace ig
 		LoadingScreenProgressBar() = default;
 
 		void SetCurrentTask(const std::string& taskName);
-
-		void DrawAndPresent(IGLOContext& context, CommandList& cmd, BatchRenderer& r, Font& font,
-			const std::string& progressBarText, float progress);
+		void DrawAndPresent(IGLOContext&, CommandList&, BatchRenderer&, Font&, const std::string& progressBarText, float progress);
 
 	private:
 

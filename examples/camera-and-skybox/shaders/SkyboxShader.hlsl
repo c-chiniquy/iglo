@@ -1,5 +1,5 @@
 
-cbuffer PushConstants : register(b0)
+struct PushConstants
 {
 	matrix viewProj;
 	float3 cameraPos;
@@ -7,6 +7,8 @@ cbuffer PushConstants : register(b0)
 	uint textureIndex;
 	uint samplerIndex;
 };
+
+[[vk::push_constant]] ConstantBuffer<PushConstants> pushConstants : register(b0);
 
 struct PixelInput
 {
@@ -16,15 +18,11 @@ struct PixelInput
 
 PixelInput VSMain(float4 position : POSITION)
 {
-	float4 pos = float4(position.xyz, 1.0f);
-
 	// The skybox follows the camera
-	pos.x += cameraPos.x;
-	pos.y += cameraPos.y;
-	pos.z += cameraPos.z;
+	float4 pos = float4(position.xyz + pushConstants.cameraPos, 1.0f);
 
 	PixelInput output;
-	output.position = mul(pos, viewProj);
+	output.position = mul(pos, pushConstants.viewProj);
 	output.viewDir = position.xyz;
 
 	return output;
@@ -32,7 +30,7 @@ PixelInput VSMain(float4 position : POSITION)
 
 float4 PSMain(PixelInput input) : SV_Target
 {
-	TextureCube cubemapTexture = ResourceDescriptorHeap[textureIndex];
-	SamplerState samplerState = SamplerDescriptorHeap[samplerIndex];
+	TextureCube cubemapTexture = ResourceDescriptorHeap[pushConstants.textureIndex];
+	SamplerState samplerState = SamplerDescriptorHeap[pushConstants.samplerIndex];
     return cubemapTexture.Sample(samplerState, normalize(input.viewDir));
 }

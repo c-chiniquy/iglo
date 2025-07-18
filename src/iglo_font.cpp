@@ -380,7 +380,7 @@ namespace ig
 		header.imageNumFaces = image.GetNumFaces();
 		header.imageArrangement = (uint32_t)image.GetArrangement();
 
-		std::ofstream outFile(std::filesystem::u8path(filename), std::ios::out | std::ios::binary);
+		std::ofstream outFile(utf8_to_path(filename), std::ios::out | std::ios::binary);
 		if (!outFile)
 		{
 			Log(LogType::Error, "Failed to save prebaked font to file '" + filename + "'. Reason: Couldn't open file.");
@@ -627,7 +627,7 @@ namespace ig
 		int kernTableLength = stbtt_GetKerningTableLength(&this->stbttFontInfo);
 		std::vector<stbtt_kerningentry> kernEntry;
 		kernEntry.resize(kernTableLength);
-		int result = stbtt_GetKerningTable(&this->stbttFontInfo, kernEntry.data(), kernTableLength);
+		stbtt_GetKerningTable(&this->stbttFontInfo, kernEntry.data(), kernTableLength);
 		std::vector<uint32_t> tableCodepoints;
 		PackedBoolArray exists; // One bool value for each element in 'tableCodepoints', indicating whether it exists.
 		tableCodepoints.resize((size_t)this->stbttFontInfo.numGlyphs + 1);
@@ -905,19 +905,19 @@ namespace ig
 			// We can't instantly unload the previous texture because the GPU might still depend on it in a previous frame.
 			// We let IGLOContext hold a shared pointer to the old texture so it remains loaded for a while longer.
 			if (page.texture) context->DelayedTextureUnload(page.texture);
+
 			page.texture = std::make_shared<Texture>();
-
-			// The code below expects the texture to already have a certain barrier layout
-			BarrierLayout initLayout = BarrierLayout::_GraphicsQueue_ShaderResource;
-
-			if (!page.texture->Load(*context, page.width, page.height, Format::BYTE, TextureUsage::Default,
-				MSAA::Disabled, 1, 1, false, ClearValue(), &initLayout))
+			if (!page.texture->Load(*context, page.width, page.height, Format::BYTE, TextureUsage::Default))
 			{
 				Log(LogType::Error, ToString("Failed to apply changes to font texture."
 					" Reason: Failed to create texture with size ", page.width, "x", page.height, "."));
 				page.texture = nullptr;
 				return;
 			}
+
+			// The code below expects the texture to have a certain barrier layout.
+			cmd.AddTextureBarrier(*page.texture, SimpleBarrier::Discard, SimpleBarrier::PixelShaderResource);
+			cmd.FlushBarriers();
 		}
 
 		// Update texture
@@ -1210,12 +1210,13 @@ namespace ig
 		{
 			// Glyph doesn't fit. Expand texture size until it fits or reaches max texture size.
 			uint32_t powerOf2 = 1;
+			const uint32_t maxTextureSize = context->GetGraphicsSpecs().maxTextureDimension;
 			while (true)
 			{
-				if (powerOf2 > context->GetMaxTextureSize()) // Reached max texture size
+				if (powerOf2 > maxTextureSize) // Reached max texture size
 				{
 					Log(LogType::Warning, ToString("Failed to load new glyph for font '", fontDesc.fontName,
-						"'. Reason: Reached max texture size (", context->GetMaxTextureSize(), ")."));
+						"'. Reason: Reached max texture size (", maxTextureSize, ")."));
 					return IntRect(0, 0, 0, 0);
 				}
 				if (powerOf2 > newWidth) break;

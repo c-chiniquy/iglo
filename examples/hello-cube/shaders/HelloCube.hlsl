@@ -1,10 +1,12 @@
 
-cbuffer PushConstants : register(b0)
+struct PushConstants
 {
 	uint textureIndex;
 	uint samplerIndex;
 	uint constantIndex;
 };
+
+[[vk::push_constant]] ConstantBuffer<PushConstants> pushConstants : register(b0);
 
 struct MatrixConstants
 {
@@ -20,7 +22,7 @@ struct PixelInput
 
 PixelInput VSMain(float4 position : POSITION, float2 texCoord : TEXCOORD0)
 {
-	ConstantBuffer<MatrixConstants> matrices = ResourceDescriptorHeap[constantIndex];
+	ConstantBuffer<MatrixConstants> matrices = ResourceDescriptorHeap[pushConstants.constantIndex];
 
 	PixelInput output;
 
@@ -34,8 +36,8 @@ PixelInput VSMain(float4 position : POSITION, float2 texCoord : TEXCOORD0)
 
 float4 PSMain(PixelInput input) : SV_TARGET
 {
-	Texture2D shaderTexture = ResourceDescriptorHeap[textureIndex];
-	SamplerState textureSampler = SamplerDescriptorHeap[samplerIndex];
+	Texture2D shaderTexture = ResourceDescriptorHeap[pushConstants.textureIndex];
+	SamplerState textureSampler = SamplerDescriptorHeap[pushConstants.samplerIndex];
 
 	float4 output = shaderTexture.Sample(textureSampler, input.texCoord);
 	return output;
