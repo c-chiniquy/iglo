@@ -20,7 +20,8 @@
   - Added ability to change the number of frames in flight at runtime which allows finer control over vsync input latency:
     - 2 frames in flight with 3 backbuffers: **Classic vsync**
     - 1 frame in flight with 2 backbuffers: **Lower latency vsync**  
-      Note: This configuration is unstable at high workloads as CPU and GPU don't work asynchronously. Should be OK for simple 2D games with low CPU and GPU workloads.
+      Note: This configuration is unstable at high workloads as CPU and GPU don't work asynchronously. Should be OK for simpler games that have low CPU and GPU workloads.
+      More info can be found at: https://www.intel.com/content/www/us/en/developer/articles/code-sample/sample-application-for-direct3d-12-flip-model-swap-chains.html
 - Code improvements:
   - Moved all implementation code to separate files
   - Refactored a bunch of code
