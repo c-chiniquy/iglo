@@ -4,11 +4,6 @@ iglo (Intuitive Graphics Layer Open-source) is a cross-platform, public domain C
 
 ## Roadmap
 
-- [x] D3D12
-- [x] Vulkan
-- [x] Cross-platform
-  - [x] Windows
-  - [x] Linux
 - [x] Helper components for 2D rendering
   -  [x] ig::Font
   -  [x] ig::BatchRenderer
