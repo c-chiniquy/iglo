@@ -26,7 +26,7 @@ This document contains my personal thoughts behind various design decisions i ha
 
 # Coding guidelines
 
-- All iglo objects that must be initialized before they can be used will follow this design pattern:
+- An iglo object that must be initialized before it can be used should follow this design pattern:
   - `bool Load();`\
     This initializes the object. Will replace existing instance if already loaded.
   - `void Unload();`\
