@@ -14,13 +14,12 @@
   - Use `ig::SimpleBarrier::Discard` when you don't care about preserving the previous contents
   - Removed `initialLayout` option when creating textures
 - New features:
-  - Added the ScreenRenderer class for rendering fullscreen quads
+  - Added the `ScreenRenderer` class for rendering fullscreen quads
   - Added an option to enable fixed update frame-rate sync in `MainLoop`.
     This option is meant for games that run at fixed frame-rates and don't use frame interpolation.
-  - Added ability to change the number of frames in flight at runtime:
-    *Allows finer control over vsync input latency:*
-    - **2 frames in flight with 3 backbuffers:** Classic vsync
-    - **1 frame in flight with 2 backbuffers:** Lower latency vsync  
+  - Added ability to change the number of frames in flight at runtime which allows finer control over vsync input latency:
+    - 2 frames in flight with 3 backbuffers: Classic vsync
+    - 1 frame in flight with 2 backbuffers: Lower latency vsync  
       *(Note: Unstable at high workloads as CPU and GPU don't work asynchronously)*
 - Code improvements:
   - Moved all implementation code to separate files
