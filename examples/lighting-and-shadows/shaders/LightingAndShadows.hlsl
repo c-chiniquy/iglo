@@ -1,5 +1,5 @@
 
-cbuffer PushConstants : register(b0)
+struct PushConstants
 {
 	uint colorTextureIndex;
 	uint depthTextureIndex;
@@ -9,6 +9,8 @@ cbuffer PushConstants : register(b0)
 	uint cameraConstantsIndex;
 	uint modelConstantsIndex;
 };
+
+[[vk::push_constant]] ConstantBuffer<PushConstants> pushConstants : register(b0);
 
 struct LightConstants
 {
@@ -38,8 +40,8 @@ struct VertexInput
 // Vertex shader used to create the shadow map
 float4 VSDepth(VertexInput input) : SV_POSITION
 {
-	ConstantBuffer<LightConstants> light = ResourceDescriptorHeap[lightConstantsIndex];
-	ConstantBuffer<ModelConstants> model = ResourceDescriptorHeap[modelConstantsIndex];
+	ConstantBuffer<LightConstants> light = ResourceDescriptorHeap[pushConstants.lightConstantsIndex];
+	ConstantBuffer<ModelConstants> model = ResourceDescriptorHeap[pushConstants.modelConstantsIndex];
 
 	input.position.w = 1.0f;
 
@@ -64,9 +66,9 @@ struct PixelInput
 
 PixelInput VSLightingAndShadows(VertexInput input)
 {
-	ConstantBuffer<LightConstants> light = ResourceDescriptorHeap[lightConstantsIndex];
-	ConstantBuffer<CameraConstants> camera = ResourceDescriptorHeap[cameraConstantsIndex];
-	ConstantBuffer<ModelConstants> model = ResourceDescriptorHeap[modelConstantsIndex];
+	ConstantBuffer<LightConstants> light = ResourceDescriptorHeap[pushConstants.lightConstantsIndex];
+	ConstantBuffer<CameraConstants> camera = ResourceDescriptorHeap[pushConstants.cameraConstantsIndex];
+	ConstantBuffer<ModelConstants> model = ResourceDescriptorHeap[pushConstants.modelConstantsIndex];
 
 	PixelInput output;
 
@@ -88,11 +90,11 @@ PixelInput VSLightingAndShadows(VertexInput input)
 
 float4 PSLightingAndShadows(PixelInput input) : SV_TARGET
 {
-	ConstantBuffer<LightConstants> light = ResourceDescriptorHeap[lightConstantsIndex];
-	Texture2D colorTexture = ResourceDescriptorHeap[colorTextureIndex];
-	Texture2D depthTexture = ResourceDescriptorHeap[depthTextureIndex];
-	SamplerState colorSampler = SamplerDescriptorHeap[colorSamplerIndex];
-	SamplerComparisonState depthSampler = SamplerDescriptorHeap[depthSamplerIndex];
+	ConstantBuffer<LightConstants> light = ResourceDescriptorHeap[pushConstants.lightConstantsIndex];
+	Texture2D colorTexture = ResourceDescriptorHeap[pushConstants.colorTextureIndex];
+	Texture2D depthTexture = ResourceDescriptorHeap[pushConstants.depthTextureIndex];
+	SamplerState colorSampler = SamplerDescriptorHeap[pushConstants.colorSamplerIndex];
+	SamplerComparisonState depthSampler = SamplerDescriptorHeap[pushConstants.depthSamplerIndex];
 
 	float bias = 0.00001f;
 	float4 color = light.ambientColor;

@@ -8,8 +8,8 @@ break>"%SHADER_PATH%"
 break>"temp1.h"
 break>"temp2.h"
 
-dxc.exe "%~4" -E %~2 -Vn "g_%~1" -Fh "temp1.h" -T %~3 -WX -Qstrip_debug -spirv || goto :error
-dxc.exe "%~4" -E %~2 -Vn "g_%~1" -Fh "temp2.h" -T %~3 -WX -Qstrip_debug -Qstrip_reflect || goto :error
+dxc.exe "%~4" -E %~2 -Vn "g_%~1" -Fh "temp1.h" -T %~3 -Qstrip_debug -WX -spirv -D VULKAN -fspv-target-env=vulkan1.3 -fvk-use-dx-layout -fvk-bind-resource-heap 0 0 -fvk-bind-sampler-heap 1 0 || goto :error
+dxc.exe "%~4" -E %~2 -Vn "g_%~1" -Fh "temp2.h" -T %~3 -Qstrip_debug -WX -Wno-ignored-attributes -Qstrip_reflect || goto :error
 
 echo #ifdef IGLO_VULKAN>>"%SHADER_PATH%"
 echo.>> "%SHADER_PATH%"

@@ -1,6 +1,30 @@
 #include "../common/BatchRendererCommon.hlsl"
 
-ConstantBuffer<PushConstants> pushConstants : register(b0);
+[[vk::push_constant]] ConstantBuffer<PushConstants> pushConstants : register(b0);
+
+#ifdef VULKAN
+typedef Texture2DMS<uint> StencilTextureMS;
+typedef Texture2D<uint> StencilTexture;
+uint LoadStencilValueMS(StencilTextureMS stencilTextureMS, float2 texCoord, float2 textureSize, uint sampleIndex)
+{
+	return stencilTextureMS.Load(int2(texCoord * textureSize), sampleIndex);
+}
+uint LoadStencilValue(StencilTexture stencilTexture, float2 texCoord, float2 textureSize)
+{
+	return stencilTexture.Load(int3(texCoord * textureSize, 0));
+}
+#else
+typedef Texture2DMS<uint2> StencilTextureMS;
+typedef Texture2D<uint2> StencilTexture;
+uint LoadStencilValueMS(StencilTextureMS stencilTextureMS, float2 texCoord, float2 textureSize, uint sampleIndex)
+{
+	return stencilTextureMS.Load(int2(texCoord * textureSize), sampleIndex).y;
+}
+uint LoadStencilValue(StencilTexture stencilTexture, float2 texCoord, float2 textureSize)
+{
+	return stencilTexture.Load(int3(texCoord * textureSize, 0)).y;
+}
+#endif
 
 float4 PSMain(float4 position : SV_POSITION, float4 color : COLOR, float2 texCoord : TEXCOORD0) : SV_TARGET
 {
@@ -38,20 +62,20 @@ float4 PSMain(float4 position : SV_POSITION, float4 color : COLOR, float2 texCoo
 		if (textureConstants.msaa > 1)
 		{
 			// Multisampled
-			Texture2DMS<uint2> textureMS = ResourceDescriptorHeap[pushConstants.stencilComponentTextureIndex];
-			uint2 value = uint2(0, 0);
+			StencilTextureMS textureMS = ResourceDescriptorHeap[pushConstants.textureIndex];
+			uint value = 0;
 			for (uint i = 0; i < textureConstants.msaa; i++)
 			{
-				value += textureMS.Load(int2(texCoord * textureConstants.textureSize), i);
+				value += LoadStencilValueMS(textureMS, texCoord, textureConstants.textureSize, i);
 			}
-			mono = 1.0f - (value.y / (255.0 * textureConstants.msaa));
+			mono = 1.0f - (value / (255.0f * textureConstants.msaa));
 		}
 		else
 		{
 			// Not multisampled
-			Texture2D<uint2> textureRegular = ResourceDescriptorHeap[pushConstants.stencilComponentTextureIndex];
-			uint2 value = textureRegular.Load(int3(texCoord * textureConstants.textureSize, 0));
-			mono = 1.0f - (value.y / 255.0);
+			StencilTexture textureRegular = ResourceDescriptorHeap[pushConstants.textureIndex];
+			uint value = LoadStencilValue(textureRegular, texCoord, textureConstants.textureSize);
+			mono = 1.0f - (value / 255.0f);
 		}
 		return float4(mono, mono, mono, 1) * color;
 	}

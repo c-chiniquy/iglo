@@ -1,6 +1,6 @@
 #include "../../../shaders/common/BatchRendererCommon.hlsl"
 
-ConstantBuffer<PushConstants> pushConstants : register(b0);
+[[vk::push_constant]] ConstantBuffer<PushConstants> pushConstants : register(b0);
 
 struct VertexInput
 {
@@ -8,6 +8,9 @@ struct VertexInput
 	float width;
 	float height;
 	uint color;
+#ifdef STRUCTURED_BUFFER
+	uint padding; // Vulkan requires an alignment of 8 for structured buffers.
+#endif
 };
 
 struct PixelInput

@@ -1,5 +1,5 @@
 #include "iglo.h"
-#include "iglo_mainloop.h"
+#include "iglo_main_loop.h"
 
 namespace ig
 {
@@ -23,11 +23,6 @@ namespace ig
 			avgFPS_numFrames = 0;
 			avgFPS_totalElapsedSeconds = 0;
 		}
-	}
-
-	void MainLoop::CallbackTick(void* userData)
-	{
-		((MainLoop*)userData)->Tick();
 	}
 
 	void MainLoop::Tick()
@@ -99,12 +94,12 @@ namespace ig
 			{
 				if (callbackDraw) callbackDraw();
 			}
-			if (windowMinimizedBehaviour == WindowMinimizedBehaviour::SkipDraw)
+			else if (windowMinimizedBehaviour == WindowMinimizedBehaviour::SkipDraw)
 			{
 			}
-			if (windowMinimizedBehaviour == WindowMinimizedBehaviour::SkipDrawAndSleep)
+			else if (windowMinimizedBehaviour == WindowMinimizedBehaviour::SkipDrawAndSleep)
 			{
-				BasicSleep(1);
+				BasicSleep(MillisecondsToSleepWhenMinimized);
 			}
 		}
 		else
@@ -157,13 +152,12 @@ namespace ig
 		if (this->mainLoopRunning && context.IsLoaded())
 		{
 			CallbackModalLoop oldModalCallback = nullptr;
-			void* oldModalCallbackUserData = nullptr;
 			if (useModalLoopCallback)
 			{
 				// Remember the old modal loop callback
-				context.GetModalLoopCallback(oldModalCallback, oldModalCallbackUserData);
+				oldModalCallback = context.GetModalLoopCallback();
 				// Assign a modal loop callback to prevent the window from freezing during window drag/resize.
-				context.SetModalLoopCallback(CallbackTick, this);
+				context.SetModalLoopCallback(std::bind(&MainLoop::Tick, this));
 			}
 			while (this->mainLoopRunning && context.IsLoaded())
 			{
@@ -172,7 +166,7 @@ namespace ig
 			if (useModalLoopCallback)
 			{
 				// Restore the modal callback to what it used to be
-				context.SetModalLoopCallback(oldModalCallback, oldModalCallbackUserData);
+				context.SetModalLoopCallback(oldModalCallback);
 			}
 		}
 		if (this->callbackOnLoopExited) this->callbackOnLoopExited();

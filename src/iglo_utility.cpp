@@ -3,7 +3,6 @@
 
 #include <fstream>
 #include <sstream>
-#include <filesystem>
 #include <iostream>
 #include <thread>
 
@@ -935,12 +934,10 @@ namespace ig
 		std::this_thread::sleep_for(std::chrono::milliseconds(milliseconds));
 	}
 
-	// Code taken from public domain source: https://github.com/blat-blatnik/Snippets/blob/main/precise_sleep.c
-	void PreciseSleep(double seconds)
-	{
-		if (seconds <= 0) return;
-
 #ifdef _WIN32
+	// Code taken from public domain source: https://github.com/blat-blatnik/Snippets/blob/main/precise_sleep.c
+	void WindowsPreciseSleep(double seconds)
+	{
 		static HANDLE timerHandle = NULL;
 		static int schedulerPeriodMs = 0;
 		static INT64 qpcPerSecond = 0;
@@ -984,11 +981,58 @@ namespace ig
 			YieldProcessor();
 			QueryPerformanceCounter(&qpc);
 		}
+	}
+#endif
 
+#ifdef __linux__
+	// Gets current time in nanoseconds
+	inline uint64_t LinuxGetMonotonicTimeNS()
+	{
+		struct timespec ts;
+		clock_gettime(CLOCK_MONOTONIC, &ts);
+		return (uint64_t)ts.tv_sec * UINT64_C(1'000'000'000) + (uint64_t)ts.tv_nsec;
+	}
+
+	void LinuxPreciseSleep(double seconds)
+	{
+		const uint64_t ns_total = (uint64_t)((seconds * 1e9) + 0.5);
+		const uint64_t start = LinuxGetMonotonicTimeNS();
+		const uint64_t deadline = start + ns_total;
+
+		// Sleep for durations > 1ms
+		if (ns_total > 1'000'000)
+		{
+			// Sleep time (total - 1ms)
+			const uint64_t bulk_ns = ns_total - 1'000'000;
+			struct timespec req =
+			{
+				.tv_sec = (time_t)(bulk_ns / UINT64_C(1'000'000'000)),
+				.tv_nsec = (long)(bulk_ns % UINT64_C(1'000'000'000))
+			};
+
+			while (nanosleep(&req, &req) == -1 && errno == EINTR)
+			{
+				// If interrupted, continue sleeping for remaining time
+			}
+		}
+
+		// Spin for remaining time
+		while (LinuxGetMonotonicTimeNS() < deadline)
+		{
+			__builtin_ia32_pause();
+		}
+	}
+#endif
+
+	void PreciseSleep(double seconds)
+	{
+		if (seconds <= 0.0) return;
+
+#ifdef _WIN32
+		WindowsPreciseSleep(seconds);
 #endif
 #ifdef __linux__
-		//TODO: implement this
-		throw std::exception();
+		LinuxPreciseSleep(seconds);
 #endif
 	}
 
@@ -1602,23 +1646,23 @@ namespace ig
 
 	std::string GetFileExtension(const std::string& filename)
 	{
-		return std::filesystem::u8path(filename).extension().u8string();
+		return u8string_to_string(utf8_to_path(filename).extension().u8string());
 	}
 	bool FileExists(const std::string& filename)
 	{
-		return std::filesystem::exists(std::filesystem::u8path(filename));
+		return std::filesystem::exists(utf8_to_path(filename));
 	}
 	bool DirectoryExists(const std::string& directoryName)
 	{
-		return std::filesystem::is_directory(std::filesystem::u8path(directoryName));
+		return std::filesystem::is_directory(utf8_to_path(directoryName));
 	}
 	bool CreateDirectory(const std::string& directoryName)
 	{
-		return std::filesystem::create_directory(std::filesystem::u8path(directoryName));
+		return std::filesystem::create_directory(utf8_to_path(directoryName));
 	}
 	std::string GetCurrentPath()
 	{
-		return std::filesystem::current_path().u8string();
+		return u8string_to_string(std::filesystem::current_path().u8string());
 	}
 
 	uint32_t utf32_to_lower(uint32_t codepoint)
@@ -1826,13 +1870,23 @@ namespace ig
 		return out;
 	}
 
-	std::string ToLowercase(const std::string& s)
+	std::string utf8_to_lower(const std::string& utf8)
 	{
-		return utf32_to_utf8(utf32_to_lower(utf8_to_utf32(s)));
+		return utf32_to_utf8(utf32_to_lower(utf8_to_utf32(utf8)));
 	}
-	std::string ToUppercase(const std::string& s)
+	std::string utf8_to_upper(const std::string& utf8)
 	{
-		return utf32_to_utf8(utf32_to_upper(utf8_to_utf32(s)));
+		return utf32_to_utf8(utf32_to_upper(utf8_to_utf32(utf8)));
+	}
+
+	std::filesystem::path utf8_to_path(const std::string& utf8)
+	{
+		return std::filesystem::path(std::u8string_view(reinterpret_cast<const char8_t*>(utf8.data()), utf8.size()));
+	}
+
+	std::string u8string_to_string(const std::u8string& u8str)
+	{
+		return std::string(reinterpret_cast<const char*>(u8str.data()), u8str.size());
 	}
 
 	ListDirectoryResult ListDirectory(const std::string& directoryPath, bool listSubDirectories)
@@ -1845,30 +1899,30 @@ namespace ig
 		{
 			if (listSubDirectories)
 			{
-				for (const auto& entry : std::filesystem::recursive_directory_iterator(std::filesystem::u8path(directoryPath)))
+				for (const auto& entry : std::filesystem::recursive_directory_iterator(utf8_to_path(directoryPath)))
 				{
 					if (entry.is_directory())
 					{
-						out.foldernames.push_back(entry.path().u8string());
+						out.foldernames.push_back(u8string_to_string(entry.path().u8string()));
 					}
 					else
 					{
-						out.filenames.push_back(entry.path().u8string());
+						out.filenames.push_back(u8string_to_string(entry.path().u8string()));
 					}
 
 				}
 			}
 			else
 			{
-				for (const auto& entry : std::filesystem::directory_iterator(std::filesystem::u8path(directoryPath)))
+				for (const auto& entry : std::filesystem::directory_iterator(utf8_to_path(directoryPath)))
 				{
 					if (entry.is_directory())
 					{
-						out.foldernames.push_back(entry.path().u8string());
+						out.foldernames.push_back(u8string_to_string(entry.path().u8string()));
 					}
 					else
 					{
-						out.filenames.push_back(entry.path().u8string());
+						out.filenames.push_back(u8string_to_string(entry.path().u8string()));
 					}
 				}
 			}
@@ -2100,7 +2154,7 @@ namespace ig
 	{
 		ReadFileResult out;
 		out.success = false;
-		std::ifstream f(std::filesystem::u8path(filename), std::ios::in | std::ios::binary | std::ios::ate);
+		std::ifstream f(utf8_to_path(filename), std::ios::in | std::ios::binary | std::ios::ate);
 		if (!f) return out; // Failed
 		std::streampos end = f.tellg();
 		f.seekg(0, std::ios::beg);
@@ -2113,10 +2167,9 @@ namespace ig
 		return out;
 	}
 
-
 	bool WriteFile(const std::string& filename, const byte* fileContent, size_t numBytes)
 	{
-		std::ofstream outFile(std::filesystem::u8path(filename), std::ios::out | std::ios::binary);
+		std::ofstream outFile(utf8_to_path(filename), std::ios::out | std::ios::binary);
 		if (!outFile) return false; // Failed to open file
 		outFile.write((char*)fileContent, numBytes);
 		outFile.close();
@@ -2133,7 +2186,7 @@ namespace ig
 
 	bool AppendToFile(const std::string& filename, const byte* fileContent, size_t numBytes)
 	{
-		std::ofstream outFile(std::filesystem::u8path(filename), std::ios::out | std::ios::binary | std::ios_base::app);
+		std::ofstream outFile(utf8_to_path(filename), std::ios::out | std::ios::binary | std::ios_base::app);
 		if (!outFile) return false; // Failed to open file
 		outFile.write((char*)fileContent, numBytes);
 		outFile.close();
@@ -2150,7 +2203,7 @@ namespace ig
 
 	void Print(const std::string& text)
 	{
-#if defined IGLO_FORCE_CONSOLE_OUTPUT || !defined _WIN32
+#if defined IGLO_WIN32_FORCE_CONSOLE_OUTPUT || !defined _WIN32
 		std::cout << text;
 #else
 		OutputDebugStringA(text.c_str());
@@ -2158,7 +2211,7 @@ namespace ig
 	}
 	void Print(const char* text)
 	{
-#if defined IGLO_FORCE_CONSOLE_OUTPUT || !defined _WIN32
+#if defined IGLO_WIN32_FORCE_CONSOLE_OUTPUT || !defined _WIN32
 		std::cout << text;
 #else
 		OutputDebugStringA(text);
@@ -2166,16 +2219,17 @@ namespace ig
 	}
 	void Print(const std::stringstream& text)
 	{
-#if defined IGLO_FORCE_CONSOLE_OUTPUT || !defined _WIN32
+#if defined IGLO_WIN32_FORCE_CONSOLE_OUTPUT || !defined _WIN32
 		std::cout << text.str();
 #else
 		OutputDebugStringA(text.str().c_str());
 #endif
 	}
+
 #ifdef _WIN32
 	void Print(const std::wstring& text)
 	{
-#ifdef IGLO_FORCE_CONSOLE_OUTPUT
+#ifdef IGLO_WIN32_FORCE_CONSOLE_OUTPUT
 		std::wcout << text;
 #else
 		OutputDebugStringW(text.c_str());
@@ -2183,7 +2237,7 @@ namespace ig
 	}
 	void Print(const wchar_t* text)
 	{
-#ifdef IGLO_FORCE_CONSOLE_OUTPUT
+#ifdef IGLO_WIN32_FORCE_CONSOLE_OUTPUT
 		std::wcout << text;
 #else
 		OutputDebugStringW(text);
@@ -2191,7 +2245,7 @@ namespace ig
 	}
 	void Print(const std::wstringstream& text)
 	{
-#ifdef IGLO_FORCE_CONSOLE_OUTPUT
+#ifdef IGLO_WIN32_FORCE_CONSOLE_OUTPUT
 		std::wcout << text.str();
 #else
 		OutputDebugStringW(text.str().c_str());
@@ -2273,8 +2327,8 @@ namespace ig
 		{
 			if (probability >= 1.0f) return true;
 			if (probability <= 0.0f) return false;
-			float d = (float)rand() / (RAND_MAX + 1); // d can never be 1.0f
-			return d < probability;
+			double d = (double)rand() / ((double)RAND_MAX + 1.0); // d can never be 1.0
+			return d < (double)probability;
 		}
 
 		float NextFloat(float min, float max)
@@ -2297,7 +2351,7 @@ namespace ig
 
 	uint64_t AlignUp(uint64_t value, uint64_t alignment)
 	{
-		if (alignment == 0) return value;
+		if (alignment == 0) throw std::invalid_argument("alignment must be non-zero.");
 		if (alignment & (alignment - 1)) throw std::invalid_argument("alignment not a power of 2.");
 
 		uint64_t alignMask = alignment - 1;
@@ -2317,4 +2371,4 @@ namespace ig
 		return ((value & (value - 1)) == 0);
 	}
 
-	} // namespace ig
+} // namespace ig

@@ -1,10 +1,6 @@
-#pragma once
-
 #include "iglo.h"
 #include "iglo_font.h"
-#include "iglo_batchrenderer.h"
-
-#include <cassert>
+#include "iglo_batch_renderer.h"
 
 #ifdef __linux__
 #include <cstring>
@@ -38,14 +34,16 @@ namespace ig
 
 		if (batchType >= batchPipelines.size())
 		{
+			assert(batchPipelines.size() > 0);
+
 			state.batchType = 0;
-			state.batchDesc = batchPipelines.at(0).batchDesc;
+			state.batchDesc = batchPipelines[0].batchDesc;
 			Log(LogType::Error, "Failed to set batch type. Reason: Invalid batch type.");
 			return;
 		}
 
 		state.batchType = batchType;
-		state.batchDesc = batchPipelines.at((uint32_t)batchType).batchDesc;
+		state.batchDesc = batchPipelines[(uint32_t)batchType].batchDesc;
 		state.bytesPerPrimitive = state.batchDesc.bytesPerVertex * state.batchDesc.inputVerticesPerPrimitive;
 		if (state.bytesPerPrimitive == 0)
 		{
@@ -97,18 +95,11 @@ namespace ig
 		if (tempConstant.IsNull())
 		{
 			// Better to throw an exception than crash the GPU with an invalid resource heap index.
-			throw std::runtime_error("This shouldn't happen unless you run out of VRAM.");
+			throw std::runtime_error("Failed to create temp constant.");
 		}
+
 		state.pushConstants.textureConstantsIndex = tempConstant.heapIndex;
 		state.pushConstants.textureIndex = validTexture->GetDescriptor()->heapIndex;
-		if (validTexture->GetStencilDescriptor())
-		{
-			state.pushConstants.stencilComponentTextureIndex = validTexture->GetStencilDescriptor()->heapIndex;
-		}
-		else
-		{
-			state.pushConstants.stencilComponentTextureIndex = validTexture->GetDescriptor()->heapIndex;
-		}
 	}
 
 	void BatchRenderer::UsingRenderConstants(const Descriptor& descriptor)
@@ -443,9 +434,9 @@ namespace ig
 			return BatchParams();
 
 		case StandardBatchType::Points_XYC:
-			out.batchDesc.primitive = Primitive::PointList;
 			out.batchDesc.inputVerticesPerPrimitive = 1;
 			out.batchDesc.bytesPerVertex = sizeof(Vertex_XYC);
+			out.pipelineDesc.primitiveTopology = PrimitiveTopology::PointList;
 			out.pipelineDesc.vertexLayout = layout_XYC;
 			out.pipelineDesc.VS = SHADER_VS(g_VS_XYC);
 			out.pipelineDesc.PS = SHADER_PS(g_PS_C);
@@ -453,9 +444,9 @@ namespace ig
 
 		case StandardBatchType::Lines_XYC:
 		case StandardBatchType::Lines_XYC_Pixelated:
-			out.batchDesc.primitive = Primitive::LineList;
 			out.batchDesc.inputVerticesPerPrimitive = 2;
 			out.batchDesc.bytesPerVertex = sizeof(Vertex_XYC);
+			out.pipelineDesc.primitiveTopology = PrimitiveTopology::LineList;
 			out.pipelineDesc.vertexLayout = layout_XYC;
 			out.pipelineDesc.VS = SHADER_VS(g_VS_XYC);
 			out.pipelineDesc.PS = SHADER_PS(g_PS_C);
@@ -466,18 +457,18 @@ namespace ig
 			break;
 
 		case StandardBatchType::Triangles_XYC:
-			out.batchDesc.primitive = Primitive::TriangleList;
 			out.batchDesc.inputVerticesPerPrimitive = 3;
 			out.batchDesc.bytesPerVertex = sizeof(Vertex_XYC);
+			out.pipelineDesc.primitiveTopology = PrimitiveTopology::TriangleList;
 			out.pipelineDesc.vertexLayout = layout_XYC;
 			out.pipelineDesc.VS = SHADER_VS(g_VS_XYC);
 			out.pipelineDesc.PS = SHADER_PS(g_PS_C);
 			break;
 
 		case StandardBatchType::Triangles_XYCUV:
-			out.batchDesc.primitive = Primitive::TriangleList;
 			out.batchDesc.inputVerticesPerPrimitive = 3;
 			out.batchDesc.bytesPerVertex = sizeof(Vertex_XYCUV);
+			out.pipelineDesc.primitiveTopology = PrimitiveTopology::TriangleList;
 			out.pipelineDesc.vertexLayout = layout_XYCUV;
 			out.pipelineDesc.VS = SHADER_VS(g_VS_XYCUV);
 			out.pipelineDesc.PS = SHADER_PS(g_PS_CUV);
@@ -485,10 +476,10 @@ namespace ig
 
 		case StandardBatchType::Rects:
 			out.batchDesc.vertGenMethod = BatchDesc::VertexGenerationMethod::Instancing;
-			out.batchDesc.primitive = Primitive::TriangleStrip;
 			out.batchDesc.inputVerticesPerPrimitive = 1;
 			out.batchDesc.outputVerticesPerPrimitive = 4;
 			out.batchDesc.bytesPerVertex = sizeof(Vertex_Rect);
+			out.pipelineDesc.primitiveTopology = PrimitiveTopology::TriangleStrip;
 			out.pipelineDesc.vertexLayout = layout_instanced_Rect;
 			out.pipelineDesc.VS = SHADER_VS(g_VS_InstancedRect);
 			out.pipelineDesc.PS = SHADER_PS(g_PS_C);
@@ -499,10 +490,10 @@ namespace ig
 		case StandardBatchType::Sprites_MonoTransparent:
 		case StandardBatchType::Sprites_SDF:
 			out.batchDesc.vertGenMethod = BatchDesc::VertexGenerationMethod::Instancing;
-			out.batchDesc.primitive = Primitive::TriangleStrip;
 			out.batchDesc.inputVerticesPerPrimitive = 1;
 			out.batchDesc.outputVerticesPerPrimitive = 4;
 			out.batchDesc.bytesPerVertex = sizeof(Vertex_Sprite);
+			out.pipelineDesc.primitiveTopology = PrimitiveTopology::TriangleStrip;
 			out.pipelineDesc.vertexLayout = layout_instanced_Sprite;
 			out.pipelineDesc.VS = SHADER_VS(g_VS_InstancedSprite);
 			out.pipelineDesc.PS = SHADER_PS(g_PS_CUV);
@@ -519,10 +510,10 @@ namespace ig
 		case StandardBatchType::ScaledSprites_PremultipliedAlpha:
 		case StandardBatchType::ScaledSprites_BlendDisabled:
 			out.batchDesc.vertGenMethod = BatchDesc::VertexGenerationMethod::Instancing;
-			out.batchDesc.primitive = Primitive::TriangleStrip;
 			out.batchDesc.inputVerticesPerPrimitive = 1;
 			out.batchDesc.outputVerticesPerPrimitive = 4;
 			out.batchDesc.bytesPerVertex = sizeof(Vertex_ScaledSprite);
+			out.pipelineDesc.primitiveTopology = PrimitiveTopology::TriangleStrip;
 			out.pipelineDesc.vertexLayout = layout_instanced_ScaledSprite;
 			out.pipelineDesc.VS = SHADER_VS(g_VS_InstancedScaledSprite);
 			out.pipelineDesc.PS = SHADER_PS(g_PS_CUV);
@@ -539,10 +530,10 @@ namespace ig
 		case StandardBatchType::TransformedSprites_MonoTransparent:
 		case StandardBatchType::TransformedSprites_SDF:
 			out.batchDesc.vertGenMethod = BatchDesc::VertexGenerationMethod::Instancing;
-			out.batchDesc.primitive = Primitive::TriangleStrip;
 			out.batchDesc.inputVerticesPerPrimitive = 1;
 			out.batchDesc.outputVerticesPerPrimitive = 4;
 			out.batchDesc.bytesPerVertex = sizeof(Vertex_TransformedSprite);
+			out.pipelineDesc.primitiveTopology = PrimitiveTopology::TriangleStrip;
 			out.pipelineDesc.vertexLayout = layout_instanced_TransformedSprite;
 			out.pipelineDesc.VS = SHADER_VS(g_VS_InstancedTransformedSprite);
 			out.pipelineDesc.PS = SHADER_PS(g_PS_CUV);
@@ -553,17 +544,15 @@ namespace ig
 
 		case StandardBatchType::Circles:
 			out.batchDesc.vertGenMethod = BatchDesc::VertexGenerationMethod::Instancing;
-			out.batchDesc.primitive = Primitive::TriangleStrip;
 			out.batchDesc.inputVerticesPerPrimitive = 1;
 			out.batchDesc.outputVerticesPerPrimitive = 4;
 			out.batchDesc.bytesPerVertex = sizeof(Vertex_Circle);
+			out.pipelineDesc.primitiveTopology = PrimitiveTopology::TriangleStrip;
 			out.pipelineDesc.vertexLayout = layout_instanced_Circle;
 			out.pipelineDesc.VS = SHADER_VS(g_VS_InstancedCircle);
 			out.pipelineDesc.PS = SHADER_PS(g_PS_Circle);
 			break;
 		}
-
-		out.pipelineDesc.primitiveTopology = out.batchDesc.primitive;
 
 		return out;
 	}
@@ -664,7 +653,7 @@ namespace ig
 
 	void BatchRenderer::AddPrimitive(const void* data)
 	{
-		if (nextPrimitive + 1 > state.maxPrimitives)
+		if (nextPrimitive >= state.maxPrimitives)
 		{
 			FlushPrimitives();
 		}
@@ -702,7 +691,7 @@ namespace ig
 	void BatchRenderer::FlushPrimitives()
 	{
 		if (nextPrimitive == 0) return;
-		if (batchPipelines.at(state.batchType).pipeline == nullptr)
+		if (batchPipelines[state.batchType].pipeline == nullptr)
 		{
 			Log(LogType::Error, "BatchRenderer failed to draw pending primitives. Reason: Invalid batch type.");
 			nextPrimitive = 0;
@@ -711,8 +700,7 @@ namespace ig
 
 		uint32_t numVertices = nextPrimitive * state.batchDesc.inputVerticesPerPrimitive;
 
-		cmd->SetPipeline(*batchPipelines.at(state.batchType).pipeline.get());
-		cmd->SetPrimitiveTopology(state.batchDesc.primitive);
+		cmd->SetPipeline(*(batchPipelines[state.batchType].pipeline.get()));
 
 		if (state.batchDesc.vertGenMethod == BatchDesc::VertexGenerationMethod::None ||
 			state.batchDesc.vertGenMethod == BatchDesc::VertexGenerationMethod::Instancing ||
@@ -836,7 +824,8 @@ namespace ig
 					}
 					else
 					{
-						if (font.GetTexture()->GetColorChannelCount() == 1)
+						uint32_t colorChannelCount = GetFormatInfo(font.GetTexture()->GetFormat()).elementCount;
+						if (colorChannelCount == 1)
 						{
 							UsingBatch((BatchType)StandardBatchType::Sprites_MonoTransparent);
 						}

@@ -136,7 +136,6 @@ namespace ig
 
 	struct BatchDesc
 	{
-		Primitive primitive = Primitive::Undefined;
 		uint32_t bytesPerVertex = 0; // Vertex stride
 		uint32_t inputVerticesPerPrimitive = 0; // Minimum number of vertices you need to feed to BatchRenderer to draw 1 primitive.
 
@@ -338,7 +337,6 @@ namespace ig
 		struct PushConstants
 		{
 			uint32_t textureIndex = IGLO_UINT32_MAX;
-			uint32_t stencilComponentTextureIndex = IGLO_UINT32_MAX; // Only for depth buffers with stencil component
 			uint32_t samplerIndex = IGLO_UINT32_MAX;
 			uint32_t worldMatrixIndex = IGLO_UINT32_MAX;
 			uint32_t viewProjMatrixIndex = IGLO_UINT32_MAX;

@@ -1,5 +1,21 @@
 ﻿#pragma once
 
+#ifndef UNICODE
+#define UNICODE
+#endif
+#ifndef _UNICODE
+#define _UNICODE
+#endif
+
+#include <string>
+#include <random>
+#include <chrono>
+#include <filesystem>
+#ifdef __linux__
+#include <memory>
+#endif
+
+
 #define IGLO_PI	(3.14159265358979323846)
 #define IGLO_SQR2 (1.41421356237309504880)
 #define IGLO_ToRadian(degree) ((degree) * (IGLO_PI / 180.0))
@@ -9,14 +25,6 @@
 #define IGLO_UINT32_MAX (0xffffffff)
 #define IGLO_UINT64_MAX (0xffffffffffffffff)
 #define IGLO_MEGABYTE (1024 * 1024)
-
-#include <string>
-#include <sstream>
-#include <random>
-#include <chrono>
-#ifdef __linux__
-#include <memory>
-#endif
 
 // 'byte' is a more intuitive name than 'uint8_t'.
 typedef uint8_t byte;
@@ -560,7 +568,8 @@ namespace ig
 
 	/////////////////////////// Sleep /////////////////////////////
 
-	// Sleeps using the standard 'sleep_for' method. It's not very accurate. Expect an accuracy of roughly 15ms.
+	// Sleeps using the standard 'sleep_for' method.
+	// On Windows it's not very accurate, expect an accuracy of roughly 15ms.
 	void BasicSleep(uint32_t milliseconds);
 	// Sleeps using a combination of many high resolution sleeps and CPU spinning. Highly accurate and low CPU usage.
 	void PreciseSleep(double seconds);
@@ -625,12 +634,18 @@ namespace ig
 		}
 	}
 
-
 	// Transforms a utf8 string to all lowercase
-	std::string ToLowercase(const std::string& s);
+	std::string utf8_to_lower(const std::string& utf8);
 
 	// Transforms a utf8 string to all uppercase
-	std::string ToUppercase(const std::string& s);
+	std::string utf8_to_upper(const std::string& utf8);
+
+	// Converts a utf8 string to filesystem::path. Needed for C++20.
+	std::filesystem::path utf8_to_path(const std::string& utf8);
+
+	// Converts u8string to string. Needed for C++20.
+	std::string u8string_to_string(const std::u8string& u8str);
+
 
 	//////////////////////// File system ////////////////////////
 
@@ -814,7 +829,7 @@ namespace ig
 
 	///////////////////////////// Math /////////////////////////////
 
-	// The alignment is required to be a power of 2. An alignment of 0 is OK.
+	// The alignment is required to be a power of 2.
 	uint64_t AlignUp(uint64_t value, uint64_t alignment);
 	bool IsPowerOf2(uint64_t value);
 

@@ -1,8 +1,10 @@
 
-cbuffer PushConstants : register(b0)
+struct PushConstants
 {
 	matrix viewProj;
 };
+
+[[vk::push_constant]] ConstantBuffer<PushConstants> pushConstants : register(b0);
 
 struct VertexInput
 {
@@ -21,7 +23,7 @@ PixelInput VSMain(VertexInput input)
 	float4 pos = float4(input.position.xyz, 1.0f);
 
 	PixelInput output;
-	output.position = mul(pos, viewProj);
+	output.position = mul(pos, pushConstants.viewProj);
 	output.color = input.color;
 
 	return output;

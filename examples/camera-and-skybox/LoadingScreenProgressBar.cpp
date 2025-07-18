@@ -1,7 +1,6 @@
 #include "iglo.h"
 #include "iglo_font.h"
-#include "iglo_batchrenderer.h"
-#include "iglo_mainloop.h"
+#include "iglo_batch_renderer.h"
 #include "LoadingScreenProgressBar.h"
 
 
@@ -18,13 +17,12 @@ namespace ig
 	{
 		cmd.Begin();
 		{
-			cmd.AddTextureBarrier(context.GetBackBuffer(), SimpleBarrier::Common, SimpleBarrier::RenderTarget, false);
+			cmd.AddTextureBarrier(context.GetBackBuffer(), SimpleBarrier::Discard, SimpleBarrier::RenderTarget);
 			cmd.FlushBarriers();
 
-			cmd.SetRenderTarget(&context.GetBackBuffer());
+			cmd.SetRenderTarget(&context.GetBackBuffer(), nullptr, true);
 			cmd.SetViewport((float)context.GetWidth(), (float)context.GetHeight());
 			cmd.SetScissorRectangle(context.GetWidth(), context.GetHeight());
-			cmd.ClearColor(context.GetBackBuffer());
 
 			r.Begin(cmd);
 			{
@@ -52,7 +50,7 @@ namespace ig
 			}
 			r.End();
 
-			cmd.AddTextureBarrier(context.GetBackBuffer(), SimpleBarrier::RenderTarget, SimpleBarrier::Common, false);
+			cmd.AddTextureBarrier(context.GetBackBuffer(), SimpleBarrier::RenderTarget, SimpleBarrier::Present);
 			cmd.FlushBarriers();
 		}
 		cmd.End();
