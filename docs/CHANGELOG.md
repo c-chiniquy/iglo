@@ -20,7 +20,8 @@
   - Added ability to change the number of frames in flight at runtime which allows finer control over vsync input latency:
     - 2 frames in flight with 3 backbuffers: Classic vsync
     - 1 frame in flight with 2 backbuffers: Lower latency vsync  
-      *(Note: Unstable at high workloads as CPU and GPU don't work asynchronously)*
+      This configuration is unstable at high workloads as CPU and GPU don't work asynchronously.
+      Should be OK for simple 2D games with low CPU and GPU workloads.
 - Code improvements:
   - Moved all implementation code to separate files
   - Refactored a bunch of code
