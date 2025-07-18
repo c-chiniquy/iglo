@@ -53,7 +53,7 @@ This document contains my personal thoughts behind various design decisions i ha
   Any new utf8 string the app receives should be checked if valid.
   Use the functions `ig::utf8_is_valid` and `ig::utf8_make_valid` to check and repair utf8 strings.
 
-- IGLOContext must be defined first so it's unloaded last (if it's on the stack, that is).
+- Since destructors run in reverse order of definitions, declare/define IGLOContext before other iglo resources so that IGLOContext is unloaded last.
 
 ## Dynamic arrays
 
