@@ -107,22 +107,22 @@ Prefer using `std::vector` over `std::unique_ptr` for dynamic arrays.
 # Backend Technical Requirements
 
 ## Windows
-- **Agility SDK**: Requires Windows 10 version 1909 or newer
-- **Frame rate limiter**: Requires Windows 10 version 1803 or newer for high-resolution timer
+- Agility SDK: Requires Windows 10 version 1909 or newer
+- Frame rate limiter: Requires Windows 10 version 1803 or newer for high-resolution timer
 
 ## Linux
 - Vulkan backend confirmed working with proprietary NVIDIA drivers on Linux Mint 21.3 which runs on Ubuntu 22.04.
 
 ## D3D12
-- **Feature Level 12_1**
-- **Shader Model 6.6**: Requires Agility SDK
-- **Enhanced barriers**: Requires Agility SDK
-- **Resource Binding Tier 3**
-- **Minimum supported GPU**: GTX 1000-series (and AMD/Intel equivalent)
+- Feature Level 12_1
+- Resource Binding Tier 3
+- Shader Model 6.6: Requires Agility SDK
+- Enhanced barriers: Requires Agility SDK
+- Minimum supported GPU: GTX 1000-series (and AMD/Intel equivalent)
 
 ## Vulkan
-- Requires support for **Vulkan 1.3**, along with some additional extensions/features
-- **Minimum supported GPU**: RTX 2000-series (and AMD/Intel equivalent)
+- Requires support for Vulkan 1.3, along with some additional extensions/features
+- Minimum supported GPU: RTX 2000-series (and AMD/Intel equivalent)
 
 # iglo Requirements
 
