@@ -33,7 +33,7 @@ iglo (Intuitive Graphics Layer Open-source) is a cross-platform, public domain C
 
 ## Gallery
 
-> The `Lighting and Shadows` example project demonstrates how to implement basic lighting and shadows in iglo, how to use multisampled anti-aliasing, and how to use sRGB formats for more accurate lighting calculations.
+> The `Lighting and Shadows` example project demonstrates how to implement basic lighting and shadow mapping in iglo, use multisampled anti-aliasing, and using sRGB formats for more accurate lighting calculations.
 ![](images/example-projects/LightingAndShadows.png)
 
 <details>
