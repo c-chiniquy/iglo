@@ -1862,10 +1862,9 @@ namespace ig
 		return maxMSAA;
 	}
 
-	const Texture& IGLOContext::GetBackBuffer() const
+	uint32_t IGLOContext::GetCurrentBackBufferIndex() const
 	{
-		uint32_t backBufferIndex = graphics.swapChain->GetCurrentBackBufferIndex();
-		return *swapChain.wrappedBackBuffers[backBufferIndex];
+		return graphics.swapChain->GetCurrentBackBufferIndex();
 	}
 
 	void IGLOContext::SetPresentMode(PresentMode presentMode)
@@ -1876,7 +1875,6 @@ namespace ig
 
 	void IGLOContext::DestroySwapChainResources()
 	{
-		// Clear swap chain info
 		swapChain = SwapChainInfo();
 	}
 
@@ -1887,14 +1885,17 @@ namespace ig
 
 		graphics.swapChain = nullptr;
 
+		FormatInfo formatInfo = GetFormatInfo(format);
+		Format format_non_sRGB = formatInfo.is_sRGB ? formatInfo.sRGB_opposite : format;
+
 		swapChain.extent = extent;
 		swapChain.format = format;
 		swapChain.presentMode = presentMode;
 		swapChain.numBackBuffers = numBackBuffers;
-		swapChain.renderTargetDesc = RenderTargetDesc({ format }, Format::None, MSAA::Disabled);
-
-		FormatInfo formatInfo = GetFormatInfo(format);
-		Format format_non_sRGB = formatInfo.is_sRGB ? formatInfo.sRGB_opposite : format;
+		swapChain.renderTargetDesc = RenderTargetDesc( {format} );
+		swapChain.renderTargetDesc_sRGB_opposite = (formatInfo.sRGB_opposite != Format::None)
+			? RenderTargetDesc({ formatInfo.sRGB_opposite })
+			: RenderTargetDesc({});
 
 		DXGI_SWAP_CHAIN_DESC1 swapChainDesc = {};
 		swapChainDesc.BufferCount = numBackBuffers;
@@ -1931,29 +1932,40 @@ namespace ig
 			Log(LogType::Warning, "Failed to disable IDXGISwapChain Alt-Enter fullscreen toggle.");
 		}
 
-		// Wrap back buffer
+		// Wrap backbuffers
 		for (uint32_t i = 0; i < numBackBuffers; i++)
 		{
 			ComPtr<ID3D12Resource> res;
 			hr = graphics.swapChain->GetBuffer(i, IID_PPV_ARGS(&res));
 			if (FAILED(hr))
 			{
-				swapChain.wrappedBackBuffers.clear();
-				swapChain.wrappedBackBuffers.shrink_to_fit();
+				swapChain.wrapped.clear();
+				swapChain.wrapped_sRGB_opposite.clear();
 				return DetailedResult::MakeFail(CreateD3D12ErrorMsg("IDXGISwapChain3::GetBuffer", hr));
 			}
 
 			D3D12_RENDER_TARGET_VIEW_DESC rtv = Texture::GenerateD3D12Desc_RTV(format, MSAA::Disabled, 1);
-			std::unique_ptr<Texture> currentBackBuffer = std::make_unique<Texture>();
 			WrappedTextureDesc desc;
 			desc.extent = extent;
 			desc.format = format;
 			desc.usage = TextureUsage::RenderTexture;
 			desc.d3d12Resource = res;
 			desc.d3d12Desc_RTV = &rtv;
-			currentBackBuffer->LoadAsWrapped(*this, desc);
 
-			swapChain.wrappedBackBuffers.push_back(std::move(currentBackBuffer));
+			std::unique_ptr<Texture> backBuffer = std::make_unique<Texture>();
+			backBuffer->LoadAsWrapped(*this, desc);
+			swapChain.wrapped.push_back(std::move(backBuffer));
+
+			// sRGB opposite views
+			if (formatInfo.sRGB_opposite != Format::None)
+			{
+				D3D12_RENDER_TARGET_VIEW_DESC rtv_sRGB_opposite = Texture::GenerateD3D12Desc_RTV(formatInfo.sRGB_opposite, MSAA::Disabled, 1);
+				desc.d3d12Desc_RTV = &rtv_sRGB_opposite;
+
+				std::unique_ptr<Texture> backBuffer_sRGB_opposite = std::make_unique<Texture>();
+				backBuffer_sRGB_opposite->LoadAsWrapped(*this, desc);
+				swapChain.wrapped_sRGB_opposite.push_back(std::move(backBuffer_sRGB_opposite));
+			}
 		}
 
 		return DetailedResult::MakeSuccess();
@@ -1980,19 +1992,22 @@ namespace ig
 		window.activeResizing = false;
 		window.activeMenuLoop = false;
 
-		swapChain.extent = extent;
-		swapChain.wrappedBackBuffers.clear();
-		swapChain.wrappedBackBuffers.shrink_to_fit();
+		// Must release all backbuffer references first
+		swapChain.wrapped.clear();
+		swapChain.wrapped_sRGB_opposite.clear();
 
 		FormatInfo formatInfo = GetFormatInfo(swapChain.format);
 		Format format_non_sRGB = formatInfo.is_sRGB ? formatInfo.sRGB_opposite : swapChain.format;
 		FormatInfoDXGI formatInfoD3D = GetFormatInfoDXGI(format_non_sRGB);
+
 		HRESULT hr = graphics.swapChain->ResizeBuffers(0, extent.width, extent.height, formatInfoD3D.dxgiFormat, d3d12SwapChainFlags);
 		if (FAILED(hr))
 		{
 			Log(LogType::Error, ToString(errStr, CreateD3D12ErrorMsg("IDXGISwapChain3::ResizeBuffers", hr)));
 			return false;
 		}
+
+		swapChain.extent = extent;
 
 		for (uint32_t i = 0; i < swapChain.numBackBuffers; i++)
 		{
@@ -2001,26 +2016,33 @@ namespace ig
 			if (FAILED(hr))
 			{
 				Log(LogType::Error, ToString(errStr, CreateD3D12ErrorMsg("IDXGISwapChain3::GetBuffer", hr)));
-				swapChain.wrappedBackBuffers.clear();
-				swapChain.wrappedBackBuffers.shrink_to_fit();
+				swapChain.wrapped.clear();
+				swapChain.wrapped_sRGB_opposite.clear();
 				return false;
 			}
+
 			D3D12_RENDER_TARGET_VIEW_DESC rtv = Texture::GenerateD3D12Desc_RTV(swapChain.format, MSAA::Disabled, 1);
-			std::unique_ptr<Texture> currentBackBuffer = std::make_unique<Texture>();
 			WrappedTextureDesc desc;
 			desc.extent = extent;
 			desc.format = swapChain.format;
 			desc.usage = TextureUsage::RenderTexture;
 			desc.d3d12Resource = res;
 			desc.d3d12Desc_RTV = &rtv;
-			if (!currentBackBuffer->LoadAsWrapped(*this, desc))
+
+			std::unique_ptr<Texture> backBuffer = std::make_unique<Texture>();
+			backBuffer->LoadAsWrapped(*this, desc);
+			swapChain.wrapped.push_back(std::move(backBuffer));
+
+			// sRGB opposite views
+			if (formatInfo.sRGB_opposite != Format::None)
 			{
-				Log(LogType::Error, ToString(errStr, "Failed to wrap back buffer."));
-				swapChain.wrappedBackBuffers.clear();
-				swapChain.wrappedBackBuffers.shrink_to_fit();
-				return false;
+				D3D12_RENDER_TARGET_VIEW_DESC rtv_sRGB_opposite = Texture::GenerateD3D12Desc_RTV(formatInfo.sRGB_opposite, MSAA::Disabled, 1);
+				desc.d3d12Desc_RTV = &rtv_sRGB_opposite;
+
+				std::unique_ptr<Texture> backBuffer_sRGB_opposite = std::make_unique<Texture>();
+				backBuffer_sRGB_opposite->LoadAsWrapped(*this, desc);
+				swapChain.wrapped_sRGB_opposite.push_back(std::move(backBuffer_sRGB_opposite));
 			}
-			swapChain.wrappedBackBuffers.push_back(std::move(currentBackBuffer));
 		}
 
 		commandQueue.SubmitSignal(CommandListType::Graphics);

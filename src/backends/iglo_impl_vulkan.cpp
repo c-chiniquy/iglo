@@ -538,7 +538,6 @@ namespace ig
 		viewInfo.subresourceRange.levelCount = 1;
 		viewInfo.subresourceRange.baseArrayLayer = 0;
 		viewInfo.subresourceRange.layerCount = 1;
-
 		return vkCreateImageView(device, &viewInfo, nullptr, out_pView);
 	}
 
@@ -2993,10 +2992,9 @@ namespace ig
 		return maxMSAA;
 	}
 
-	const Texture& IGLOContext::GetBackBuffer() const
+	uint32_t IGLOContext::GetCurrentBackBufferIndex() const
 	{
-		uint32_t backBufferIndex = commandQueue.GetCurrentBackBufferIndex();
-		return *swapChain.wrappedBackBuffers[backBufferIndex];
+		return commandQueue.GetCurrentBackBufferIndex();
 	}
 
 	void IGLOContext::SetPresentMode(PresentMode presentMode)
@@ -3015,15 +3013,17 @@ namespace ig
 	void IGLOContext::DestroySwapChainResources()
 	{
 		// Wrapped textures don't free any graphical resources upon unloading, so we must do it manually.
-		for (size_t i = 0; i < swapChain.wrappedBackBuffers.size(); i++)
+		// Don't free any VkImage from the wrapped textures, as they belong to the swap chain.
+		for (size_t i = 0; i < swapChain.wrapped.size(); i++)
 		{
-			VkImageView imageView_RTV = swapChain.wrappedBackBuffers[i]->GetVulkanImageView_RTV_DSV();
+			VkImageView imageView_RTV = swapChain.wrapped[i]->GetVulkanImageView_RTV_DSV();
 			if (imageView_RTV) vkDestroyImageView(graphics.device, imageView_RTV, nullptr);
-
-			// Don't free any VkImage from the wrapped textures, as they belong to the swap chain.
 		}
-
-		// Clear swap chain info
+		for (size_t i = 0; i < swapChain.wrapped_sRGB_opposite.size(); i++)
+		{
+			VkImageView imageView_RTV = swapChain.wrapped_sRGB_opposite[i]->GetVulkanImageView_RTV_DSV();
+			if (imageView_RTV) vkDestroyImageView(graphics.device, imageView_RTV, nullptr);
+		}
 		swapChain = SwapChainInfo();
 	}
 
@@ -3058,6 +3058,11 @@ namespace ig
 			eventQueue.push(resizeEvent);
 		}
 
+		FormatInfo formatInfo = GetFormatInfo(format);
+
+		VkImageFormatListCreateInfo formatListInfo = {};
+		formatListInfo.sType = VK_STRUCTURE_TYPE_IMAGE_FORMAT_LIST_CREATE_INFO;
+
 		VkSwapchainCreateInfoKHR createInfo = {};
 		createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
 		createInfo.surface = graphics.surface;
@@ -3075,6 +3080,16 @@ namespace ig
 		createInfo.clipped = VK_TRUE;
 		createInfo.oldSwapchain = graphics.swapChain; // Important
 		createInfo.presentMode = (VkPresentModeKHR)presentMode;
+
+		if (formatInfo.sRGB_opposite != Format::None)
+		{
+			VkFormat formats[2] = {createInfo.imageFormat, ConvertToVulkanFormat(formatInfo.sRGB_opposite)};
+			formatListInfo.viewFormatCount = 2;
+			formatListInfo.pViewFormats = formats;
+
+			createInfo.pNext = &formatListInfo;
+			createInfo.flags |= VK_SWAPCHAIN_CREATE_MUTABLE_FORMAT_BIT_KHR;
+		}
 
 		VkSwapchainKHR newSwapchain = VK_NULL_HANDLE;
 		VkResult result = vkCreateSwapchainKHR(graphics.device, &createInfo, nullptr, &newSwapchain);
@@ -3107,7 +3122,10 @@ namespace ig
 		swapChain.format = format;
 		swapChain.presentMode = presentMode;
 		swapChain.numBackBuffers = imageCount;
-		swapChain.renderTargetDesc = RenderTargetDesc({ format }, Format::None, MSAA::Disabled);
+		swapChain.renderTargetDesc = RenderTargetDesc({ format });
+		swapChain.renderTargetDesc_sRGB_opposite = (formatInfo.sRGB_opposite != Format::None)
+			? RenderTargetDesc({ formatInfo.sRGB_opposite })
+			: RenderTargetDesc({});
 
 		std::vector<VkImage> swapchainImages(imageCount);
 		result = vkGetSwapchainImagesKHR(graphics.device, graphics.swapChain, &imageCount, swapchainImages.data());
@@ -3116,23 +3134,35 @@ namespace ig
 			return DetailedResult::MakeFail(CreateVulkanErrorMsg("vkGetSwapchainImagesKHR", result));
 		}
 
-		// Wrap back buffers
+		// Wrap backbuffers
 		for (uint32_t i = 0; i < imageCount; i++)
 		{
-			VkImageView imageView_RTV = VK_NULL_HANDLE;
-			result = CreateVulkanImageViewForSwapChain(graphics.device, swapchainImages[i], createInfo.imageFormat, &imageView_RTV);
-
-			std::unique_ptr<Texture> currentBackBuffer = std::make_unique<Texture>();
+			VkImageView imageView = VK_NULL_HANDLE;
+			CreateVulkanImageViewForSwapChain(graphics.device, swapchainImages[i], createInfo.imageFormat, &imageView);
 
 			WrappedTextureDesc desc;
 			desc.extent = cappedExtent;
 			desc.format = format;
 			desc.usage = TextureUsage::RenderTexture;
 			desc.vkImage = swapchainImages[i];
-			desc.vkImageView_RTV_DSV = imageView_RTV;
-			currentBackBuffer->LoadAsWrapped(*this, desc);
+			desc.vkImageView_RTV_DSV = imageView;
 
-			swapChain.wrappedBackBuffers.push_back(std::move(currentBackBuffer));
+			std::unique_ptr<Texture> currentBackBuffer = std::make_unique<Texture>();
+			currentBackBuffer->LoadAsWrapped(*this, desc);
+			swapChain.wrapped.push_back(std::move(currentBackBuffer));
+
+			// sRGB opposite views
+			if (formatInfo.sRGB_opposite != Format::None)
+			{
+				VkImageView imageView_sRGB_opposite = VK_NULL_HANDLE;
+				CreateVulkanImageViewForSwapChain(graphics.device, swapchainImages[i],
+					ConvertToVulkanFormat(formatInfo.sRGB_opposite), &imageView_sRGB_opposite);
+				desc.vkImageView_RTV_DSV = imageView_sRGB_opposite;
+
+				std::unique_ptr<Texture> backBuffer_sRGB_opposite = std::make_unique<Texture>();
+				backBuffer_sRGB_opposite->LoadAsWrapped(*this, desc);
+				swapChain.wrapped_sRGB_opposite.push_back(std::move(backBuffer_sRGB_opposite));
+			}
 		}
 
 		// Acquire next image
@@ -3158,7 +3188,6 @@ namespace ig
 			Log(LogType::Error, "Failed to acquire swapchain image at swapchain creation (" + vk::to_string((vk::Result)result) + ").");
 		}
 
-		// Swapchain creation succeeded.
 		return DetailedResult::MakeSuccess();
 	}
 
@@ -3221,6 +3250,7 @@ namespace ig
 		const std::vector<const char*> deviceExtensions =
 		{
 			VK_KHR_SWAPCHAIN_EXTENSION_NAME,
+			VK_KHR_SWAPCHAIN_MUTABLE_FORMAT_EXTENSION_NAME,
 			VK_KHR_MAINTENANCE_5_EXTENSION_NAME,
 			VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME,
 			VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME,

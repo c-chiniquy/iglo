@@ -1579,6 +1579,49 @@ namespace ig
 		return (MSAA)maxMSAA;
 	}
 
+	const RenderTargetDesc& IGLOContext::GetBackBufferRenderTargetDesc(bool get_opposite_sRGB_view) const
+	{
+		if (get_opposite_sRGB_view)
+		{
+			if (swapChain.wrapped_sRGB_opposite.size() == 0)
+			{
+				Log(LogType::Warning, "Failed to get back buffer render target desc with an sRGB opposite format as requested."
+					" Reason: No back buffer views exist with an sRGB opposite format.");
+				return swapChain.renderTargetDesc;
+			}
+			else
+			{
+				return swapChain.renderTargetDesc_sRGB_opposite;
+			}
+		}
+		else
+		{
+			return swapChain.renderTargetDesc;
+		}
+	}
+
+	const Texture& IGLOContext::GetBackBuffer(bool get_opposite_sRGB_view) const
+	{
+		uint32_t backBufferIndex = GetCurrentBackBufferIndex();
+		if (get_opposite_sRGB_view)
+		{
+			if (swapChain.wrapped_sRGB_opposite.size() == 0)
+			{
+				Log(LogType::Warning, "Failed to get back buffer view with an sRGB opposite format as requested."
+					" Reason: No back buffer views exist with an sRGB opposite format.");
+				return *swapChain.wrapped[backBufferIndex];
+			}
+			else
+			{
+				return *swapChain.wrapped_sRGB_opposite[backBufferIndex];
+			}
+		}
+		else
+		{
+			return *swapChain.wrapped[backBufferIndex];
+		}
+	}
+
 	void IGLOContext::OnFatalError(const std::string& message, bool popupMessage)
 	{
 		Log(LogType::FatalError, message);
