@@ -22,6 +22,7 @@
     - 1 frame in flight with 2 backbuffers: **Lower latency vsync**  
       Note: This configuration is unstable at high workloads as CPU and GPU don't work asynchronously. Should be OK for simpler games that have low CPU and GPU workloads.
       More info can be found at: https://www.intel.com/content/www/us/en/developer/articles/code-sample/sample-application-for-direct3d-12-flip-model-swap-chains.html
+  - Added ability to get an sRGB-opposite view in IGLOContext::GetBackBuffer(). This allows you to more easily control when to apply hardware linear->sRGB conversions and vice versa.
 - Code improvements:
   - Moved all implementation code to separate files
   - Refactored a bunch of code
