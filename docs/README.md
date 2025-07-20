@@ -111,7 +111,7 @@ Follow these steps to create a new iglo project in Visual Studio 2019:
 8. In your `main.cpp` file, ensure the `UINT D3D12SDKVersion` value matches the version of the Agility SDK you installed.  
 
 You can now build and run your iglo project using the D3D12 backend!
-If you want to use the Vulkan backend instead, modify iglo_config.h to enable IGLO_WIN32_VULKAN, then download and install the Vulkan SDK and add its include and library directories to your project.
+If you want to use the Vulkan backend instead, modify iglo_config.h to enable IGLO_WIN32_VULKAN, then download and install the Vulkan SDK and add its include and library directory paths to your project.
 
 ### Hello world example
 
