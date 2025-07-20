@@ -119,11 +119,11 @@ Prefer using `std::vector` over `std::unique_ptr` for dynamic arrays.
   - Resource Binding Tier 3
   - Shader Model 6.6 (requires Agility SDK)
   - Enhanced barriers (requires Agility SDK)
-- Minimum supported GPU: GTX 1000-series (and AMD/Intel equivalent)
+- Oldest supported GPU: GTX 1000-series (and AMD/Intel equivalent)
 
 ## Vulkan
 - Requires support for Vulkan 1.3, along with some additional extensions/features
-- Minimum supported GPU: RTX 2000-series (and AMD/Intel equivalent)
+- Oldest supported GPU: RTX 2000-series (and AMD/Intel equivalent)
 
 # iglo Requirements
 
@@ -133,7 +133,7 @@ Prefer using `std::vector` over `std::unique_ptr` for dynamic arrays.
   - Windows 11
   - Ubuntu 22.04 or newer
   - Likely works on other Linux distros as well, just haven't tested them yet
-- Minimum supported GPUs:
+- Oldest supported GPUs:
   - GTX 1000-series (or AMD/Intel equivalent generation) for the D3D12 backend
   - RTX 2000-series (or AMD/Intel equivalent generation) for the Vulkan backend
 - The D3D12 backend requires the Agility SDK for advanced features such as Shader Model 6.6 and Enhanced Barriers.
