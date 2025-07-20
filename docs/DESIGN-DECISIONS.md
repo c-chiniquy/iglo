@@ -114,10 +114,11 @@ Prefer using `std::vector` over `std::unique_ptr` for dynamic arrays.
 - Vulkan backend confirmed working with proprietary NVIDIA drivers on Linux Mint 21.3 which runs on Ubuntu 22.04.
 
 ## D3D12
-- Feature Level 12_1
-- Resource Binding Tier 3
-- Shader Model 6.6: Requires Agility SDK
-- Enhanced barriers: Requires Agility SDK
+- Requires support for these features:
+  - Feature Level 12_1
+  - Resource Binding Tier 3
+  - Shader Model 6.6 (requires Agility SDK)
+  - Enhanced barriers (requires Agility SDK)
 - Minimum supported GPU: GTX 1000-series (and AMD/Intel equivalent)
 
 ## Vulkan
