@@ -26,16 +26,16 @@ This document contains my personal thoughts behind various design decisions i ha
 
 # Coding guidelines
 
-- An iglo object that must be initialized before it can be used should follow this design pattern:
+- An iglo object that must be initialized before use should follow this design pattern:
   - `bool Load();`\
-    This initializes the object. Will replace existing instance if already loaded.
+    Initializes the object. Replaces existing instance if already loaded.
   - `void Unload();`\
-    This destroys the object. It's OK to call `Unload()` on an already unloaded object.
+    Destroys the object. It's safe to call `Unload()` on an already unloaded object.
   - `bool IsLoaded() const;`\
-    Whether or not the object is initialized.
+    Returns whether the object is currently initialized.
 
-- Calling `const` functions on non-loaded iglo objects should always be OK to do.
-  For example, calling `texture.GetWidth()` must always return 0 if the texture isn't loaded.
+- Calling `const` functions on unloaded iglo objects should always be safe.
+  For example, `texture.GetWidth()` must return 0 if the texture isn't loaded.
 
 - Functions should not use output parameters.
   Always consider returning a struct for multiple return values, even for vectors and strings.
