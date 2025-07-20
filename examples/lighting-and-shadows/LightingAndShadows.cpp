@@ -29,7 +29,7 @@ public:
 			ig::RenderSettings
 			{
 				.presentMode = ig::PresentMode::Vsync,
-				.backBufferFormat = ig::Format::BYTE_BYTE_BYTE_BYTE_BGRA_sRGB, // We use sRGB for more accurate lighting
+				.backBufferFormat = ig::Format::BYTE_BYTE_BYTE_BYTE_BGRA,
 			}))
 		{
 			mainloop.Run(context,
@@ -65,16 +65,14 @@ private:
 	ig::Sampler colorSampler;
 	ig::Sampler depthSampler;
 
-	// Rendertargets
+	// Render targets
 	ig::Texture sceneRender;
 	ig::Texture sceneDepth;
 	ig::Texture sceneResolved;
 	ig::Texture shadowMap;
-	ig::Texture uiRender;
 	ig::RenderTargetDesc sceneDesc;
 	ig::RenderTargetDesc sceneDescMSAA;
 	ig::RenderTargetDesc shadowMapDesc;
-	ig::RenderTargetDesc uiDesc;
 
 	struct Mesh
 	{
@@ -363,12 +361,6 @@ private:
 		{
 			.depthFormat = ig::Format::DEPTHFORMAT_FLOAT,
 		};
-
-		// UI
-		uiDesc =
-		{
-			.colorFormats = {ig::Format::BYTE_BYTE_BYTE_BYTE}
-		};
 	}
 
 	ig::Extent2D GetInternalRenderingResolution()
@@ -400,23 +392,13 @@ private:
 
 		// Shadow map
 		shadowMap.Load(context, shadowMapRes, shadowMapRes, shadowMapDesc.depthFormat, ig::TextureUsage::DepthBuffer, shadowMapDesc.msaa);
-
-		// UI
-		{
-			ig::TextureDesc textureDesc;
-			textureDesc.extent = context.GetBackBufferExtent();
-			textureDesc.format = uiDesc.colorFormats[0];
-			textureDesc.forceSRVFormat = ig::Format::BYTE_BYTE_BYTE_BYTE_sRGB; // To bypass hardware linear->sRGB conversion
-			textureDesc.usage = ig::TextureUsage::RenderTexture;
-			textureDesc.optimizedClearValue.color = ig::Colors::Transparent;
-			uiRender.Load(context, textureDesc);
-		}
 	}
 
 	void Start()
 	{
 		cmd.Load(context, ig::CommandListType::Graphics);
-		screenRenderer.Load(context, context.GetBackBufferRenderTargetDesc());
+		screenRenderer.Load(context, context.GetBackBufferRenderTargetDesc(true));
+
 		InitRenderTargetDescriptions();
 		LoadRenderTargets();
 
@@ -498,7 +480,7 @@ private:
 
 			cmd.Begin();
 			{
-				r.Load(context, cmd, uiDesc);
+				r.Load(context, cmd, context.GetBackBufferRenderTargetDesc());
 				defaultFont.LoadAsPrebaked(context, cmd, ig::GetDefaultFont());
 
 				const bool sRGB = true;
@@ -718,14 +700,6 @@ private:
 
 	void RenderUI()
 	{
-		cmd.AddTextureBarrier(sceneDepth, ig::SimpleBarrier::DepthStencil, ig::SimpleBarrier::PixelShaderResource);
-		cmd.AddTextureBarrier(uiRender, ig::SimpleBarrier::Discard, ig::SimpleBarrier::RenderTarget);
-		cmd.FlushBarriers();
-
-		cmd.SetRenderTarget(&uiRender, nullptr, true);
-		cmd.SetViewport((float)uiRender.GetWidth(), (float)uiRender.GetHeight());
-		cmd.SetScissorRectangle(uiRender.GetWidth(), uiRender.GetHeight());
-
 		r.Begin(cmd);
 		{
 			// Use point sampling for textures
@@ -834,15 +808,12 @@ private:
 	{
 		cmd.Begin();
 		{
-			// Render all 3D things
+			// Render all 3D content
 			RenderScene();
-
-			// Render all 2D things
-			RenderUI();
 
 			if (enableMSAA)
 			{
-				// Resolve scene if using MSAA
+				// Resolve the scene if MSAA is enabled
 				cmd.AddTextureBarrier(sceneRender, ig::SimpleBarrier::RenderTarget, ig::SimpleBarrier::ResolveSource);
 				cmd.AddTextureBarrier(sceneResolved, ig::SimpleBarrier::Discard, ig::SimpleBarrier::ResolveDest);
 				cmd.FlushBarriers();
@@ -854,21 +825,23 @@ private:
 			}
 			else
 			{
-				// If not using MSAA, prepare to draw the render texture directly
+				// If MSAA is not enabled, prepare to sample the render texture directly
 				cmd.AddTextureBarrier(sceneRender, ig::SimpleBarrier::RenderTarget, ig::SimpleBarrier::PixelShaderResource);
 				cmd.FlushBarriers();
 			}
 
-			cmd.AddTextureBarrier(uiRender, ig::SimpleBarrier::RenderTarget, ig::SimpleBarrier::PixelShaderResource);
 			cmd.AddTextureBarrier(context.GetBackBuffer(), ig::SimpleBarrier::Discard, ig::SimpleBarrier::RenderTarget);
 			cmd.FlushBarriers();
 
-			// Draw the resulting render textures to back buffer
-			cmd.SetRenderTarget(&context.GetBackBuffer());
+			// Draw the final scene to the back buffer
+			cmd.SetRenderTarget(&context.GetBackBuffer(true)); // Use an sRGB render target view
 			cmd.SetViewport((float)context.GetWidth(), (float)context.GetHeight());
 			cmd.SetScissorRectangle(context.GetWidth(), context.GetHeight());
 			screenRenderer.DrawFullscreenQuad(cmd, enableMSAA ? sceneResolved : sceneRender, context.GetBackBuffer());
-			screenRenderer.DrawFullscreenQuad(cmd, uiRender, context.GetBackBuffer(), ig::ScreenRendererBlend::PremultipliedAlpha);
+
+			// Render all 2D content
+			cmd.SetRenderTarget(&context.GetBackBuffer(false)); // Use a non-sRGB render target view
+			RenderUI();
 
 			cmd.AddTextureBarrier(context.GetBackBuffer(), ig::SimpleBarrier::RenderTarget, ig::SimpleBarrier::Present);
 			cmd.FlushBarriers();

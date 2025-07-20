@@ -2563,10 +2563,10 @@ namespace ig
 		uint32_t GetHeight() const { return swapChain.extent.height; }
 		// Gets the width and height of the backbuffer.
 		Extent2D GetBackBufferExtent() const { return swapChain.extent; }
-		const RenderTargetDesc& GetBackBufferRenderTargetDesc() const { return swapChain.renderTargetDesc; }
+		const RenderTargetDesc& GetBackBufferRenderTargetDesc(bool get_opposite_sRGB_view = false) const;
 
 		// Gets the current back buffer for this frame.
-		const Texture& GetBackBuffer() const;
+		const Texture& GetBackBuffer(bool get_opposite_sRGB_view = false) const;
 		DescriptorHeap& GetDescriptorHeap() const { return descriptorHeap; }
 		TempBufferAllocator& GetTempBufferAllocator() const { return tempBufferAllocator; }
 		CommandQueue& GetCommandQueue() const { return commandQueue; }
@@ -2648,8 +2648,10 @@ namespace ig
 			Format format = Format::None;
 			PresentMode presentMode = PresentMode::Vsync;
 			uint32_t numBackBuffers = 0;
-			std::vector<std::unique_ptr<Texture>> wrappedBackBuffers;
+			std::vector<std::unique_ptr<Texture>> wrapped;
+			std::vector<std::unique_ptr<Texture>> wrapped_sRGB_opposite;
 			RenderTargetDesc renderTargetDesc;
+			RenderTargetDesc renderTargetDesc_sRGB_opposite;
 		};
 		SwapChainInfo swapChain;
 
@@ -2693,6 +2695,7 @@ namespace ig
 		DetailedResult CreateSwapChain(Extent2D extent, Format format, uint32_t numBackBuffers,
 			uint32_t numFramesInFlight, PresentMode presentMode);
 		void DestroySwapChainResources();
+		uint32_t GetCurrentBackBufferIndex() const;
 
 		uint32_t Impl_GetMaxMultiSampleCount(Format textureFormat) const;
 
