@@ -116,7 +116,7 @@ private:
 	const ig::Color lightDiffuseColor = ig::Colors::White;
 
 	// While shadows don't require a stencil, i have included an option to use a stencil format here
-	// to demonstrate how to draw the stencil component of a depthbuffer (useful for debugging).
+	// to demonstrate how to draw the stencil component of a depthbuffer (which can be useful for debugging).
 	const bool useStencilFormat = false;
 	ig::StencilTextureView stencilView;
 
