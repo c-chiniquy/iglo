@@ -95,7 +95,7 @@ Follow these steps to build and run the iglo example projects on Linux (tested o
   sudo apt update
   sudo apt install cmake build-essential libx11-dev
   ```
-- Download and extract the Vulkan SDK from [LunarG](https://vulkan.lunarg.com/)
+- Download and extract the Vulkan SDK from [LunarG](https://vulkan.lunarg.com/).
   Once extracted, source the environment script (replace the path to where you extracted it):
   ```
   source /path/to/VulkanSDK/1.4.313.0/setup-env.sh
