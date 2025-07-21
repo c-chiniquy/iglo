@@ -291,7 +291,7 @@ iglo is in the public domain. iglo is also licensed under the MIT open source li
 
 ## Acknowledgments
 
-I found inspiration on how to design iglo from [Alex Tardif's blog post on rendering abstraction layers](https://alextardif.com/RenderingAbstractionLayers.html).
+I found some inspiration on how to design iglo from [Alex Tardif's blog post on rendering abstraction layers](https://alextardif.com/RenderingAbstractionLayers.html).
 
 Code snippets used (all of these are public domain):
 - [gingerBill's math functions](https://github.com/gingerBill/gb/blob/master/gb_math.h)
