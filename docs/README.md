@@ -88,7 +88,25 @@ Follow these steps to build and run the iglo example projects on Windows:
 
 ### Linux
 
-¯\\_(ツ)_/¯
+Follow these steps to build and run the iglo example projects on Linux (tested on Ubuntu 22.04+):
+
+- Install build tools and dependencies:
+  ```
+  sudo apt update
+  sudo apt install cmake build-essential libx11-dev
+  ```
+- Download and extract the Vulkan SDK from [LunarG](https://vulkan.lunarg.com/)
+  Once extracted, source the environment script (replace the path to where you extracted it):
+  ```
+  source /path/to/VulkanSDK/1.4.313.0/setup-env.sh
+  ```
+  This sets the VULKAN_SDK environment variable, allowing CMake to detect the Vulkan SDK.
+  Note: These environment variables are only active for the current terminal session.
+- Build the project:
+  ```
+  cmake -B build
+  cmake --build build
+  ```
 
 ### iglo and Visual Studio
 
