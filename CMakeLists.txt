@@ -147,6 +147,10 @@ function(add_example name)
             target_link_libraries(${name} PRIVATE vulkan)
         endif()
     endif()
+    if(UNIX)
+        find_package(X11 REQUIRED)
+        target_link_libraries(${name} PRIVATE X11)
+    endif()
 
     # create 'iglo' filter
     source_group("iglo" FILES ${IGLO_SOURCES})
