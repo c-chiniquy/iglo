@@ -93,14 +93,20 @@ endif()
 if(DEFINED ENV{VULKAN_SDK})
     message(STATUS "Vulkan SDK detected at: $ENV{VULKAN_SDK}")
 
-    set(VULKAN_SDK_INCLUDE "$ENV{VULKAN_SDK}/Include")
-    set(VULKAN_SDK_LIB "$ENV{VULKAN_SDK}/Lib")
+    if (WIN32)
+        set(VULKAN_SDK_INCLUDE "$ENV{VULKAN_SDK}/Include")
+        set(VULKAN_SDK_LIB "$ENV{VULKAN_SDK}/Lib")
+    else()
+        set(VULKAN_SDK_INCLUDE "$ENV{VULKAN_SDK}/include")
+        set(VULKAN_SDK_LIB "$ENV{VULKAN_SDK}/lib")
+    endif()
 
     set(VULKAN_FOUND TRUE)
 else()
     message(WARNING "Vulkan SDK not found.")
     set(VULKAN_FOUND FALSE)
 endif()
+
 
 function(add_example name)
     set(example_fullpath ${CMAKE_CURRENT_SOURCE_DIR}/examples/${name})
