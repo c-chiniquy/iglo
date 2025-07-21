@@ -656,7 +656,7 @@ namespace ig
 		}
 
 		XIMStyles* ximStyles = nullptr;
-		if (XGetIMValues(window.xim, XNQueryInputStyle, &ximStyles, 0) || ximStyles == nullptr)
+		if (XGetIMValues(window.xim, XNQueryInputStyle, &ximStyles, NULL) || ximStyles == nullptr)
 		{
 			return DetailedResult::MakeFail("Failed to get input styles.");
 		}
@@ -680,7 +680,7 @@ namespace ig
 
 		window.xic = XCreateIC(window.xim, XNInputStyle, bestStyle,
 			XNClientWindow, window.handle,
-			XNFocusWindow, window.handle, 0);
+			XNFocusWindow, window.handle, NULL);
 		if (!window.xic)
 		{
 			return DetailedResult::MakeFail("Failed to create input context.");
