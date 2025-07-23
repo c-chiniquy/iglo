@@ -4,7 +4,7 @@ TODO: Fix the segmentation fault in XCloseDisplay() caused by the interplay betw
       https://github.com/KhronosGroup/Vulkan-LoaderAndValidationLayers/issues/1894
       I changed the unload order in Linux to first unload the X11 window and then the vulkan instance, but it didn't stop the segfault.
       Now it just segfaults in _XSend() instead when cleaning up the vulkan instance.
-      So for now, the Linux backend is segfaulting when during cleanup if using NVIDIA drivers.
+      So for now, the Linux backend is segfaulting during cleanup if using NVIDIA drivers.
 
 TODO: Unit tests.
 
