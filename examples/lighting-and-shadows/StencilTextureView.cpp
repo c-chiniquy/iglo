@@ -52,6 +52,8 @@ namespace ig
 			return false;
 		}
 
+		Impl_Texture impl;
+
 #ifdef IGLO_D3D12
 		{
 			auto device = context.GetD3D12Device();
@@ -81,6 +83,8 @@ namespace ig
 
 			device->CreateShaderResourceView(depthBufferWithStencil.GetD3D12Resource(), &srv,
 				heap.GetD3D12CPUHandle(this->stencilDescriptor));
+
+			impl.resource = { nullptr }; // This vector must have a size of 1
 		}
 #endif
 #ifdef IGLO_VULKAN
@@ -112,15 +116,20 @@ namespace ig
 			}
 
 			heap.WriteImageDescriptor(this->stencilDescriptor, this->stencilImageView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+			// These vectors must have a size of 1
+			impl.image = { VK_NULL_HANDLE };
+			impl.memory = { VK_NULL_HANDLE };
 		}
 #endif
 
 		WrappedTextureDesc desc;
-		desc.extent = Extent2D(depthBufferWithStencil.GetWidth(), depthBufferWithStencil.GetHeight());
-		desc.format = depthBufferWithStencil.GetFormat();
-		desc.msaa = depthBufferWithStencil.GetMSAA();
-		desc.usage = depthBufferWithStencil.GetUsage();
+		desc.textureDesc.extent = depthBufferWithStencil.GetExtent();
+		desc.textureDesc.format = depthBufferWithStencil.GetFormat();
+		desc.textureDesc.msaa = depthBufferWithStencil.GetMSAA();
+		desc.textureDesc.usage = depthBufferWithStencil.GetUsage();
 		desc.srvDescriptor = this->stencilDescriptor;
+		desc.impl = impl;
 		return wrappedTexture.LoadAsWrapped(context, desc);
 	}
 

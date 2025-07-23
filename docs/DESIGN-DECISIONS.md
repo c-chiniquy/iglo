@@ -125,15 +125,3 @@ Prefer using `std::vector` over `std::unique_ptr` for dynamic arrays.
 - Requires support for Vulkan 1.3, along with some additional extensions/features
 - Oldest supported GPU: RTX 2000-series (and AMD/Intel equivalent)
 
-# iglo Requirements
-
-- Supported operating systems:
-  - Windows 10 1909 or newer
-  - Windows 10 LTSC 2021
-  - Windows 11
-  - Ubuntu 22.04 or newer
-  - Likely works on other Linux distros as well, just haven't tested them yet
-- Oldest supported GPUs:
-  - GTX 1000-series (or AMD/Intel equivalent generation) for the D3D12 backend
-  - RTX 2000-series (or AMD/Intel equivalent generation) for the Vulkan backend
-- The D3D12 backend requires the Agility SDK for advanced features such as Shader Model 6.6 and Enhanced Barriers.

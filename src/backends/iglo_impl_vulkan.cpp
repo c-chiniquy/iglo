@@ -506,7 +506,7 @@ namespace ig
 		uint64_t size = 0;
 		for (uint32_t face = 0; face < image.GetNumFaces(); face++)
 		{
-			for (uint32_t mip = 0; mip < image.GetNumMipLevels(); mip++)
+			for (uint32_t mip = 0; mip < image.GetMipLevels(); mip++)
 			{
 				uint64_t srcRowPitch = image.GetMipRowPitch(mip);
 				uint64_t destRowPitch = AlignUp(srcRowPitch, alignments.textureRowPitch);
@@ -1632,7 +1632,7 @@ namespace ig
 		barrier.image = texture.GetVulkanImage();
 		barrier.subresourceRange.aspectMask = GetVulkanImageAspect(texture.GetFormat());
 		barrier.subresourceRange.baseMipLevel = 0;
-		barrier.subresourceRange.levelCount = texture.GetNumMipLevels();
+		barrier.subresourceRange.levelCount = texture.GetMipLevels();
 		barrier.subresourceRange.baseArrayLayer = 0;
 		barrier.subresourceRange.layerCount = texture.GetNumFaces();
 
@@ -1849,7 +1849,7 @@ namespace ig
 			VkImageSubresourceRange range = {};
 			range.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 			range.baseMipLevel = 0;
-			range.levelCount = renderTexture.GetNumMipLevels();
+			range.levelCount = renderTexture.GetMipLevels();
 			range.baseArrayLayer = 0;
 			range.layerCount = renderTexture.GetNumFaces();
 
@@ -1901,7 +1901,7 @@ namespace ig
 			VkImageSubresourceRange range = {};
 			range.aspectMask = (clearDepth ? VK_IMAGE_ASPECT_DEPTH_BIT : 0) | (clearStencil ? VK_IMAGE_ASPECT_STENCIL_BIT : 0);
 			range.baseMipLevel = 0;
-			range.levelCount = depthBuffer.GetNumMipLevels();
+			range.levelCount = depthBuffer.GetMipLevels();
 			range.baseArrayLayer = 0;
 			range.layerCount = depthBuffer.GetNumFaces();
 
@@ -1933,7 +1933,7 @@ namespace ig
 		VkImageSubresourceRange range = {};
 		range.aspectMask = GetVulkanImageAspect(texture.GetFormat());
 		range.baseMipLevel = 0;
-		range.levelCount = texture.GetNumMipLevels();
+		range.levelCount = texture.GetMipLevels();
 		range.baseArrayLayer = 0;
 		range.layerCount = texture.GetNumFaces();
 
@@ -1952,7 +1952,7 @@ namespace ig
 		VkImageSubresourceRange range = {};
 		range.aspectMask = GetVulkanImageAspect(texture.GetFormat());
 		range.baseMipLevel = 0;
-		range.levelCount = texture.GetNumMipLevels();
+		range.levelCount = texture.GetMipLevels();
 		range.baseArrayLayer = 0;
 		range.layerCount = texture.GetNumFaces();
 
@@ -2049,8 +2049,8 @@ namespace ig
 	{
 		// Copy all mip levels and faces
 		std::vector<VkImageCopy> regionList;
-		regionList.reserve(source.GetNumMipLevels());
-		for (uint32_t mip = 0; mip < source.GetNumMipLevels(); mip++)
+		regionList.reserve(source.GetMipLevels());
+		for (uint32_t mip = 0; mip < source.GetMipLevels(); mip++)
 		{
 			VkImageCopy region = {};
 
@@ -2114,7 +2114,7 @@ namespace ig
 	void CommandList::Impl_CopyTextureToReadableTexture(const Texture& source, const Texture& destination)
 	{
 		const uint32_t numFaces = source.GetNumFaces();
-		const uint32_t numMips = source.GetNumMipLevels();
+		const uint32_t numMips = source.GetMipLevels();
 		std::vector<VkImageCopy> regionList;
 		regionList.reserve(numFaces * numMips);
 
@@ -2167,7 +2167,7 @@ namespace ig
 	void CommandList::CopyTempBufferToTexture(const TempBuffer& source, const Texture& destination)
 	{
 		std::vector<VkBufferImageCopy> regionList;
-		regionList.reserve(destination.GetNumFaces() * destination.GetNumMipLevels());
+		regionList.reserve(destination.GetNumFaces() * destination.GetMipLevels());
 
 		FormatInfo formatInfo = GetFormatInfo(destination.GetFormat());
 		bool blockCompressed = (formatInfo.blockSize > 0);
@@ -2176,9 +2176,9 @@ namespace ig
 		uint64_t vkBufferOffset = source.offset;
 		for (uint32_t face = 0; face < destination.GetNumFaces(); face++)
 		{
-			for (uint32_t mip = 0; mip < destination.GetNumMipLevels(); mip++)
+			for (uint32_t mip = 0; mip < destination.GetMipLevels(); mip++)
 			{
-				Extent2D mipExtent = Image::CalculateMipExtent(mip, destination.GetWidth(), destination.GetHeight());
+				Extent2D mipExtent = Image::CalculateMipExtent(destination.GetExtent(), mip);
 
 				VkBufferImageCopy region = {};
 				region.bufferOffset = vkBufferOffset;
@@ -2193,8 +2193,8 @@ namespace ig
 
 				regionList.push_back(region);
 
-				uint64_t basicRowPitch = Image::CalculateMipRowPitch(mip, destination.GetWidth(), destination.GetHeight(), destination.GetFormat());
-				uint64_t basicMipSize = Image::CalculateMipSize(mip, destination.GetWidth(), destination.GetHeight(), destination.GetFormat());
+				uint64_t basicRowPitch = Image::CalculateMipRowPitch(destination.GetExtent(), destination.GetFormat(), mip);
+				uint64_t basicMipSize = Image::CalculateMipSize(destination.GetExtent(), destination.GetFormat(), mip);
 				uint64_t alignedRowPitch = AlignUp(basicRowPitch, context->GetGraphicsSpecs().bufferPlacementAlignments.textureRowPitch);
 				uint64_t numScanLines = basicMipSize / basicRowPitch;
 				vkBufferOffset += (alignedRowPitch * numScanLines);
@@ -2211,7 +2211,7 @@ namespace ig
 
 	void CommandList::CopyTempBufferToTextureSubresource(const TempBuffer& source, const Texture& destination, uint32_t destFaceIndex, uint32_t destMipIndex)
 	{
-		Extent2D mipExtent = Image::CalculateMipExtent(destMipIndex, destination.GetWidth(), destination.GetHeight());
+		Extent2D mipExtent = Image::CalculateMipExtent(destination.GetExtent(), destMipIndex);
 		FormatInfo formatInfo = GetFormatInfo(destination.GetFormat());
 		bool blockCompressed = (formatInfo.blockSize > 0);
 		uint32_t texelBlockSize = blockCompressed ? 4 : 1;
@@ -2475,7 +2475,7 @@ namespace ig
 		}
 
 		VkMemoryPropertyFlags memProperties = 0;
-		if (usage == TextureUsage::Readable)
+		if (desc.usage == TextureUsage::Readable)
 		{
 			memProperties |= VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
 			memProperties |= VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
@@ -2493,7 +2493,7 @@ namespace ig
 			imageInfo.extent.width = desc.extent.width;
 			imageInfo.extent.height = desc.extent.height;
 			imageInfo.extent.depth = 1;
-			imageInfo.mipLevels = desc.numMipLevels;
+			imageInfo.mipLevels = desc.mipLevels;
 			imageInfo.arrayLayers = desc.numFaces;
 			imageInfo.format = vkFormat;
 			imageInfo.tiling = (desc.usage == TextureUsage::Readable) ? VK_IMAGE_TILING_LINEAR : VK_IMAGE_TILING_OPTIMAL;
@@ -2504,7 +2504,7 @@ namespace ig
 
 			imageInfo.flags = 0;
 			if (desc.isCubemap) imageInfo.flags |= VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
-			if (desc.forceSRVFormat != Format::None) imageInfo.flags |= VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT;
+			if (desc.overrideSRVFormat != Format::None) imageInfo.flags |= VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT;
 
 			VkResult result = vkCreateImage(device, &imageInfo, nullptr, &impl.image[i]);
 			if (result != VK_SUCCESS)
@@ -2585,8 +2585,8 @@ namespace ig
 		if (createSRV)
 		{
 			// Allocate descriptor
-			descriptor_SRV = heap.AllocatePersistent(DescriptorType::Texture_SRV);
-			if (descriptor_SRV.IsNull()) return DetailedResult::MakeFail("Failed to allocate descriptor.");
+			srvDescriptor = heap.AllocatePersistent(DescriptorType::Texture_SRV);
+			if (srvDescriptor.IsNull()) return DetailedResult::MakeFail("Failed to allocate descriptor.");
 
 			VkImageViewType srvViewType = VK_IMAGE_VIEW_TYPE_2D;
 			if (desc.isCubemap)
@@ -2601,30 +2601,30 @@ namespace ig
 			VkFormat srvFormat = vkFormat;
 			VkImageAspectFlagBits srvAspect = formatInfo.isDepthFormat ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT;
 
-			if (desc.forceSRVFormat != Format::None)
+			if (desc.overrideSRVFormat != Format::None)
 			{
-				srvFormat = ConvertToVulkanFormat(desc.forceSRVFormat);
-				srvAspect = GetFormatInfo(desc.forceSRVFormat).isDepthFormat ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT;
+				srvFormat = ConvertToVulkanFormat(desc.overrideSRVFormat);
+				srvAspect = GetFormatInfo(desc.overrideSRVFormat).isDepthFormat ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT;
 			}
 
 			// SRV
 			impl.imageView_SRV = CreateImageView(impl.image[0], srvViewType, srvFormat, srvAspect);
 			if (!impl.imageView_SRV) return DetailedResult::MakeFail("Failed to create SRV image view.");
-			heap.WriteImageDescriptor(descriptor_SRV, impl.imageView_SRV, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+			heap.WriteImageDescriptor(srvDescriptor, impl.imageView_SRV, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 		}
 
 		if (createUAV)
 		{
 			// Allocate descriptor
-			descriptor_UAV = heap.AllocatePersistent(DescriptorType::Texture_UAV);
-			if (descriptor_UAV.IsNull()) return DetailedResult::MakeFail("Failed to allocate descriptor.");
+			uavDescriptor = heap.AllocatePersistent(DescriptorType::Texture_UAV);
+			if (uavDescriptor.IsNull()) return DetailedResult::MakeFail("Failed to allocate descriptor.");
 
 			VkImageViewType viewType = (desc.numFaces == 1) ? VK_IMAGE_VIEW_TYPE_2D : VK_IMAGE_VIEW_TYPE_2D_ARRAY;
 
 			// UAV
 			impl.imageView_UAV = CreateImageView(impl.image[0], viewType, vkFormat, VK_IMAGE_ASPECT_COLOR_BIT);
 			if (!impl.imageView_UAV) return DetailedResult::MakeFail("Failed to create UAV image view.");
-			heap.WriteImageDescriptor(descriptor_UAV, impl.imageView_UAV, VK_IMAGE_LAYOUT_GENERAL);
+			heap.WriteImageDescriptor(uavDescriptor, impl.imageView_UAV, VK_IMAGE_LAYOUT_GENERAL);
 		}
 
 		if (desc.usage == TextureUsage::RenderTexture ||
@@ -2666,7 +2666,7 @@ namespace ig
 	{
 		if (!isLoaded) return VK_NULL_HANDLE;
 		if (impl.image.size() == 0) throw std::runtime_error("This should be impossible.");
-		switch (usage)
+		switch (desc.usage)
 		{
 		case TextureUsage::Default:
 		case TextureUsage::UnorderedAccess:
@@ -2684,7 +2684,7 @@ namespace ig
 	{
 		if (!isLoaded) return VK_NULL_HANDLE;
 		if (impl.memory.size() == 0) throw std::runtime_error("This should be impossible.");
-		switch (usage)
+		switch (desc.usage)
 		{
 		case TextureUsage::Default:
 		case TextureUsage::UnorderedAccess:
@@ -3141,11 +3141,12 @@ namespace ig
 			CreateVulkanImageViewForSwapChain(graphics.device, swapchainImages[i], createInfo.imageFormat, &imageView);
 
 			WrappedTextureDesc desc;
-			desc.extent = cappedExtent;
-			desc.format = format;
-			desc.usage = TextureUsage::RenderTexture;
-			desc.vkImage = swapchainImages[i];
-			desc.vkImageView_RTV_DSV = imageView;
+			desc.textureDesc.extent = cappedExtent;
+			desc.textureDesc.format = format;
+			desc.textureDesc.usage = TextureUsage::RenderTexture;
+			desc.impl.image = { swapchainImages[i] };
+			desc.impl.memory = { VK_NULL_HANDLE };
+			desc.impl.imageView_RTV_DSV = imageView;
 
 			std::unique_ptr<Texture> currentBackBuffer = std::make_unique<Texture>();
 			currentBackBuffer->LoadAsWrapped(*this, desc);
@@ -3157,7 +3158,7 @@ namespace ig
 				VkImageView imageView_sRGB_opposite = VK_NULL_HANDLE;
 				CreateVulkanImageViewForSwapChain(graphics.device, swapchainImages[i],
 					ConvertToVulkanFormat(formatInfo.sRGB_opposite), &imageView_sRGB_opposite);
-				desc.vkImageView_RTV_DSV = imageView_sRGB_opposite;
+				desc.impl.imageView_RTV_DSV = imageView_sRGB_opposite;
 
 				std::unique_ptr<Texture> backBuffer_sRGB_opposite = std::make_unique<Texture>();
 				backBuffer_sRGB_opposite->LoadAsWrapped(*this, desc);

@@ -61,12 +61,15 @@ iglo (Intuitive Graphics Layer Open-source) is a cross-platform, public domain C
 
 ### Requirements
 
-- Supported operating systems:
+- Supported platforms:
   - Windows 10 1909 or newer
   - Windows 10 LTSC 2021
   - Windows 11
   - Ubuntu 22.04 or newer
   - Likely works on other Linux distros as well, just haven't tested them yet
+- Supported rendering backends:
+  - Direct3D 12
+  - Vulkan
 - Oldest supported GPUs:
   - GTX 1000-series (or AMD/Intel equivalent generation) for the D3D12 backend
   - RTX 2000-series (or AMD/Intel equivalent generation) for the Vulkan backend
