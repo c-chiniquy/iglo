@@ -3,7 +3,7 @@ TODO: Fix the segmentation fault that occurs when closing the window on Linux.
       This segmentation fault is caused by X11 and the NVIDIA driver.
       Someone else had a similar problem and fixed it by unloading the X11 window before unloading the vulkan instance:
       https://github.com/KhronosGroup/Vulkan-LoaderAndValidationLayers/issues/1894
-      It tried both unload orders, but the segfault persists.
+      I tried both unload orders, but the segfault persists.
       When unloading the vulkan instance before the window, it segfaults in XCloseDisplay().
       When unloading the window before the vulkan instance, it segfaults in _XSend() (called by the NVIDIA driver) while cleaning up the vulkan instance.
 
