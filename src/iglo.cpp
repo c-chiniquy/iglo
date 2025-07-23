@@ -1671,11 +1671,21 @@ namespace ig
 	void IGLOContext::Unload()
 	{
 		if (commandQueue.IsLoaded()) commandQueue.WaitForIdle();
+#ifdef IGLO_VULKAN
+		if (isLoaded) vkDeviceWaitIdle(graphics.device);
+#endif
 
 		isLoaded = false;
 
+#ifdef __linux__
+		// You are required to unload the X11 display before unloading the vulkan device.
+		// Otherwise you may get a segfault.
+		UnloadWindow();
+		UnloadGraphicsDevice();
+#else
 		UnloadGraphicsDevice();
 		UnloadWindow();
+#endif
 	}
 
 	void IGLOContext::UnloadWindow()
@@ -1910,13 +1920,8 @@ namespace ig
 		ownedBuffer.shrink_to_fit();
 
 		size = 0;
-		width = 0;
-		height = 0;
-		mipLevels = 0;
-		numFaces = 0;
-		format = Format::None;
-		arrangement = Arrangement::CompleteMipChains;
-		isCubemap = false;
+
+		desc = ImageDesc();
 	}
 
 	Image::Image(Image&& other) noexcept
@@ -1926,15 +1931,9 @@ namespace ig
 	Image& Image::operator=(Image&& other) noexcept
 	{
 		Unload();
-		std::swap(this->size, other.size);
-		std::swap(this->width, other.width);
-		std::swap(this->height, other.height);
-		std::swap(this->mipLevels, other.mipLevels);
-		std::swap(this->numFaces, other.numFaces);
-		std::swap(this->format, other.format);
-		std::swap(this->arrangement, other.arrangement);
-		std::swap(this->isCubemap, other.isCubemap);
 
+		std::swap(this->desc, other.desc);
+		std::swap(this->size, other.size);
 		std::swap(this->pixelsPtr, other.pixelsPtr);
 		std::swap(this->mustFreeSTBI, other.mustFreeSTBI);
 
@@ -1943,9 +1942,9 @@ namespace ig
 		return *this;
 	}
 
-	DetailedResult Image::Validate(uint32_t width, uint32_t height, Format format, uint32_t mipLevels, uint32_t numFaces, bool isCubemap)
+	DetailedResult ImageDesc::Validate() const
 	{
-		if (width == 0 || height == 0)
+		if (extent.width == 0 || extent.height == 0)
 		{
 			return DetailedResult::MakeFail("Width and height must be nonzero.");
 		}
@@ -1964,8 +1963,8 @@ namespace ig
 		FormatInfo info = GetFormatInfo(format);
 		if (info.blockSize > 0)
 		{
-			bool widthIsMultipleOf4 = (width % 4 == 0);
-			bool heightIsMultipleOf4 = (height % 4 == 0);
+			bool widthIsMultipleOf4 = (extent.width % 4 == 0);
+			bool heightIsMultipleOf4 = (extent.height % 4 == 0);
 			if (!widthIsMultipleOf4 || !heightIsMultipleOf4)
 			{
 				return DetailedResult::MakeFail("Width and height must be multiples of 4 when using a block compression format.");
@@ -1974,55 +1973,47 @@ namespace ig
 		return DetailedResult::MakeSuccess();
 	}
 
-	bool Image::Load(uint32_t width, uint32_t height, Format format,
-		uint32_t mipLevels, uint32_t numFaces, bool isCubemap, Arrangement arrangement)
+	bool Image::Load(uint32_t width, uint32_t height, Format format)
+	{
+		ImageDesc imageDesc;
+		imageDesc.extent = Extent2D(width, height);
+		imageDesc.format = format;
+		return Load(imageDesc);
+	}
+
+	bool Image::Load(const ImageDesc& desc)
 	{
 		Unload();
 
-		DetailedResult result = Validate(width, height, format, mipLevels, numFaces, isCubemap);
+		DetailedResult result = desc.Validate();
 		if (!result)
 		{
 			Log(LogType::Error, "Failed to create image. Reason: " + result.errorMessage);
 			return false;
 		}
 
-		this->width = width;
-		this->height = height;
-		this->format = format;
-		this->mipLevels = mipLevels;
-		this->numFaces = numFaces;
-		this->arrangement = arrangement;
-		this->isCubemap = isCubemap;
+		this->desc = desc;
 		this->mustFreeSTBI = false;
-
-		this->size = CalculateTotalSize(mipLevels, numFaces, width, height, format);
+		this->size = CalculateTotalSize(desc.extent, desc.format, desc.mipLevels, desc.numFaces);
 		this->ownedBuffer.resize(this->size, 0);
 		this->pixelsPtr = this->ownedBuffer.data();
 		return true;
 	}
 
-	bool Image::LoadAsPointer(const void* pixels, uint32_t width, uint32_t height, Format format, uint32_t mipLevels, uint32_t numFaces,
-		bool isCubemap, Arrangement arrangement)
+	bool Image::LoadAsPointer(const void* pixels, const ImageDesc& desc)
 	{
 		Unload();
 
-		DetailedResult result = Validate(width, height, format, mipLevels, numFaces, isCubemap);
+		DetailedResult result = desc.Validate();
 		if (!result)
 		{
-			Log(LogType::Error, "Failed to create image (as pointer). Reason: " + result.errorMessage);
+			Log(LogType::Error, "Failed to load image as pointer. Reason: " + result.errorMessage);
 			return false;
 		}
 
-		this->width = width;
-		this->height = height;
-		this->format = format;
-		this->mipLevels = mipLevels;
-		this->numFaces = numFaces;
-		this->arrangement = arrangement;
-		this->isCubemap = isCubemap;
+		this->desc = desc;
 		this->mustFreeSTBI = false;
-
-		this->size = CalculateTotalSize(mipLevels, numFaces, width, height, format);
+		this->size = CalculateTotalSize(desc.extent, desc.format, desc.mipLevels, desc.numFaces);
 		this->ownedBuffer.clear();
 		this->ownedBuffer.shrink_to_fit();
 		this->pixelsPtr = (byte*)pixels; // Store pointer
@@ -2031,33 +2022,34 @@ namespace ig
 
 	size_t Image::GetMipSize(uint32_t mipIndex) const
 	{
-		return CalculateMipSize(mipIndex, width, height, format);
+		return CalculateMipSize(desc.extent, desc.format, mipIndex);
 	}
 
 	uint32_t Image::GetMipRowPitch(uint32_t mipIndex) const
 	{
-		return CalculateMipRowPitch(mipIndex, width, height, format);
+		return CalculateMipRowPitch(desc.extent, desc.format, mipIndex);
 	}
 
 	Extent2D Image::GetMipExtent(uint32_t mipIndex) const
 	{
-		return CalculateMipExtent(mipIndex, width, height);
+		return CalculateMipExtent(desc.extent, mipIndex);
 	}
 
-	size_t Image::CalculateTotalSize(uint32_t mipLevels, uint32_t numFaces, uint32_t width, uint32_t height, Format format)
+	size_t Image::CalculateTotalSize(Extent2D extent, Format format, uint32_t mipLevels, uint32_t numFaces)
 	{
 		size_t totalSize = 0;
 		for (uint32_t i = 0; i < mipLevels; i++)
 		{
-			totalSize += CalculateMipSize(i, width, height, format);
+			totalSize += CalculateMipSize(extent, format, i);
 		}
 		return totalSize * numFaces;
 	}
-	size_t Image::CalculateMipSize(uint32_t mipIndex, uint32_t width, uint32_t height, Format format)
+
+	size_t Image::CalculateMipSize(Extent2D extent, Format format, uint32_t mipIndex)
 	{
 		FormatInfo info = GetFormatInfo(format);
-		uint32_t mipWidth = std::max(uint32_t(1), width >> mipIndex);
-		uint32_t mipHeight = std::max(uint32_t(1), height >> mipIndex);
+		uint32_t mipWidth = std::max(uint32_t(1), extent.width >> mipIndex);
+		uint32_t mipHeight = std::max(uint32_t(1), extent.height >> mipIndex);
 		if (info.blockSize > 0) // Block-compressed format
 		{
 			return (size_t)std::max(uint32_t(1), ((mipWidth + 3) / 4)) * (size_t)std::max(uint32_t(1), ((mipHeight + 3) / 4)) * info.blockSize;
@@ -2068,10 +2060,10 @@ namespace ig
 		}
 	}
 
-	uint32_t Image::CalculateMipRowPitch(uint32_t mipIndex, uint32_t width, uint32_t height, Format format)
+	uint32_t Image::CalculateMipRowPitch(Extent2D extent, Format format, uint32_t mipIndex)
 	{
 		FormatInfo info = GetFormatInfo(format);
-		uint32_t mipWidth = std::max(uint32_t(1), width >> mipIndex);
+		uint32_t mipWidth = std::max(uint32_t(1), extent.width >> mipIndex);
 		if (info.blockSize > 0) // Block-compressed format
 		{
 			return std::max(uint32_t(1), ((mipWidth + 3) / 4)) * info.blockSize;
@@ -2082,21 +2074,21 @@ namespace ig
 		}
 	}
 
-	Extent2D Image::CalculateMipExtent(uint32_t mipIndex, uint32_t width, uint32_t height)
+	Extent2D Image::CalculateMipExtent(Extent2D extent, uint32_t mipIndex)
 	{
 		Extent2D mipExtent;
-		mipExtent.width = std::max(uint32_t(1), width >> mipIndex);
-		mipExtent.height = std::max(uint32_t(1), height >> mipIndex);
+		mipExtent.width = std::max(uint32_t(1), extent.width >> mipIndex);
+		mipExtent.height = std::max(uint32_t(1), extent.height >> mipIndex);
 		return mipExtent;
 	}
 
-	uint32_t Image::CalculateNumMips(uint32_t width, uint32_t height)
+	uint32_t Image::CalculateNumMips(Extent2D extent)
 	{
 		uint32_t numLevels = 1;
-		while (width > 1 && height > 1)
+		while (extent.width > 1 && extent.height > 1)
 		{
-			width = std::max(width / 2, (uint32_t)1);
-			height = std::max(height / 2, (uint32_t)1);
+			extent.width = std::max(extent.width / 2, (uint32_t)1);
+			extent.height = std::max(extent.height / 2, (uint32_t)1);
 			numLevels++;
 		}
 		return numLevels;
@@ -2107,26 +2099,12 @@ namespace ig
 		if (!IsLoaded()) return nullptr;
 
 		byte* out = pixelsPtr;
-		if (arrangement == Arrangement::CompleteMipChains)
+		for (uint32_t f = 0; f < desc.numFaces; f++)
 		{
-			for (uint32_t f = 0; f < numFaces; f++)
+			for (uint32_t m = 0; m < desc.mipLevels; m++)
 			{
-				for (uint32_t m = 0; m < mipLevels; m++)
-				{
-					if (f == faceIndex && m == mipIndex) return out;
-					out += GetMipSize(m);
-				}
-			}
-		}
-		else if (arrangement == Arrangement::MipStrips)
-		{
-			for (uint32_t m = 0; m < mipLevels; m++)
-			{
-				for (uint32_t f = 0; f < numFaces; f++)
-				{
-					if (f == faceIndex && m == mipIndex) return out;
-					out += GetMipSize(m);
-				}
+				if (f == faceIndex && m == mipIndex) return out;
+				out += GetMipSize(m);
 			}
 		}
 		return (void*)out;
@@ -2286,20 +2264,21 @@ namespace ig
 		}
 
 		/*	OK, validated the header, let's load the image data	*/
-		uint32_t tempWidth = header->dwWidth;
-		uint32_t tempHeight = header->dwHeight;
-		uint32_t tempMipLevel = 1;
-		Format tempFormat = Format::None;
-		uint32_t tempNumFaces = 1;
-		bool tempIsCubemap = false;
+		ImageDesc tempDesc =
+		{
+			.extent = Extent2D(header->dwWidth, header->dwHeight),
+			.format = Format::None,
+			.mipLevels = 1,
+			.numFaces = 1,
+			.isCubemap = false,
+		};
 		bool mustConvertBGRToBGRA = false;
-		Arrangement tempArrangement = Arrangement::CompleteMipChains;
 
 		int32_t cubemap = (header->sCaps.dwCaps2 & DDSCAPS2_CUBEMAP) / DDSCAPS2_CUBEMAP;
 		if (cubemap)
 		{
-			tempIsCubemap = true;
-			tempNumFaces = 6; // A cubemap has 6 faces
+			tempDesc.isCubemap = true;
+			tempDesc.numFaces = 6; // A cubemap has 6 faces
 		}
 
 		int32_t volume = (header->sCaps.dwCaps2 & DDSCAPS2_VOLUME) / DDSCAPS2_VOLUME;
@@ -2316,17 +2295,17 @@ namespace ig
 			{
 				// 32 bits per pixel BGRA or BGRX.
 				// BGRX is compatible with BGRA, so just use BGRA for both
-				tempFormat = Format::BYTE_BYTE_BYTE_BYTE_BGRA;
+				tempDesc.format = Format::BYTE_BYTE_BYTE_BYTE_BGRA;
 				if (header->sPixelFormat.dwRBitMask == 0x000000ff)
 				{
-					tempFormat = Format::BYTE_BYTE_BYTE_BYTE; // Order is RGBA, not BGRA
+					tempDesc.format = Format::BYTE_BYTE_BYTE_BYTE; // Order is RGBA, not BGRA
 				}
 			}
 			else if (header->sPixelFormat.dwRGBBitCount == 24)
 			{
 				// 24 bits per pixel BGR. Must be converted to BGRA.
 				mustConvertBGRToBGRA = true;
-				tempFormat = Format::BYTE_BYTE_BYTE_BYTE_BGRA;
+				tempDesc.format = Format::BYTE_BYTE_BYTE_BYTE_BGRA;
 			}
 			else if (header->sPixelFormat.dwRGBBitCount == 16)
 			{
@@ -2335,7 +2314,7 @@ namespace ig
 			}
 			else if (header->sPixelFormat.dwRGBBitCount == 8)
 			{
-				tempFormat = Format::BYTE;
+				tempDesc.format = Format::BYTE;
 			}
 			else
 			{
@@ -2352,16 +2331,16 @@ namespace ig
 				// DXT2 and DXT3 both use BC2. DXT2 uses premultiplied alpha, DXT3 uses regular alpha.
 				// DXT4 and DXT5 both use BC3. DXT4 uses premultiplied alpha, DXT5 uses regular alpha.
 
-			case 1: tempFormat = Format::BC1; break;
-			case 3: tempFormat = Format::BC2; break;
-			case 5: tempFormat = Format::BC3; break;
+			case 1: tempDesc.format = Format::BC1; break;
+			case 3: tempDesc.format = Format::BC2; break;
+			case 5: tempDesc.format = Format::BC3; break;
 			}
 		}
 
 		// If mipmaps exist
 		if ((header->sCaps.dwCaps1 & DDSCAPS_MIPMAP) && (header->dwMipMapCount > 1))
 		{
-			tempMipLevel = header->dwMipMapCount;
+			tempDesc.mipLevels = header->dwMipMapCount;
 		}
 
 		byte* ddsPixels = (byte*)&fileData[buffer_index];
@@ -2369,7 +2348,7 @@ namespace ig
 		if (mustConvertBGRToBGRA || guaranteeOwnership)
 		{
 			// If we must convert to different format, then this image must create its own pixel buffer first
-			if (!Load(tempWidth, tempHeight, tempFormat, tempMipLevel, tempNumFaces, tempIsCubemap, tempArrangement))
+			if (!Load(tempDesc))
 			{
 				failed = true;
 			}
@@ -2377,14 +2356,14 @@ namespace ig
 		else
 		{
 			// Store pointer to existing pixel data
-			if (!LoadAsPointer(ddsPixels, tempWidth, tempHeight, tempFormat, tempMipLevel, tempNumFaces, tempIsCubemap, tempArrangement))
+			if (!LoadAsPointer(ddsPixels, tempDesc))
 			{
 				failed = true;
 			}
 		}
 		if (failed)
 		{
-			Log(LogType::Error, ToString(errStr, "Unable to create the image. This error shouldn't be able to happen."));
+			Log(LogType::Error, ToString(errStr, "Unable to create the image. This error should be impossible."));
 			return false;
 		}
 
@@ -2428,28 +2407,6 @@ namespace ig
 		return true;
 	}
 
-	bool Image::FileIsOfTypeKTX(const byte* fileData, size_t numBytes)
-	{
-		const uint32_t identifierSize = 12;
-		byte identifier[identifierSize] = { 0xAB, 0x4B, 0x54, 0x58, 0x20, 0x31, 0x31, 0xBB, 0x0D, 0x0A, 0x1A, 0x0A };
-		if (numBytes < identifierSize) return false;
-		uint8_t* f8 = (uint8_t*)fileData;
-		for (uint32_t i = 0; i < identifierSize; i++)
-		{
-			if (f8[i] != identifier[i]) return false;
-		}
-		return true;
-	}
-	bool Image::LoadFromKTX(const byte* fileData, size_t numBytes, bool guaranteeOwnership)
-	{
-		Unload();
-
-		//TODO: Implement this function.
-
-		Log(LogType::Error, "Failed to load image from file data. Reason: Support for KTX file format is not yet implemented.");
-		return false;
-	}
-
 	bool Image::LoadFromMemory(const byte* fileData, size_t numBytes, bool guaranteeOwnership)
 	{
 		Unload();
@@ -2467,11 +2424,6 @@ namespace ig
 			return LoadFromDDS(fileData, numBytes, guaranteeOwnership);
 		}
 
-		if (FileIsOfTypeKTX(fileData, numBytes)) // .KTX
-		{
-			return LoadFromKTX(fileData, numBytes, guaranteeOwnership);
-		}
-
 		int pixelType = 0;
 		if (stbi_is_hdr_from_memory(fileData, (int)numBytes)) // .HDR
 		{
@@ -2485,6 +2437,7 @@ namespace ig
 		{
 			pixelType = 0; // BYTE (8-bit)
 		}
+
 		int w = 0, h = 0, channels = 0;
 		if (!stbi_info_from_memory(fileData, (int)numBytes, &w, &h, &channels)) // .JPEG .PNG .TGA .BMP .PSD .GIF .PIC .PNM
 		{
@@ -2492,9 +2445,10 @@ namespace ig
 			Log(LogType::Error, ToString(errStr, "stb_image returned error: ", stbErrorStr, "."));
 			return false;
 		}
-		int forceChannels = 0;
-		// Graphics API's do not like triple channel texture formats. Force 4 channels if 3 channels detected.
-		if (channels == 3) forceChannels = 4;
+
+		// Graphics API's don't like triple channel texture formats. Force 4 channels if 3 channels detected.
+		int forceChannels = (channels == 3) ? 4 : 0;
+
 		byte* stbiPixels = nullptr;
 		if (pixelType == 0) // 8 bits per color channel
 		{
@@ -2508,14 +2462,17 @@ namespace ig
 		{
 			stbiPixels = (byte*)stbi_loadf_from_memory(fileData, (int)numBytes, &w, &h, &channels, forceChannels);
 		}
-		if (forceChannels != 0) channels = forceChannels;
+
 		if (!stbiPixels)
 		{
 			const char* stbErrorStr = stbi_failure_reason();
 			Log(LogType::Error, ToString(errStr, "stb_image returned error: ", stbErrorStr, "."));
 			return false;
 		}
+
+		if (forceChannels != 0) channels = forceChannels;
 		Format tempFormat = Format::None;
+
 		if (channels == 0)
 		{
 			Log(LogType::Error, ToString(errStr, "0 color channels detected."));
@@ -2537,7 +2494,7 @@ namespace ig
 		else if (channels == 3)
 		{
 			Log(LogType::Error, ToString(errStr, "stb_image failed forcing 4 color channels for triple channel texture."
-				" This error shouldn't be able to happen."));
+				" This error should be impossible."));
 			stbi_image_free(stbiPixels);
 			return false;
 		}
@@ -2553,17 +2510,21 @@ namespace ig
 			stbi_image_free(stbiPixels);
 			return false;
 		}
+
 		if (tempFormat == Format::None)
 		{
-			Log(LogType::Error, ToString(errStr, "Unable to figure out which iglo format to use. This shouldn't be able to happen."));
+			Log(LogType::Error, ToString(errStr, "Unable to figure out which iglo format to use. This error should be impossible."));
 			stbi_image_free(stbiPixels);
 			return false;
 		}
 
 		// Store a pointer to the pixel data stb_image created
-		if (!LoadAsPointer(stbiPixels, w, h, tempFormat, 1, 1, false))
+		ImageDesc pointerImageDesc;
+		pointerImageDesc.extent = Extent2D(w, h);
+		pointerImageDesc.format = tempFormat;
+		if (!LoadAsPointer(stbiPixels, pointerImageDesc))
 		{
-			Log(LogType::Error, ToString(errStr, "Unable to create the image. This error shouldn't be able to happen."));
+			Log(LogType::Error, ToString(errStr, "Unable to load as pointer. This error should be impossible."));
 			stbi_image_free(stbiPixels);
 			return false;
 		}
@@ -2587,7 +2548,7 @@ namespace ig
 			Log(LogType::Error, "Failed to save image to file. Reason: No filename provided.");
 			return false;
 		}
-		FormatInfo info = GetFormatInfo(format);
+		FormatInfo info = GetFormatInfo(desc.format);
 		if (info.blockSize > 0)
 		{
 			Log(LogType::Error, "Failed to save image to file '" + filename +
@@ -2601,8 +2562,8 @@ namespace ig
 		byte* tempPixels = pixelsPtr;
 
 		std::vector<byte> tempPixelBuffer;
-		if (format == Format::BYTE_BYTE_BYTE_BYTE_BGRA ||
-			format == Format::BYTE_BYTE_BYTE_BYTE_BGRA_sRGB) // BGRA must be converted to RGBA
+		if (desc.format == Format::BYTE_BYTE_BYTE_BYTE_BGRA ||
+			desc.format == Format::BYTE_BYTE_BYTE_BYTE_BGRA_sRGB) // BGRA must be converted to RGBA
 		{
 			tempPixelBuffer.resize(size);
 			tempPixels = tempPixelBuffer.data();
@@ -2617,7 +2578,7 @@ namespace ig
 			}
 		}
 
-		switch (format)
+		switch (desc.format)
 		{
 		case Format::BYTE:
 		case Format::BYTE_NotNormalized:
@@ -2630,22 +2591,22 @@ namespace ig
 		case Format::BYTE_BYTE_BYTE_BYTE_BGRA_sRGB:
 			if (fileExt == ".png")
 			{
-				success = (bool)stbi_write_png(filename.c_str(), width, height, info.elementCount, (byte*)tempPixels, 0);
+				success = (bool)stbi_write_png(filename.c_str(), GetWidth(), GetHeight(), info.elementCount, (byte*)tempPixels, 0);
 				validExtension = true;
 			}
 			else if (fileExt == ".bmp")
 			{
-				success = (bool)stbi_write_bmp(filename.c_str(), width, height, info.elementCount, (byte*)tempPixels);
+				success = (bool)stbi_write_bmp(filename.c_str(), GetWidth(), GetHeight(), info.elementCount, (byte*)tempPixels);
 				validExtension = true;
 			}
 			else if (fileExt == ".tga")
 			{
-				success = (bool)stbi_write_tga(filename.c_str(), width, height, info.elementCount, (byte*)tempPixels);
+				success = (bool)stbi_write_tga(filename.c_str(), GetWidth(), GetHeight(), info.elementCount, (byte*)tempPixels);
 				validExtension = true;
 			}
 			else if (fileExt == ".jpg" || fileExt == ".jpeg")
 			{
-				success = (bool)stbi_write_jpg(filename.c_str(), width, height, info.elementCount, (byte*)tempPixels, 90);
+				success = (bool)stbi_write_jpg(filename.c_str(), GetWidth(), GetHeight(), info.elementCount, (byte*)tempPixels, 90);
 				validExtension = true;
 			}
 			break;
@@ -2654,7 +2615,7 @@ namespace ig
 		case Format::FLOAT_FLOAT_FLOAT_FLOAT:
 			if (fileExt == ".hdr")
 			{
-				success = (bool)stbi_write_hdr(filename.c_str(), width, height, info.elementCount, (float*)tempPixels);
+				success = (bool)stbi_write_hdr(filename.c_str(), GetWidth(), GetHeight(), info.elementCount, (float*)tempPixels);
 				validExtension = true;
 			}
 			break;
@@ -2683,27 +2644,27 @@ namespace ig
 		// If already using requested format, do nothing
 		if (IsSRGB() == sRGB) return;
 
-		FormatInfo info = GetFormatInfo(format);
+		FormatInfo info = GetFormatInfo(desc.format);
 		// If sRGB opposite format is found, use it
 		if (info.sRGB_opposite != Format::None)
 		{
-			format = info.sRGB_opposite;
+			desc.format = info.sRGB_opposite;
 		}
 	}
 	bool Image::IsSRGB() const
 	{
-		return GetFormatInfo(format).is_sRGB;
+		return GetFormatInfo(desc.format).is_sRGB;
 	}
 
 	void Image::ReplaceColors(Color32 colorA, Color32 colorB)
 	{
 		if (!IsLoaded()) return;
 
-		if (format == ig::Format::BYTE_BYTE_BYTE_BYTE ||
-			format == Format::BYTE_BYTE_BYTE_BYTE_NotNormalized ||
-			format == Format::BYTE_BYTE_BYTE_BYTE_sRGB ||
-			format == ig::Format::BYTE_BYTE_BYTE_BYTE_BGRA ||
-			format == Format::BYTE_BYTE_BYTE_BYTE_BGRA_sRGB)
+		if (desc.format == ig::Format::BYTE_BYTE_BYTE_BYTE ||
+			desc.format == Format::BYTE_BYTE_BYTE_BYTE_NotNormalized ||
+			desc.format == Format::BYTE_BYTE_BYTE_BYTE_sRGB ||
+			desc.format == ig::Format::BYTE_BYTE_BYTE_BYTE_BGRA ||
+			desc.format == Format::BYTE_BYTE_BYTE_BYTE_BGRA_sRGB)
 		{
 			if (colorA == colorB)
 			{
@@ -2714,8 +2675,8 @@ namespace ig
 			uint32_t replaceValue = colorB.rgba;
 
 			// Convert colorA and colorB from RGBA to BGRA
-			if (format == ig::Format::BYTE_BYTE_BYTE_BYTE_BGRA ||
-				format == Format::BYTE_BYTE_BYTE_BYTE_BGRA_sRGB)
+			if (desc.format == ig::Format::BYTE_BYTE_BYTE_BYTE_BGRA ||
+				desc.format == Format::BYTE_BYTE_BYTE_BYTE_BGRA_sRGB)
 			{
 				findValue = Color32(colorA.blue, colorA.green, colorA.red, colorA.alpha).rgba;
 				replaceValue = Color32(colorB.blue, colorB.green, colorB.red, colorB.alpha).rgba;
@@ -3315,29 +3276,20 @@ namespace ig
 
 		if (!isWrapped)
 		{
-			if (!descriptor_SRV.IsNull()) context->GetDescriptorHeap().FreePersistent(descriptor_SRV);
-			if (!descriptor_UAV.IsNull()) context->GetDescriptorHeap().FreePersistent(descriptor_UAV);
+			if (!srvDescriptor.IsNull()) context->GetDescriptorHeap().FreePersistent(srvDescriptor);
+			if (!uavDescriptor.IsNull()) context->GetDescriptorHeap().FreePersistent(uavDescriptor);
 		}
-		descriptor_SRV.SetToNull();
-		descriptor_UAV.SetToNull();
+		srvDescriptor.SetToNull();
+		uavDescriptor.SetToNull();
 
 		isLoaded = false;
 		context = nullptr;
-		usage = TextureUsage::Default;
-		width = 0;
-		height = 0;
-		format = Format::None;
-		msaa = MSAA::Disabled;
-		isCubemap = false;
-		numFaces = 0;
-		numMipLevels = 0;
-		optimizedClearValue = ClearValue();
+		desc = TextureDesc();
 
 		readMapped.clear();
 		readMapped.shrink_to_fit();
 
 		isWrapped = false;
-
 	}
 
 	Texture::Texture(Texture&& other) noexcept
@@ -3350,17 +3302,9 @@ namespace ig
 
 		std::swap(this->isLoaded, other.isLoaded);
 		std::swap(this->context, other.context);
-		std::swap(this->usage, other.usage);
-		std::swap(this->width, other.width);
-		std::swap(this->height, other.height);
-		std::swap(this->format, other.format);
-		std::swap(this->msaa, other.msaa);
-		std::swap(this->isCubemap, other.isCubemap);
-		std::swap(this->numFaces, other.numFaces);
-		std::swap(this->numMipLevels, other.numMipLevels);
-		std::swap(this->optimizedClearValue, other.optimizedClearValue);
-		std::swap(this->descriptor_SRV, other.descriptor_SRV);
-		std::swap(this->descriptor_UAV, other.descriptor_UAV);
+		std::swap(this->desc, other.desc);
+		std::swap(this->srvDescriptor, other.srvDescriptor);
+		std::swap(this->uavDescriptor, other.uavDescriptor);
 		std::swap(this->readMapped, other.readMapped);
 		std::swap(this->isWrapped, other.isWrapped);
 
@@ -3372,15 +3316,15 @@ namespace ig
 	const Descriptor* Texture::GetDescriptor() const
 	{
 		if (!isLoaded) return nullptr;
-		if (descriptor_SRV.IsNull()) return nullptr;
-		return &descriptor_SRV;
+		if (srvDescriptor.IsNull()) return nullptr;
+		return &srvDescriptor;
 	}
 
 	const Descriptor* Texture::GetUnorderedAccessDescriptor() const
 	{
 		if (!isLoaded) return nullptr;
-		if (descriptor_UAV.IsNull()) return nullptr;
-		return &descriptor_UAV;
+		if (uavDescriptor.IsNull()) return nullptr;
+		return &uavDescriptor;
 	}
 
 	bool Texture::Load(const IGLOContext& context, uint32_t width, uint32_t height, Format format,
@@ -3418,7 +3362,7 @@ namespace ig
 			Log(LogType::Error, ToString(errStr, "Texture dimensions must be atleast 1x1."));
 			return false;
 		}
-		if (desc.numFaces == 0 || desc.numMipLevels == 0)
+		if (desc.numFaces == 0 || desc.mipLevels == 0)
 		{
 			Log(LogType::Error, ToString(errStr, "Texture must have atleast 1 face and 1 mip level."));
 			return false;
@@ -3435,18 +3379,9 @@ namespace ig
 		}
 
 		this->context = &context;
-		this->usage = desc.usage;
-		this->width = desc.extent.width;
-		this->height = desc.extent.height;
-		this->format = desc.format;
-		this->msaa = desc.msaa;
-		this->isCubemap = desc.isCubemap;
-		this->numFaces = desc.numFaces;
-		this->numMipLevels = desc.numMipLevels;
-		this->optimizedClearValue = desc.optimizedClearValue;
+		this->desc = desc;
 		this->isWrapped = false;
 
-		// Create the texture
 		DetailedResult result = Impl_Load(context, desc);
 		if (!result)
 		{
@@ -3465,81 +3400,42 @@ namespace ig
 
 		const char* errStr = "Failed to load wrapped texture. Reason: ";
 
-		switch (usage)
+		size_t expectedResources = 1;
+		size_t expectedMemories = 1;
+		size_t expectedMappedPtrs = 0;
+		if (desc.textureDesc.usage == TextureUsage::Readable)
 		{
-		case TextureUsage::Default:
-		case TextureUsage::UnorderedAccess:
-		case TextureUsage::RenderTexture:
-		case TextureUsage::DepthBuffer:
-			break;
-		case TextureUsage::Readable:
-			Log(LogType::Error, ToString(errStr, "Readable texture usage is not supported for wrapped textures."));
+			expectedResources = context.GetMaxFramesInFlight();
+			expectedMemories = context.GetMaxFramesInFlight();
+			expectedMappedPtrs = context.GetMaxFramesInFlight();
+		}
+
+#ifdef IGLO_D3D12
+		size_t providedResources = desc.impl.resource.size();
+		size_t providedMemories = desc.impl.resource.size();
+#endif
+#ifdef IGLO_VULKAN
+		size_t providedResources = desc.impl.image.size();
+		size_t providedMemories = desc.impl.memory.size();
+#endif
+		size_t providedMappedPtrs = desc.readMapped.size();
+
+		if (expectedResources != providedResources ||
+			expectedMemories != providedMemories ||
+			expectedMappedPtrs != providedMappedPtrs)
+		{
+			Log(LogType::Error, ToString(errStr, "Unexpected vector size for impl.resource, impl.image, impl.memory or readMapped."));
 			return false;
-		default:
-			throw std::invalid_argument("Invalid texture usage.");
 		}
 
 		this->isLoaded = true;
 		this->context = &context;
-		this->usage = desc.usage;
-		this->width = desc.extent.width;
-		this->height = desc.extent.height;
-		this->format = desc.format;
-		this->msaa = desc.msaa;
-		this->isCubemap = desc.isCubemap;
-		this->numFaces = desc.numFaces;
-		this->numMipLevels = desc.numMipLevels;
-		this->optimizedClearValue = desc.optimizedClearValue;
-		this->descriptor_SRV = desc.srvDescriptor;
-		this->descriptor_UAV = desc.uavDescriptor;
+		this->desc = desc.textureDesc;
+		this->srvDescriptor = desc.srvDescriptor;
+		this->uavDescriptor = desc.uavDescriptor;
+		this->readMapped = desc.readMapped;
 		this->isWrapped = true;
-
-#ifdef IGLO_D3D12
-		this->impl.resource.push_back(desc.d3d12Resource);
-
-		if (desc.d3d12Desc_RTV && desc.usage != TextureUsage::RenderTexture)
-		{
-			Log(LogType::Error, ToString(errStr, "You provided an RTV description, but usage is not RenderTexture."));
-			Unload();
-			return false;
-		}
-		if (desc.d3d12Desc_DSV && desc.usage != TextureUsage::DepthBuffer)
-		{
-			Log(LogType::Error, ToString(errStr, "You provided a DSV description, but usage is not DepthBuffer."));
-			Unload();
-			return false;
-		}
-		if (desc.d3d12Desc_UAV && desc.usage != TextureUsage::UnorderedAccess)
-		{
-			Log(LogType::Error, ToString(errStr, "You provided a UAV description, but usage is not UnorderedAccess."));
-			Unload();
-			return false;
-		}
-		if (desc.usage == TextureUsage::RenderTexture)
-		{
-			this->impl.desc_cpu.rtv = desc.d3d12Desc_RTV ? *desc.d3d12Desc_RTV : GenerateD3D12Desc_RTV(desc.format, desc.msaa, desc.numFaces);
-		}
-		else if (desc.usage == TextureUsage::DepthBuffer)
-		{
-			this->impl.desc_cpu.dsv = desc.d3d12Desc_DSV ? *desc.d3d12Desc_DSV : GenerateD3D12Desc_DSV(desc.format, desc.msaa, desc.numFaces);
-		}
-		else if (desc.usage == TextureUsage::UnorderedAccess)
-		{
-			this->impl.desc_cpu.uav = desc.d3d12Desc_UAV ? *desc.d3d12Desc_UAV : GenerateD3D12Desc_UAV(desc.format, desc.msaa, desc.numFaces);
-		}
-		else
-		{
-			this->impl.desc_cpu = UnionD3D12NonShaderViewDesc();
-		}
-#endif
-#ifdef IGLO_VULKAN
-		this->impl.image.push_back(desc.vkImage);
-		this->impl.memory.push_back(desc.vkMemory);
-		this->impl.imageView_SRV = desc.vkImageView_SRV;
-		this->impl.imageView_UAV = desc.vkImageView_UAV;
-		this->impl.imageView_RTV_DSV = desc.vkImageView_RTV_DSV;
-#endif
-
+		this->impl = desc.impl;
 		return true;
 	}
 
@@ -3565,9 +3461,8 @@ namespace ig
 		Unload();
 		Image image;
 		if (!image.LoadFromMemory(fileData, numBytes, false)) return false;
-		if (sRGB)
+		if (sRGB) // User requests sRGB format
 		{
-			// User has requested to use sRGB format.
 			image.SetSRGB(true);
 			if (!image.IsSRGB())
 			{
@@ -3591,8 +3486,8 @@ namespace ig
 		}
 
 		// Should we generate mips?
-		uint32_t fullMipLevels = Image::CalculateNumMips(image.GetWidth(), image.GetHeight());
-		bool proceedWithMipGen = generateMipmaps && (fullMipLevels > 1) && (image.GetNumMipLevels() == 1);
+		uint32_t fullMipLevels = Image::CalculateNumMips(image.GetExtent());
+		bool proceedWithMipGen = generateMipmaps && (fullMipLevels > 1) && (image.GetMipLevels() == 1);
 
 		// Can we generate mips?
 		if (proceedWithMipGen)
@@ -3613,10 +3508,10 @@ namespace ig
 		selfDesc.msaa = MSAA::Disabled;
 		selfDesc.isCubemap = image.IsCubemap();
 		selfDesc.numFaces = image.GetNumFaces();
-		selfDesc.numMipLevels = proceedWithMipGen ? fullMipLevels : image.GetNumMipLevels();
+		selfDesc.mipLevels = proceedWithMipGen ? fullMipLevels : image.GetMipLevels();
 		if (!Load(context, selfDesc))
 		{
-			// Load() will already have unloaded the texture and logged an error message if it failed.
+			// Load() will have already unloaded the texture and logged an error message if it failed.
 			return false;
 		}
 
@@ -3675,21 +3570,16 @@ namespace ig
 
 	DetailedResult Texture::GenerateMips(CommandList& cmd, const Image& image)
 	{
-		if (!isLoaded ||
-			numMipLevels <= 1 ||
-			!image.IsLoaded() ||
-			image.GetWidth() != width ||
-			image.GetHeight() != height)
+		if (!isLoaded || desc.mipLevels <= 1 || !image.IsLoaded() || image.GetExtent() != desc.extent)
 		{
 			throw std::runtime_error("This should be impossible.");
 		}
 
+		Extent2D nextMipExtent = Image::CalculateMipExtent(desc.extent, 1);
+		FormatInfo formatInfo = GetFormatInfo(desc.format);
+		Format format_non_sRGB = formatInfo.is_sRGB ? formatInfo.sRGB_opposite : desc.format;
+
 		// Create an unordered access texture with one less miplevel
-		Extent2D nextMipExtent = Image::CalculateMipExtent(1, width, height);
-
-		FormatInfo formatInfo = GetFormatInfo(format);
-		Format format_non_sRGB = formatInfo.is_sRGB ? formatInfo.sRGB_opposite : format;
-
 		std::shared_ptr<Texture> unordered = std::make_shared<Texture>();
 		TextureDesc unorderedDesc;
 		unorderedDesc.extent = nextMipExtent;
@@ -3697,8 +3587,8 @@ namespace ig
 		unorderedDesc.usage = TextureUsage::UnorderedAccess;
 		unorderedDesc.msaa = MSAA::Disabled;
 		unorderedDesc.isCubemap = false;
-		unorderedDesc.numFaces = numFaces;
-		unorderedDesc.numMipLevels = numMipLevels - 1;
+		unorderedDesc.numFaces = desc.numFaces;
+		unorderedDesc.mipLevels = desc.mipLevels - 1;
 		unorderedDesc.createDescriptors = false;
 		if (!unordered->Load(*context, unorderedDesc))
 		{
@@ -3726,7 +3616,7 @@ namespace ig
 		pushConstants.bilinearClampSamplerIndex = context->GetBilinearClampSamplerDescriptor()->heapIndex;
 		pushConstants.is_sRGB = formatInfo.is_sRGB;
 
-		for (uint32_t i = 0; i < numMipLevels - 1; i++)
+		for (uint32_t i = 0; i < desc.mipLevels - 1; i++)
 		{
 			DescriptorHeap& heap = context->GetDescriptorHeap();
 
@@ -3739,7 +3629,7 @@ namespace ig
 			pushConstants.srcTextureIndex = srv.heapIndex;
 			pushConstants.destTextureIndex = uav.heapIndex;
 
-			Extent2D destDimensions = Image::CalculateMipExtent(i + 1, image.GetWidth(), image.GetHeight());
+			Extent2D destDimensions = Image::CalculateMipExtent(image.GetExtent(), i + 1);
 			pushConstants.inverseDestTextureSize = Vector2(1.0f / (float)destDimensions.width, 1.0f / (float)destDimensions.height);
 
 #ifdef IGLO_D3D12
@@ -3818,7 +3708,7 @@ namespace ig
 			cmd.CopyTextureSubresource(*unordered, 0, i, *this, 0, i + 1);
 		}
 
-		cmd.AddTextureBarrierAtSubresource(*this, SimpleBarrier::CopyDest, SimpleBarrier::PixelShaderResource, 0, numMipLevels - 1);
+		cmd.AddTextureBarrierAtSubresource(*this, SimpleBarrier::CopyDest, SimpleBarrier::PixelShaderResource, 0, desc.mipLevels - 1);
 		cmd.FlushBarriers();
 
 		return DetailedResult::MakeSuccess();
@@ -3827,22 +3717,21 @@ namespace ig
 	void Texture::SetPixels(CommandList& cmd, const Image& srcImage)
 	{
 		const char* errStr = "Failed to set texture pixels. Reason: ";
-		if (!isLoaded || usage == TextureUsage::Readable)
+		if (!isLoaded || desc.usage == TextureUsage::Readable)
 		{
 			Log(LogType::Error, ToString(errStr, "Texture must be created with non-readable texture usage."));
 			return;
 		}
-		if (msaa != MSAA::Disabled)
+		if (desc.msaa != MSAA::Disabled)
 		{
 			Log(LogType::Error, ToString(errStr, "Texture is multisampled."));
 			return;
 		}
 		if (!srcImage.IsLoaded() ||
-			srcImage.GetWidth() != width ||
-			srcImage.GetHeight() != height ||
-			srcImage.GetFormat() != format ||
-			srcImage.GetNumFaces() != numFaces ||
-			srcImage.GetNumMipLevels() != numMipLevels)
+			srcImage.GetExtent() != desc.extent ||
+			srcImage.GetFormat() != desc.format ||
+			srcImage.GetNumFaces() != desc.numFaces ||
+			srcImage.GetMipLevels() != desc.mipLevels)
 		{
 			Log(LogType::Error, ToString(errStr, "Source image dimensions must match texture."));
 			return;
@@ -3852,9 +3741,9 @@ namespace ig
 		uint64_t requiredUploadBufferSize = 0;
 		{
 			D3D12_RESOURCE_DESC resDesc = impl.resource[0]->GetDesc();
-			context->GetD3D12Device()->GetCopyableFootprints(&resDesc, 0, numFaces * numMipLevels, 0,
+			context->GetD3D12Device()->GetCopyableFootprints(&resDesc, 0, desc.numFaces * desc.mipLevels, 0,
 				nullptr, nullptr, nullptr, &requiredUploadBufferSize);
-	}
+		}
 #endif
 #ifdef IGLO_VULKAN
 		uint64_t requiredUploadBufferSize = GetRequiredUploadBufferSize(srcImage, context->GetGraphicsSpecs().bufferPlacementAlignments);
@@ -3872,7 +3761,7 @@ namespace ig
 		byte* srcPtr = (byte*)srcImage.GetPixels();
 		for (uint32_t faceIndex = 0; faceIndex < srcImage.GetNumFaces(); faceIndex++)
 		{
-			for (uint32_t mipIndex = 0; mipIndex < srcImage.GetNumMipLevels(); mipIndex++)
+			for (uint32_t mipIndex = 0; mipIndex < srcImage.GetMipLevels(); mipIndex++)
 			{
 				size_t srcRowPitch = srcImage.GetMipRowPitch(mipIndex);
 				uint64_t destRowPitch = AlignUp(srcRowPitch, context->GetGraphicsSpecs().bufferPlacementAlignments.textureRowPitch);
@@ -3889,7 +3778,7 @@ namespace ig
 		}
 
 		cmd.CopyTempBufferToTexture(tempBuffer, *this);
-}
+	}
 
 	void Texture::SetPixels(CommandList& cmd, const void* pixelData)
 	{
@@ -3898,31 +3787,39 @@ namespace ig
 			Log(LogType::Error, "Failed to set texture pixels. Reason: The provided data is nullptr.");
 			return;
 		}
+
+		ImageDesc imageDesc;
+		imageDesc.extent = desc.extent;
+		imageDesc.format = desc.format;
+		imageDesc.mipLevels = desc.mipLevels;
+		imageDesc.numFaces = desc.numFaces;
+		imageDesc.isCubemap = desc.isCubemap;
+
 		Image image;
-		image.LoadAsPointer((byte*)pixelData, width, height, format, numMipLevels, numFaces, isCubemap);
+		image.LoadAsPointer((byte*)pixelData, imageDesc);
+
 		SetPixels(cmd, image);
 	}
 
 	void Texture::SetPixelsAtSubresource(CommandList& cmd, const Image& srcImage, uint32_t destFaceIndex, uint32_t destMipIndex)
 	{
 		const char* errStr = "Failed to set texture pixels at subresource. Reason: ";
-		if (!isLoaded || usage == TextureUsage::Readable)
+		if (!isLoaded || desc.usage == TextureUsage::Readable)
 		{
 			Log(LogType::Error, ToString(errStr, "Texture must be created with non-readable texture usage."));
 			return;
 		}
-		if (msaa != MSAA::Disabled)
+		if (desc.msaa != MSAA::Disabled)
 		{
 			Log(LogType::Error, ToString(errStr, "Texture is multisampled."));
 			return;
 		}
-		Extent2D subResDimensions = Image::CalculateMipExtent(destMipIndex, width, height);
+		Extent2D subResDimensions = Image::CalculateMipExtent(desc.extent, destMipIndex);
 		if (!srcImage.IsLoaded() ||
-			srcImage.GetWidth() != subResDimensions.width ||
-			srcImage.GetHeight() != subResDimensions.height ||
-			srcImage.GetFormat() != format ||
+			srcImage.GetExtent() != subResDimensions ||
+			srcImage.GetFormat() != desc.format ||
 			srcImage.GetNumFaces() != 1 ||
-			srcImage.GetNumMipLevels() != 1)
+			srcImage.GetMipLevels() != 1)
 		{
 			Log(LogType::Error, ToString(errStr, "Source image is expected to have 1 face, 1 miplevel,"
 				" and the dimensions ", subResDimensions.ToString(), "."));
@@ -3930,12 +3827,12 @@ namespace ig
 		}
 
 #ifdef IGLO_D3D12
-		uint32_t subResourceIndex = (destFaceIndex * numMipLevels) + destMipIndex;
+		uint32_t subResourceIndex = (destFaceIndex * desc.mipLevels) + destMipIndex;
 		uint64_t requiredUploadBufferSize = 0;
 		{
 			D3D12_RESOURCE_DESC resDesc = impl.resource[0]->GetDesc();
 			context->GetD3D12Device()->GetCopyableFootprints(&resDesc, subResourceIndex, 1, 0, nullptr, nullptr, nullptr, &requiredUploadBufferSize);
-	}
+		}
 #endif
 #ifdef IGLO_VULKAN
 		uint64_t requiredUploadBufferSize = GetRequiredUploadBufferSize(srcImage, context->GetGraphicsSpecs().bufferPlacementAlignments);
@@ -3973,30 +3870,34 @@ namespace ig
 			Log(LogType::Error, "Failed to set texture pixels at subresource. Reason: The provided data is nullptr.");
 			return;
 		}
-		Extent2D subResDimensions = Image::CalculateMipExtent(destMipIndex, width, height);
+
+		ImageDesc imageDesc;
+		imageDesc.extent = Image::CalculateMipExtent(desc.extent, destMipIndex);
+		imageDesc.format = desc.format;
+		
 		Image image;
-		image.LoadAsPointer((byte*)pixelData, subResDimensions.width, subResDimensions.height, format, 1, 1, false);
+		image.LoadAsPointer((byte*)pixelData, imageDesc);
+
 		SetPixelsAtSubresource(cmd, image, destFaceIndex, destMipIndex);
 	}
 
 	void Texture::ReadPixels(Image& destImage)
 	{
-		if (!isLoaded || usage != TextureUsage::Readable)
+		if (!isLoaded || desc.usage != TextureUsage::Readable)
 		{
 			Log(LogType::Error, "Failed to read texture pixels. Reason: Texture must be created with Readable usage.");
 			return;
 		}
-		if (msaa != MSAA::Disabled)
+		if (desc.msaa != MSAA::Disabled)
 		{
 			Log(LogType::Error, "Failed to read texture pixels. Reason: Texture is multisampled.");
 			return;
 		}
 		if (!destImage.IsLoaded() ||
-			destImage.GetWidth() != width ||
-			destImage.GetHeight() != height ||
-			destImage.GetFormat() != format ||
-			destImage.GetNumFaces() != numFaces ||
-			destImage.GetNumMipLevels() != numMipLevels)
+			destImage.GetExtent() != desc.extent ||
+			destImage.GetFormat() != desc.format ||
+			destImage.GetNumFaces() != desc.numFaces ||
+			destImage.GetMipLevels() != desc.mipLevels)
 		{
 			Log(LogType::Error, "Failed to read texture pixels. Reason: Image dimension must match texture.");
 			return;
@@ -4006,11 +3907,11 @@ namespace ig
 
 		byte* destPtr = (byte*)destImage.GetPixels();
 		byte* srcPtr = (byte*)readMapped[context->GetFrameIndex()];
-		for (uint32_t faceIndex = 0; faceIndex < numFaces; faceIndex++)
+		for (uint32_t faceIndex = 0; faceIndex < desc.numFaces; faceIndex++)
 		{
-			for (uint32_t mipIndex = 0; mipIndex < numMipLevels; mipIndex++)
+			for (uint32_t mipIndex = 0; mipIndex < desc.mipLevels; mipIndex++)
 			{
-				size_t srcRowPitch = AlignUp(Image::CalculateMipRowPitch(mipIndex, width, height, format),
+				size_t srcRowPitch = AlignUp(Image::CalculateMipRowPitch(desc.extent, desc.format, mipIndex),
 					context->GetGraphicsSpecs().bufferPlacementAlignments.textureRowPitch);
 				size_t destRowPitch = destImage.GetMipRowPitch(mipIndex);
 				for (uint64_t destProgress = 0; destProgress < destImage.GetMipSize(mipIndex); destProgress += destRowPitch)
@@ -4029,12 +3930,20 @@ namespace ig
 
 	Image Texture::ReadPixels()
 	{
+		ImageDesc imageDesc;
+		imageDesc.extent = desc.extent;
+		imageDesc.format = desc.format;
+		imageDesc.mipLevels = desc.mipLevels;
+		imageDesc.numFaces = desc.numFaces;
+		imageDesc.isCubemap = desc.isCubemap;
+		
 		Image image;
-		if (!image.Load(width, height, format, numMipLevels, numFaces, isCubemap))
+		if (!image.Load(imageDesc))
 		{
 			Log(LogType::Error, "Failed to read texture pixels to image. Reason: Failed to create image.");
 			return image;
 		}
+
 		ReadPixels(image);
 		return image;
 	}

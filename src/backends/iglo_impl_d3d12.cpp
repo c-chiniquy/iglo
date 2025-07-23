@@ -657,7 +657,7 @@ namespace ig
 		barrier.LayoutBefore = (D3D12_BARRIER_LAYOUT)layoutBefore;
 		barrier.LayoutAfter = (D3D12_BARRIER_LAYOUT)layoutAfter;
 		barrier.Flags = discard ? D3D12_TEXTURE_BARRIER_FLAG_DISCARD : D3D12_TEXTURE_BARRIER_FLAG_NONE;
-		barrier.Subresources.IndexOrFirstMipLevel = (faceIndex * texture.GetNumMipLevels()) + mipIndex;
+		barrier.Subresources.IndexOrFirstMipLevel = (faceIndex * texture.GetMipLevels()) + mipIndex;
 
 		impl.numTextureBarriers++;
 	}
@@ -859,12 +859,12 @@ namespace ig
 		D3D12_TEXTURE_COPY_LOCATION srcLoc = {};
 		srcLoc.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
 		srcLoc.pResource = source.GetD3D12Resource();
-		srcLoc.SubresourceIndex = (sourceFaceIndex * source.GetNumMipLevels()) + sourceMipIndex;
+		srcLoc.SubresourceIndex = (sourceFaceIndex * source.GetMipLevels()) + sourceMipIndex;
 
 		D3D12_TEXTURE_COPY_LOCATION destLoc = {};
 		destLoc.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
 		destLoc.pResource = destination.GetD3D12Resource();
-		destLoc.SubresourceIndex = (destFaceIndex * destination.GetNumMipLevels()) + destMipIndex;
+		destLoc.SubresourceIndex = (destFaceIndex * destination.GetMipLevels()) + destMipIndex;
 
 		impl.graphicsCommandList->CopyTextureRegion(&destLoc, 0, 0, 0, &srcLoc, nullptr);
 	}
@@ -872,7 +872,7 @@ namespace ig
 	void CommandList::Impl_CopyTextureToReadableTexture(const Texture& source, const Texture& destination)
 	{
 		D3D12_RESOURCE_DESC desc = source.GetD3D12Resource()->GetDesc();
-		uint32_t numSubResources = source.GetNumFaces() * source.GetNumMipLevels();
+		uint32_t numSubResources = source.GetNumFaces() * source.GetMipLevels();
 		uint64_t currentOffset = 0;
 		for (uint32_t i = 0; i < numSubResources; i++)
 		{
@@ -932,7 +932,7 @@ namespace ig
 	void CommandList::CopyTempBufferToTextureSubresource(const TempBuffer& source, const Texture& destination, uint32_t destFaceIndex, uint32_t destMipIndex)
 	{
 		D3D12_RESOURCE_DESC desc = destination.GetD3D12Resource()->GetDesc();
-		uint32_t subResourceIndex = (destFaceIndex * destination.GetNumMipLevels()) + destMipIndex;
+		uint32_t subResourceIndex = (destFaceIndex * destination.GetMipLevels()) + destMipIndex;
 
 		D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint = {};
 		uint64_t totalBytes = 0;
@@ -1009,7 +1009,7 @@ namespace ig
 			resDesc.Width = desc.extent.width;
 			resDesc.Height = desc.extent.height;
 			resDesc.DepthOrArraySize = desc.numFaces;
-			resDesc.MipLevels = desc.numMipLevels;
+			resDesc.MipLevels = desc.mipLevels;
 			resDesc.Format = resourceFormat;
 			resDesc.SampleDesc.Count = (UINT)desc.msaa;
 			resDesc.SampleDesc.Quality = 0;  // 0 = MSAA. Driver specific.
@@ -1027,7 +1027,7 @@ namespace ig
 			if (desc.usage == TextureUsage::Readable)
 			{
 				UINT64 requiredBufferSize = 0;
-				device->GetCopyableFootprints1(&resDesc, 0, desc.numFaces * desc.numMipLevels, 0, nullptr, nullptr, nullptr, &requiredBufferSize);
+				device->GetCopyableFootprints1(&resDesc, 0, desc.numFaces * desc.mipLevels, 0, nullptr, nullptr, nullptr, &requiredBufferSize);
 				resDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
 				resDesc.Alignment = 0;
 				resDesc.Width = requiredBufferSize;
@@ -1105,8 +1105,8 @@ namespace ig
 		if (createSRV)
 		{
 			// Allocate descriptor
-			descriptor_SRV = heap.AllocatePersistent(DescriptorType::Texture_SRV);
-			if (descriptor_SRV.IsNull())
+			srvDescriptor = heap.AllocatePersistent(DescriptorType::Texture_SRV);
+			if (srvDescriptor.IsNull())
 			{
 				return DetailedResult::MakeFail("Failed to allocate descriptor.");
 			}
@@ -1122,12 +1122,12 @@ namespace ig
 					if (desc.numFaces == 6)
 					{
 						srv.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;
-						srv.TextureCube.MipLevels = desc.numMipLevels;
+						srv.TextureCube.MipLevels = desc.mipLevels;
 					}
 					else
 					{
 						srv.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBEARRAY;
-						srv.TextureCubeArray.MipLevels = desc.numMipLevels;
+						srv.TextureCubeArray.MipLevels = desc.mipLevels;
 						srv.TextureCubeArray.NumCubes = desc.numFaces / 6;
 					}
 				}
@@ -1136,12 +1136,12 @@ namespace ig
 					if (desc.numFaces == 1)
 					{
 						srv.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-						srv.Texture2D.MipLevels = desc.numMipLevels;
+						srv.Texture2D.MipLevels = desc.mipLevels;
 					}
 					else
 					{
 						srv.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DARRAY;
-						srv.Texture2DArray.MipLevels = desc.numMipLevels;
+						srv.Texture2DArray.MipLevels = desc.mipLevels;
 						srv.Texture2DArray.ArraySize = desc.numFaces;
 					}
 				}
@@ -1160,9 +1160,9 @@ namespace ig
 			}
 
 			srv.Format = formatInfoD3D.dxgiFormat;
-			if (desc.forceSRVFormat != Format::None)
+			if (desc.overrideSRVFormat != Format::None)
 			{
-				srv.Format = GetFormatInfoDXGI(desc.forceSRVFormat).dxgiFormat;
+				srv.Format = GetFormatInfoDXGI(desc.overrideSRVFormat).dxgiFormat;
 			}
 
 			// Format for depth component
@@ -1172,35 +1172,35 @@ namespace ig
 			else if (srv.Format == DXGI_FORMAT_D32_FLOAT_S8X24_UINT) srv.Format = DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS;
 
 			// Create SRV
-			device->CreateShaderResourceView(impl.resource[0].Get(), &srv, heap.GetD3D12CPUHandle(descriptor_SRV));
+			device->CreateShaderResourceView(impl.resource[0].Get(), &srv, heap.GetD3D12CPUHandle(srvDescriptor));
 		}
 
 		if (createUAV)
 		{
 			// Allocate descriptor
-			descriptor_UAV = heap.AllocatePersistent(DescriptorType::Texture_UAV);
-			if (descriptor_UAV.IsNull())
+			uavDescriptor = heap.AllocatePersistent(DescriptorType::Texture_UAV);
+			if (uavDescriptor.IsNull())
 			{
 				return DetailedResult::MakeFail("Failed to allocate descriptor.");
 			}
 
 			D3D12_UNORDERED_ACCESS_VIEW_DESC uav = GenerateD3D12Desc_UAV(desc.format, desc.msaa, desc.numFaces);
-			device->CreateUnorderedAccessView(impl.resource[0].Get(), nullptr, &uav, heap.GetD3D12CPUHandle(descriptor_UAV));
+			device->CreateUnorderedAccessView(impl.resource[0].Get(), nullptr, &uav, heap.GetD3D12CPUHandle(uavDescriptor));
 		}
 
 		// Generate CPU-only descriptor descriptions
-		impl.desc_cpu = UnionD3D12NonShaderViewDesc(); // zero memory
-		if (usage == TextureUsage::RenderTexture)
+		impl.desc_cpu = D3D12ViewDescUnion_RTV_DSV_UAV(); // zero memory
+		if (desc.usage == TextureUsage::RenderTexture)
 		{
 			impl.desc_cpu.rtv = GenerateD3D12Desc_RTV(desc.format, desc.msaa, desc.numFaces);
 		}
-		else if (usage == TextureUsage::DepthBuffer)
+		else if (desc.usage == TextureUsage::DepthBuffer)
 		{
 			impl.desc_cpu.dsv = GenerateD3D12Desc_DSV(desc.format, desc.msaa, desc.numFaces);
 		}
-		else if (usage == TextureUsage::UnorderedAccess)
+		else if (desc.usage == TextureUsage::UnorderedAccess)
 		{
-			// Needed when clearing UAV texture
+			// Needed for clearing UAV texture
 			impl.desc_cpu.uav = GenerateD3D12Desc_UAV(desc.format, desc.msaa, desc.numFaces);
 		}
 
@@ -1211,7 +1211,7 @@ namespace ig
 	{
 		if (!isLoaded) return nullptr;
 		if (impl.resource.size() == 0) throw std::runtime_error("This should be impossible.");
-		switch (usage)
+		switch (desc.usage)
 		{
 		case TextureUsage::Default:
 		case TextureUsage::UnorderedAccess:
@@ -1228,19 +1228,19 @@ namespace ig
 	const D3D12_RENDER_TARGET_VIEW_DESC& Texture::GetD3D12Desc_RTV() const
 	{
 		assert(isLoaded);
-		assert(usage == TextureUsage::RenderTexture);
+		assert(desc.usage == TextureUsage::RenderTexture);
 		return impl.desc_cpu.rtv;
 	}
 	const D3D12_DEPTH_STENCIL_VIEW_DESC& Texture::GetD3D12Desc_DSV() const
 	{
 		assert(isLoaded);
-		assert(usage == TextureUsage::DepthBuffer);
+		assert(desc.usage == TextureUsage::DepthBuffer);
 		return impl.desc_cpu.dsv;
 	}
 	const D3D12_UNORDERED_ACCESS_VIEW_DESC& Texture::GetD3D12Desc_UAV() const
 	{
 		assert(isLoaded);
-		assert(usage == TextureUsage::UnorderedAccess);
+		assert(desc.usage == TextureUsage::UnorderedAccess);
 		return impl.desc_cpu.uav;
 	}
 
@@ -1944,13 +1944,12 @@ namespace ig
 				return DetailedResult::MakeFail(CreateD3D12ErrorMsg("IDXGISwapChain3::GetBuffer", hr));
 			}
 
-			D3D12_RENDER_TARGET_VIEW_DESC rtv = Texture::GenerateD3D12Desc_RTV(format, MSAA::Disabled, 1);
 			WrappedTextureDesc desc;
-			desc.extent = extent;
-			desc.format = format;
-			desc.usage = TextureUsage::RenderTexture;
-			desc.d3d12Resource = res;
-			desc.d3d12Desc_RTV = &rtv;
+			desc.textureDesc.extent = extent;
+			desc.textureDesc.format = format;
+			desc.textureDesc.usage = TextureUsage::RenderTexture;
+			desc.impl.resource = { res };
+			desc.impl.desc_cpu.rtv = Texture::GenerateD3D12Desc_RTV(format, MSAA::Disabled, 1);
 
 			std::unique_ptr<Texture> backBuffer = std::make_unique<Texture>();
 			backBuffer->LoadAsWrapped(*this, desc);
@@ -1959,8 +1958,7 @@ namespace ig
 			// sRGB opposite views
 			if (formatInfo.sRGB_opposite != Format::None)
 			{
-				D3D12_RENDER_TARGET_VIEW_DESC rtv_sRGB_opposite = Texture::GenerateD3D12Desc_RTV(formatInfo.sRGB_opposite, MSAA::Disabled, 1);
-				desc.d3d12Desc_RTV = &rtv_sRGB_opposite;
+				desc.impl.desc_cpu.rtv = Texture::GenerateD3D12Desc_RTV(formatInfo.sRGB_opposite, MSAA::Disabled, 1);
 
 				std::unique_ptr<Texture> backBuffer_sRGB_opposite = std::make_unique<Texture>();
 				backBuffer_sRGB_opposite->LoadAsWrapped(*this, desc);
@@ -2021,13 +2019,12 @@ namespace ig
 				return false;
 			}
 
-			D3D12_RENDER_TARGET_VIEW_DESC rtv = Texture::GenerateD3D12Desc_RTV(swapChain.format, MSAA::Disabled, 1);
 			WrappedTextureDesc desc;
-			desc.extent = extent;
-			desc.format = swapChain.format;
-			desc.usage = TextureUsage::RenderTexture;
-			desc.d3d12Resource = res;
-			desc.d3d12Desc_RTV = &rtv;
+			desc.textureDesc.extent = extent;
+			desc.textureDesc.format = swapChain.format;
+			desc.textureDesc.usage = TextureUsage::RenderTexture;
+			desc.impl.resource = { res };
+			desc.impl.desc_cpu.rtv = Texture::GenerateD3D12Desc_RTV(swapChain.format, MSAA::Disabled, 1);
 
 			std::unique_ptr<Texture> backBuffer = std::make_unique<Texture>();
 			backBuffer->LoadAsWrapped(*this, desc);
@@ -2036,8 +2033,7 @@ namespace ig
 			// sRGB opposite views
 			if (formatInfo.sRGB_opposite != Format::None)
 			{
-				D3D12_RENDER_TARGET_VIEW_DESC rtv_sRGB_opposite = Texture::GenerateD3D12Desc_RTV(formatInfo.sRGB_opposite, MSAA::Disabled, 1);
-				desc.d3d12Desc_RTV = &rtv_sRGB_opposite;
+				desc.impl.desc_cpu.rtv = Texture::GenerateD3D12Desc_RTV(formatInfo.sRGB_opposite, MSAA::Disabled, 1);
 
 				std::unique_ptr<Texture> backBuffer_sRGB_opposite = std::make_unique<Texture>();
 				backBuffer_sRGB_opposite->LoadAsWrapped(*this, desc);

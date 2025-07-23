@@ -1,5 +1,5 @@
 ﻿/*
-	iglo is a public domain C++ rendering abstraction layer for low level graphics APIs.
+	iglo is a public domain rendering abstraction layer for D3D12 and Vulkan.
 	https://github.com/c-chiniquy/iglo
 	See the bottom of this document for licensing details.
 */
@@ -65,6 +65,7 @@ namespace ig
 	class Sampler;
 	enum class Format;
 	enum class IndexFormat;
+	struct ImageDesc;
 	class Image;
 	enum class TextureUsage;
 	struct ClearValue;
@@ -860,6 +861,17 @@ namespace ig
 	};
 	FormatInfo GetFormatInfo(Format format);
 
+	struct ImageDesc
+	{
+		Extent2D extent;
+		Format format = Format::None;
+		uint32_t mipLevels = 1; // The lowest number of mip levels an image can have is 1.
+		uint32_t numFaces = 1; // The lowest number of faces an image can have is 1.
+		bool isCubemap = false;
+
+		DetailedResult Validate() const;
+	};
+
 	class Image
 	{
 	public:
@@ -872,32 +884,21 @@ namespace ig
 		Image& operator=(Image&&) noexcept; // Move assignment operator
 		Image(Image&&) noexcept; // Move constructor
 
-		// How the mipmaps and faces are arranged in memory
-		enum class Arrangement
-		{
-			// DDS files use this arrangement.
-			// foreach face {foreach mipmap{}}
-			CompleteMipChains = 0,
-
-			// KTX files use this arrangement.
-			// foreach mipmap {foreach face{}}
-			MipStrips = 1,
-		};
-
 		// Calculates the total byte size of an image, including all miplevels and faces.
-		static size_t CalculateTotalSize(uint32_t mipLevels, uint32_t numFaces, uint32_t width, uint32_t height, Format format);
-		static size_t CalculateMipSize(uint32_t mipIndex, uint32_t width, uint32_t height, Format format);
-		static uint32_t CalculateMipRowPitch(uint32_t mipIndex, uint32_t width, uint32_t height, Format format);
-		static Extent2D CalculateMipExtent(uint32_t mipIndex, uint32_t width, uint32_t height);
-		static uint32_t CalculateNumMips(uint32_t width, uint32_t height);
+		static size_t CalculateTotalSize(Extent2D extent, Format format, uint32_t mipLevels, uint32_t numFaces);
+		static size_t CalculateMipSize(Extent2D extent, Format format, uint32_t mipIndex);
+		static uint32_t CalculateMipRowPitch(Extent2D extent, Format format, uint32_t mipIndex);
+		static Extent2D CalculateMipExtent(Extent2D extent, uint32_t mipIndex);
+		static uint32_t CalculateNumMips(Extent2D extent);
 
 		void Unload();
 		bool IsLoaded() const { return pixelsPtr != nullptr; }
 
-		// Creates an image and fills all pixels with an initial value of 0.
-		bool Load(uint32_t width, uint32_t height, Format format,
-			uint32_t mipLevels = 1, uint32_t numFaces = 1, bool isCubemap = false,
-			Arrangement arrangement = Arrangement::CompleteMipChains);
+		// Creates an image. All pixels are filled with an initial value of 0.
+		bool Load(uint32_t width, uint32_t height, Format format);
+
+		// Creates an image using more advanced parameters. All pixels are filled with an initial value of 0.
+		bool Load(const ImageDesc& desc);
 
 		// Loads an image from a file.
 		bool LoadFromFile(const std::string& filename);
@@ -909,7 +910,7 @@ namespace ig
 		// - Slightly slower due to memory copying, but always safe.
 		// 
 		// When 'guaranteeOwnership' is false:
-		// - May directly reference 'fileData' without copying for better performance for DDS/KTX filetypes.
+		// - May directly reference 'fileData' without copying for better performance for DDS filetypes.
 		// - WARNING: You must keep 'fileData' valid for the lifetime of this image.
 		bool LoadFromMemory(const byte* fileData, size_t numBytes, bool guaranteeOwnership = true);
 
@@ -924,33 +925,27 @@ namespace ig
 		// USAGE:
 		// - Useful for zero-copy interaction with existing pixel buffers
 		// - Allows reading/writing to your memory through image interface
-		bool LoadAsPointer(const void* pixels, uint32_t width, uint32_t height, Format format,
-			uint32_t mipLevels = 1, uint32_t numFaces = 1, bool isCubemap = false,
-			Arrangement arrangement = Arrangement::CompleteMipChains);
+		bool LoadAsPointer(const void* pixels, const ImageDesc& desc);
 
 		// Saves image to file. Supported file extensions: PNG, BMP, TGA, JPG/JPEG, HDR.
 		bool SaveToFile(const std::string& filename) const;
 
-		// The lowest number of mip levels an image can have is 1.
-		uint32_t GetNumMipLevels() const { return mipLevels; }
-		bool HasMipmaps() const { return mipLevels > 1; }
-		uint32_t GetNumFaces() const { return numFaces; }
+		const ImageDesc& GetDesc() const { return desc; }
+		Extent2D GetExtent() const { return desc.extent; }
+		uint32_t GetWidth() const { return desc.extent.width; }
+		uint32_t GetHeight() const { return desc.extent.height; }
+		Format GetFormat() const { return desc.format; }
+		uint32_t GetMipLevels() const { return desc.mipLevels; }
+		bool HasMipmaps() const { return desc.mipLevels > 1; }
+		uint32_t GetNumFaces() const { return desc.numFaces; }
+		bool IsCubemap() const { return desc.isCubemap; }
 
-		// Width of the first mip level
-		uint32_t GetWidth() const { return width; }
-		// Height of the first mip level
-		uint32_t GetHeight() const { return height; }
-
-		Format GetFormat() const { return format; }
+		// Returns true if using an sRGB format.
+		bool IsSRGB() const;
 
 		// Sets the format to an sRGB or non-sRGB equivalent to current format.
 		// Not all formats support being sRGB. If the requested sRGB or non-sRGB format does not exist, no changes will be made.
 		void SetSRGB(bool sRGB);
-
-		// Returns true if the format of this image is of type sRGB.
-		bool IsSRGB() const;
-
-		bool IsCubemap() const { return isCubemap; }
 
 		// Replaces all pixel values that are colorA with colorB (applies to all miplevels and faces).
 		// For this method to work, the format must be 32 bits per pixel unsigned integer with 4 color channels.
@@ -971,33 +966,24 @@ namespace ig
 		// faceIndex=0, mipIndex=0 will get the pixels located at the first mip at the first face.
 		void* GetMipPixels(uint32_t faceIndex, uint32_t mipIndex) const;
 
-		// Gets which order the mipmaps and faces are arranged.
-		Arrangement GetArrangement() const { return arrangement; }
-
 	private:
-		static DetailedResult Validate(uint32_t width, uint32_t height, Format format, uint32_t mipLevels, uint32_t numFaces, bool isCubemap);
-		static bool FileIsOfTypeDDS(const byte* fileData, size_t numBytes);
-		static bool FileIsOfTypeKTX(const byte* fileData, size_t numBytes);
-		bool LoadFromDDS(const byte* fileData, size_t numBytes, bool guaranteeOwnership);
-		bool LoadFromKTX(const byte* fileData, size_t numBytes, bool guaranteeOwnership);
+		ImageDesc desc;
+		
+		// Byte size of the entire image (including all faces and mipLevels).
+		size_t size = 0; 
 
-		// A byte array containing the source of the pixel data (may be raw pixel data only or an entire DDS/KTX file).
-		// Only used if this image owns the pixel data itself.
-		std::vector<byte> ownedBuffer;
 		// A pointer to where the pixel data begins.
 		byte* pixelsPtr = nullptr;
+
 		// If true, 'pixelsPtr' points to memory allocated by stb_image which must be freed using stb_image at some point.
 		bool mustFreeSTBI = false;
 
-		size_t size = 0; // Byte size of the entire image (including all faces and mipLevels).
-		uint32_t width = 0; // Width of the first mip level.
-		uint32_t height = 0; // Height of the first mip level.
-		uint32_t mipLevels = 0;
-		uint32_t numFaces = 0; // Most textures has 1 face. A cubemap has 6 faces.
-		Format format = Format::None;
-		Arrangement arrangement = Arrangement::CompleteMipChains;
-		bool isCubemap = false;
+		// A byte array containing the source of the pixel data (just pixel data or an entire DDS file).
+		// Only used if this image owns the pixel data itself.
+		std::vector<byte> ownedBuffer;
 
+		static bool FileIsOfTypeDDS(const byte* fileData, size_t numBytes);
+		bool LoadFromDDS(const byte* fileData, size_t numBytes, bool guaranteeOwnership);
 	};
 
 	enum class TextureUsage
@@ -1037,47 +1023,35 @@ namespace ig
 		TextureUsage usage = TextureUsage::Default;
 		MSAA msaa = MSAA::Disabled;
 		uint32_t numFaces = 1;
-		uint32_t numMipLevels = 1;
+		uint32_t mipLevels = 1;
 		bool isCubemap = false;
 
 		// Only relevant for render texture and depth buffer usage.
 		ClearValue optimizedClearValue = ClearValue();
 
+		// Optional. If set to Format::None, the texture's main format is used for the SRV.
+		// It can be useful to use different formats for the SRV and RTV of a render texture,
+		// like for example to avoid automatic sRGB conversions by using a non-sRGB RTV and an sRGB SRV.
+		Format overrideSRVFormat = Format::None;
+
 		// By default, descriptor(s) are created for textures that need them.
 		// You can set this to false if you know you won't be needing any descriptors for this texture.
 		bool createDescriptors = true;
-
-		// Optional. If 'Format::None' is specified, this value is ignored.
-		// For render textures, it can sometimes be useful to use separate formats for SRV and RTV.
-		// An example is if you want to bypass hardware linear->sRGB conversion by using non-sRGB RTV and sRGB SRV.
-		Format forceSRVFormat = Format::None;
 	};
 
 	struct WrappedTextureDesc
 	{
-#ifdef IGLO_D3D12
-		ComPtr<ID3D12Resource> d3d12Resource; // [Optional] Can be nullptr.
-		const D3D12_RENDER_TARGET_VIEW_DESC* d3d12Desc_RTV = nullptr; // [Optional] Can be nullptr.
-		const D3D12_DEPTH_STENCIL_VIEW_DESC* d3d12Desc_DSV = nullptr; // [Optional] Can be nullptr.
-		const D3D12_UNORDERED_ACCESS_VIEW_DESC* d3d12Desc_UAV = nullptr; // [Optional] Can be nullptr.
-#endif
-#ifdef IGLO_VULKAN
-		VkImage vkImage = VK_NULL_HANDLE; // [Optional] Can be VK_NULL_HANDLE.
-		VkDeviceMemory vkMemory = VK_NULL_HANDLE; // [Optional] Can be VK_NULL_HANDLE.
-		VkImageView vkImageView_SRV = VK_NULL_HANDLE; // [Optional] Can be VK_NULL_HANDLE.
-		VkImageView vkImageView_UAV = VK_NULL_HANDLE; // [Optional] Can be VK_NULL_HANDLE.
-		VkImageView vkImageView_RTV_DSV = VK_NULL_HANDLE; // [Optional] Can be VK_NULL_HANDLE.
-#endif
-		Extent2D extent;
-		Format format = Format::None;
-		TextureUsage usage = TextureUsage::Default;
-		MSAA msaa = MSAA::Disabled;
-		bool isCubemap = false;
-		uint32_t numFaces = 1;
-		uint32_t numMipLevels = 1;
-		ClearValue optimizedClearValue;
+		TextureDesc textureDesc;
+
 		Descriptor srvDescriptor; // [Optional] Can be a null descriptor.
 		Descriptor uavDescriptor; // [Optional] Can be a null descriptor.
+
+		std::vector<void*> readMapped; // Per-frame if Readable; otherwise not used.
+
+		// All vectors in 'impl' must be sized based on texture usage.
+		// Tip: If the texture is not Readable, all vectors must have size 1.
+		// The contents themselves are optional. For example, resource[0] or image[0] can be nullptr or VK_NULL_HANDLE.
+		Impl_Texture impl;
 	};
 
 	class Texture
@@ -1103,7 +1077,7 @@ namespace ig
 		bool Load(const IGLOContext&, uint32_t width, uint32_t height, Format, TextureUsage,
 			MSAA msaa = MSAA::Disabled, ClearValue optimizedClearValue = ClearValue());
 
-		// Creates a texture with more advanced parameters.
+		// Creates a texture using more advanced parameters.
 		bool Load(const IGLOContext&, const TextureDesc&);
 
 		// Loads a texture from file. Returns true if success.
@@ -1119,7 +1093,6 @@ namespace ig
 		bool LoadFromMemory(const IGLOContext&, CommandList&, const Image& image, bool generateMipmaps = true);
 
 		// Creates a non-owning wrapper for existing graphics API resources and descriptors.
-		// Texture must not be Readable usage.
 		// NOTE: This texture has no ownership over its resources/descriptors, and will not free them when unloading.
 		// You must ensure the given resources/descriptors are valid during the lifetime of this texture.
 		// You are responsible for freeing the given resources/descriptors yourself.
@@ -1138,19 +1111,21 @@ namespace ig
 		void ReadPixels(Image& destImage);
 		Image ReadPixels();
 
-		uint32_t GetWidth() const { return width; }
-		uint32_t GetHeight() const { return height; }
-		TextureUsage GetUsage() const { return usage; }
-		Format GetFormat() const { return format; }
-		MSAA GetMSAA() const { return msaa; }
-		bool IsCubemap() const { return isCubemap; }
-		uint32_t GetNumFaces() const { return numFaces; }
-		uint32_t GetNumMipLevels() const { return numMipLevels; }
-		ClearValue GetOptimiziedClearValue() const { return optimizedClearValue; }
+		const TextureDesc& GetDesc() const { return desc; }
+		Extent2D GetExtent() const { return desc.extent; }
+		uint32_t GetWidth() const { return desc.extent.width; }
+		uint32_t GetHeight() const { return desc.extent.height; }
+		Format GetFormat() const { return desc.format; }
+		TextureUsage GetUsage() const { return desc.usage; }
+		MSAA GetMSAA() const { return desc.msaa; }
+		uint32_t GetNumFaces() const { return desc.numFaces; }
+		uint32_t GetMipLevels() const { return desc.mipLevels; }
+		bool IsCubemap() const { return desc.isCubemap; }
+		ClearValue GetOptimiziedClearValue() const { return desc.optimizedClearValue; }
 
 		// Gets the SRV descriptor for this texture, if it has one.
-		// NOTE: Will return nullptr if texture has no SRV descriptor. This is to protect you
-		// from accidentally passing an invalid heap index to the shader and crashing the GPU.
+		// NOTE: These GetDescriptor() functions will return nullptr if no such descriptor exists. This is to
+		// protect you from accidentally passing an invalid heap index to the shader and crashing the GPU.
 		const Descriptor* GetDescriptor() const;
 
 		// Gets the UAV descriptor for this texture, if it has one.
@@ -1161,6 +1136,7 @@ namespace ig
 		const D3D12_RENDER_TARGET_VIEW_DESC& GetD3D12Desc_RTV() const;
 		const D3D12_DEPTH_STENCIL_VIEW_DESC& GetD3D12Desc_DSV() const;
 		const D3D12_UNORDERED_ACCESS_VIEW_DESC& GetD3D12Desc_UAV() const;
+
 		static D3D12_RENDER_TARGET_VIEW_DESC GenerateD3D12Desc_RTV(Format, MSAA, uint32_t numFaces);
 		static D3D12_DEPTH_STENCIL_VIEW_DESC GenerateD3D12Desc_DSV(Format, MSAA, uint32_t numFaces);
 		static D3D12_UNORDERED_ACCESS_VIEW_DESC GenerateD3D12Desc_UAV(Format, MSAA, uint32_t numFaces);
@@ -1176,18 +1152,10 @@ namespace ig
 	private:
 		bool isLoaded = false;
 		const IGLOContext* context = nullptr;
-		TextureUsage usage = TextureUsage::Default;
-		uint32_t width = 0;
-		uint32_t height = 0;
-		Format format = Format::None;
-		MSAA msaa = MSAA::Disabled;
-		bool isCubemap = false;
-		uint32_t numFaces = 0;
-		uint32_t numMipLevels = 0;
-		ClearValue optimizedClearValue;
-		Descriptor descriptor_SRV;
-		Descriptor descriptor_UAV;
-		std::vector<void*> readMapped; // Per-frame if Readable
+		TextureDesc desc;
+		Descriptor srvDescriptor;
+		Descriptor uavDescriptor;
+		std::vector<void*> readMapped; // Per-frame if Readable; otherwise not used.
 		bool isWrapped = false;
 
 		Impl_Texture impl;

@@ -301,7 +301,7 @@ namespace ig
 
 
 	const uint16_t PrebakedFontFile_MajorVersion = 1;
-	const uint16_t PrebakedFontFile_MinorVersion = 0;
+	const uint16_t PrebakedFontFile_MinorVersion = 1;
 	struct PrebakedFontFileHeader
 	{
 		char fileDescriptor[8] = {}; // IGLOFONT
@@ -324,28 +324,27 @@ namespace ig
 		uint32_t imageFormat = {};
 		uint32_t imageMipLevels = {};
 		uint32_t imageNumFaces = {};
-		uint32_t imageArrangement = {};
 
 
-		uint64_t GetGlyphsByteSize()
+		uint64_t GetGlyphsByteSize() const
 		{
 			return numCodepointGlyphs * sizeof(CodepointGlyph);
 		}
-		static uint64_t GetSingleKernSize()
+		static constexpr uint64_t GetSingleKernSize()
 		{
 			return sizeof(uint32_t) + sizeof(uint32_t) + sizeof(int16_t);
 		}
-		uint64_t GetKernsByteSize()
+		uint64_t GetKernsByteSize() const
 		{
 			return numKerns * (GetSingleKernSize());
 		}
-		uint64_t GetTotalFileSize()
+		uint64_t GetTotalFileSize() const
 		{
 			uint64_t totalSize = sizeof(PrebakedFontFileHeader);
 			totalSize += fontNameStrSize;
 			totalSize += GetGlyphsByteSize();
 			totalSize += GetKernsByteSize();
-			totalSize += Image::CalculateTotalSize(imageMipLevels, imageNumFaces, imageWidth, imageHeight, (Format)imageFormat);
+			totalSize += Image::CalculateTotalSize(Extent2D(imageWidth, imageHeight), (Format)imageFormat, imageMipLevels, imageNumFaces);
 			return totalSize;
 		}
 	};
@@ -376,9 +375,8 @@ namespace ig
 		header.imageWidth = image.GetWidth();
 		header.imageHeight = image.GetHeight();
 		header.imageFormat = (uint32_t)image.GetFormat();
-		header.imageMipLevels = image.GetNumMipLevels();
+		header.imageMipLevels = image.GetMipLevels();
 		header.imageNumFaces = image.GetNumFaces();
-		header.imageArrangement = (uint32_t)image.GetArrangement();
 
 		std::ofstream outFile(utf8_to_path(filename), std::ios::out | std::ios::binary);
 		if (!outFile)
@@ -486,8 +484,14 @@ namespace ig
 			src += PrebakedFontFileHeader::GetSingleKernSize();
 		}
 
-		if (!this->image.Load(header->imageWidth, header->imageHeight, (Format)header->imageFormat, header->imageMipLevels,
-			header->imageNumFaces, false, (Image::Arrangement)header->imageArrangement))
+		ImageDesc imageDesc =
+		{
+			.extent = Extent2D(header->imageWidth, header->imageHeight),
+			.format = (Format)header->imageFormat,
+			.mipLevels = header->imageMipLevels,
+			.numFaces = header->imageNumFaces,
+		};
+		if (!this->image.Load(imageDesc))
 		{
 			Log(LogType::Error, ToString(errStr, "Failed to load font image."));
 			return false;

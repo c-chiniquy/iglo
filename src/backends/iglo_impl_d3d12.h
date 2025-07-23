@@ -86,9 +86,9 @@ namespace ig
 		uint32_t descriptorSize_CBV_SRV_UAV = 0;
 	};
 
-	struct UnionD3D12NonShaderViewDesc
+	struct D3D12ViewDescUnion_RTV_DSV_UAV
 	{
-		UnionD3D12NonShaderViewDesc()
+		D3D12ViewDescUnion_RTV_DSV_UAV()
 		{
 			std::memset(this, 0, sizeof(*this));
 		}
@@ -103,10 +103,11 @@ namespace ig
 
 	struct Impl_Texture
 	{
-		std::vector<ComPtr<ID3D12Resource>> resource; // Per-frame if Readable
-
-		// Descriptions for CPU-only descriptors
-		UnionD3D12NonShaderViewDesc desc_cpu;
+		std::vector<ComPtr<ID3D12Resource>> resource; // Per-frame only if Readable; otherwise just one.
+		
+		// Info used to create RTVs, DSVs and UAVs when setting/clearing render targets and clearing unordered access textures.
+		// These CPU-only descriptors are created only when needed.
+		D3D12ViewDescUnion_RTV_DSV_UAV desc_cpu; 
 	};
 
 	struct Impl_Buffer
