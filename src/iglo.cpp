@@ -427,7 +427,7 @@ namespace ig
 		uint32_t numChannels = info.elementCount;
 		if (bitsPerPixel != 32 || numChannels != 4 || !icon.IsLoaded())
 		{
-			Log(LogType::Error, "Failed to set window icon. Reason: Icon must be 4 colors per channel, 32 bits per pixel.");
+			Log(LogType::Error, "Failed to set window icon. Reason: Icon must have 4 color channels and be 32 bits per pixel.");
 			return;
 		}
 
