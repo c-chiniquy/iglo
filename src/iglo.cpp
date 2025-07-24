@@ -2,20 +2,16 @@
 #include "iglo.h"
 #include "shaders/CS_GenerateMipmaps.h"
 
-
-#define STB_TRUETYPE_IMPLEMENTATION
-#include "stb/stb_truetype.h"
+#define STBI_WINDOWS_UTF8
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb/stb_image.h"
 
-/*
-	Defining __STDC_LIB_EXT1__ here is a quick workaround to stop stb_image_write.h from causing
-	this visual studio compile error: "error C4996: 'sprintf': This function or variable may be unsafe."
-*/
 #ifdef _WIN32
+// Quick workaround to stop stb_image_write.h from causing visual studio compile error: "'sprintf': This function or variable may be unsafe."
 #define __STDC_LIB_EXT1__
 #endif
 #define STB_IMAGE_WRITE_IMPLEMENTATION
+#define STBIW_WINDOWS_UTF8
 #include "stb/stb_image_write.h"
 
 namespace ig
@@ -993,10 +989,16 @@ namespace ig
 			out.layout = BarrierLayout::RenderTarget;
 			break;
 
-		case SimpleBarrier::DepthStencil:
+		case SimpleBarrier::DepthWrite:
 			out.sync = BarrierSync::DepthStencil;
 			out.access = BarrierAccess::DepthStencilWrite;
 			out.layout = BarrierLayout::DepthStencilWrite;
+			break;
+
+		case SimpleBarrier::DepthRead:
+			out.sync = BarrierSync::DepthStencil;
+			out.access = BarrierAccess::DepthStencilRead;
+			out.layout = BarrierLayout::DepthStencilRead;
 			break;
 
 		case SimpleBarrier::CopySource:
@@ -1028,6 +1030,14 @@ namespace ig
 			out.sync = BarrierSync::Resolve;
 			out.access = BarrierAccess::ResolveDest;
 			out.layout = BarrierLayout::ResolveDest;
+			break;
+
+		case SimpleBarrier::ClearUnorderedAccess:
+			out.sync = BarrierSync::ClearUnorderedAccessView;
+			out.access = BarrierAccess::UnorderedAccess;
+			out.layout = BarrierLayout::UnorderedAccess;
+			if (isGraphicsQueue) out.layout = BarrierLayout::_GraphicsQueue_UnorderedAccess;
+			if (isComputeQueue) out.layout = BarrierLayout::_ComputeQueue_UnorderedAccess;
 			break;
 		}
 

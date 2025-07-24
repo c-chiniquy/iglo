@@ -1,6 +1,9 @@
 #include "iglo.h"
 #include "iglo_font.h"
 
+#define STB_TRUETYPE_IMPLEMENTATION
+#include "stb/stb_truetype.h"
+
 #include <fstream>
 #include <filesystem>
 
