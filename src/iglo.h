@@ -7,7 +7,7 @@
 // -------------------- Version --------------------//
 #define IGLO_VERSION_MAJOR 0
 #define IGLO_VERSION_MINOR 3
-#define IGLO_VERSION_PATCH 0
+#define IGLO_VERSION_PATCH 1
 
 #define IGLO_STRINGIFY_HELPER(x) #x
 #define IGLO_STRINGIFY(x) IGLO_STRINGIFY_HELPER(x)
@@ -20,12 +20,6 @@
 #pragma once
 #include "iglo_config.h"
 #include "iglo_utility.h"
-
-#include "stb/stb_truetype.h"
-#define STBI_WINDOWS_UTF8
-#include "stb/stb_image.h"
-#define STBIW_WINDOWS_UTF8
-#include "stb/stb_image_write.h"
 
 #include <array>
 #include <queue>
@@ -1898,11 +1892,13 @@ namespace ig
 		ComputeShaderResource,
 		ComputeShaderUnorderedAccess,
 		RenderTarget,
-		DepthStencil,
+		DepthWrite,
+		DepthRead,
 		CopySource,
 		CopyDest,
 		ResolveSource,
 		ResolveDest,
+		ClearUnorderedAccess,
 	};
 	struct SimpleBarrierInfo
 	{

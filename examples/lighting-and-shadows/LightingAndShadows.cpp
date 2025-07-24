@@ -659,7 +659,7 @@ private:
 			lightConstants.SetDynamicData(&transposed);
 		}
 
-		cmd.AddTextureBarrier(shadowMap, ig::SimpleBarrier::Discard, ig::SimpleBarrier::DepthStencil);
+		cmd.AddTextureBarrier(shadowMap, ig::SimpleBarrier::Discard, ig::SimpleBarrier::DepthWrite);
 		cmd.FlushBarriers();
 
 		// Prepare the shadow map pipeline
@@ -682,9 +682,9 @@ private:
 		// Render the scene from the lights perspective
 		RenderAllModels(false);
 
-		cmd.AddTextureBarrier(shadowMap, ig::SimpleBarrier::DepthStencil, ig::SimpleBarrier::PixelShaderResource);
+		cmd.AddTextureBarrier(shadowMap, ig::SimpleBarrier::DepthWrite, ig::SimpleBarrier::PixelShaderResource);
 		cmd.AddTextureBarrier(sceneRender, ig::SimpleBarrier::Discard, ig::SimpleBarrier::RenderTarget);
-		cmd.AddTextureBarrier(sceneDepth, ig::SimpleBarrier::Discard, ig::SimpleBarrier::DepthStencil);
+		cmd.AddTextureBarrier(sceneDepth, ig::SimpleBarrier::Discard, ig::SimpleBarrier::DepthWrite);
 		cmd.FlushBarriers();
 
 		// Prepare the lighting and shadows pipeline

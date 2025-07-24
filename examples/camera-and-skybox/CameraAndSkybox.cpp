@@ -472,7 +472,7 @@ private:
 		cmd.Begin();
 		{
 			cmd.AddTextureBarrier(renderColor, ig::SimpleBarrier::Discard, ig::SimpleBarrier::RenderTarget);
-			cmd.AddTextureBarrier(renderDepth, ig::SimpleBarrier::Discard, ig::SimpleBarrier::DepthStencil);
+			cmd.AddTextureBarrier(renderDepth, ig::SimpleBarrier::Discard, ig::SimpleBarrier::DepthWrite);
 			cmd.FlushBarriers();
 
 			cmd.SetRenderTarget(&renderColor, &renderDepth);
