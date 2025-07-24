@@ -33,13 +33,13 @@ iglo (Intuitive Graphics Layer Open-source) is a cross-platform, public domain C
 
 ## Gallery
 
-> The `Lighting and Shadows` example project demonstrates how to implement basic shadow mapping and lighting in iglo, use multisampled anti-aliasing, and use sRGB formats for more accurate lighting calculations.
+> The `Lighting and Shadows` example project demonstrates shadow mapping, multisampled anti-aliasing, and the use of sRGB texture formats for accurate lighting calculations.
 ![](images/example-projects/LightingAndShadows.png)
 
 <details>
 <summary>Click to show more</summary>
 
-> The `Camera and Skybox` example project demonstrates how to use the `ig::BaseCamera` class and how to render a skybox. It also shows how you can use instancing to render models (cubes in this case).
+> The `Camera and Skybox` example project demonstrates how to create a controllable camera using the `ig::BaseCamera` class, how to render a skybox, and how to render models with instancing (cubes in this case).
 ![](images/example-projects/CameraAndSkybox.png)
 
 > The `Hello BatchRenderer` example project demonstrates how to use the `ig::BatchRenderer` class to render various types of 2D geometry.
