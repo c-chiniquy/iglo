@@ -303,18 +303,16 @@ namespace ig
 	}
 
 
-	const uint16_t PrebakedFontFile_MajorVersion = 1;
-	const uint16_t PrebakedFontFile_MinorVersion = 1;
+	constexpr uint32_t PrebakedFontFileVersion = 1;
 	struct PrebakedFontFileHeader
 	{
 		char fileDescriptor[8] = {}; // IGLOFONT
-		uint16_t majorVersion = {};
-		uint16_t minorVersion = {};
-		uint64_t numCodepointGlyphs = {};
-		uint64_t numKerns = {};
+		uint32_t fileVersion = {};
+		uint32_t numCodepointGlyphs = {};
+		uint32_t numKerns = {};
 		uint32_t fontType = {};
 
-		uint64_t fontNameStrSize = {};
+		uint32_t fontNameStrSize = {};
 		float fontSize = {};
 		int32_t baseline = {};
 		int32_t lineHeight = {};
@@ -351,24 +349,34 @@ namespace ig
 			return totalSize;
 		}
 	};
+	static_assert(sizeof(PrebakedFontFileHeader) == 80, "Unexpected struct size");
+
 
 	bool PrebakedFontData::SaveToFile(const std::string& filename)
 	{
+		const char* errStr = "Failed to save prebaked font to file. Reason: ";
+
 		if (!image.IsLoaded())
 		{
-			Log(LogType::Error, "Failed to save prebaked font to file '" + filename +
-				"'. Reason: The provided image isn't loaded with any data.");
+			Log(LogType::Error, ToString(errStr, "The provided image isn't loaded with any data."));
+			return false;
+		}
+
+		if (glyphs.size() > IGLO_UINT32_MAX ||
+			kerns.size() > IGLO_UINT32_MAX ||
+			fontDesc.fontName.size() > IGLO_UINT32_MAX)
+		{
+			Log(LogType::Error, ToString(errStr, "One of the following is too large: number of glyphs, number of kerns, or font name."));
 			return false;
 		}
 
 		PrebakedFontFileHeader header;
 		std::memcpy(header.fileDescriptor, "IGLOFONT", 8);
-		header.majorVersion = PrebakedFontFile_MajorVersion;
-		header.minorVersion = PrebakedFontFile_MinorVersion;
-		header.numCodepointGlyphs = (uint64_t)glyphs.size();
-		header.numKerns = (uint64_t)kerns.size();
+		header.fileVersion = PrebakedFontFileVersion;
+		header.numCodepointGlyphs = (uint32_t)glyphs.size();
+		header.numKerns = (uint32_t)kerns.size();
 		header.fontType = (uint32_t)fontType;
-		header.fontNameStrSize = (uint64_t)fontDesc.fontName.size();
+		header.fontNameStrSize = (uint32_t)fontDesc.fontName.size();
 		header.fontSize = fontDesc.fontSize;
 		header.baseline = fontDesc.baseline;
 		header.lineHeight = fontDesc.lineHeight;
@@ -384,7 +392,7 @@ namespace ig
 		std::ofstream outFile(utf8_to_path(filename), std::ios::out | std::ios::binary);
 		if (!outFile)
 		{
-			Log(LogType::Error, "Failed to save prebaked font to file '" + filename + "'. Reason: Couldn't open file.");
+			Log(LogType::Error, ToString(errStr, "Couldn't open file: ", filename));
 			return false;
 		}
 
@@ -437,10 +445,7 @@ namespace ig
 			return false;
 		}
 
-		bool isCorrectVersion = (
-			header->majorVersion == PrebakedFontFile_MajorVersion &&
-			header->minorVersion == PrebakedFontFile_MinorVersion);
-		if (!isCorrectVersion)
+		if (header->fileVersion != PrebakedFontFileVersion)
 		{
 			Log(LogType::Error, ToString(errStr, "File uses a newer or older version of the file format."));
 			return false;
