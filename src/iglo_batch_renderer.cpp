@@ -222,10 +222,12 @@ namespace ig
 	void BatchRenderer::End()
 	{
 		if (!isLoaded) return;
-		FlushPrimitives();
-		hasBegunDrawing = false;
 
+		FlushPrimitives();
+
+		hasBegunDrawing = false;
 		prevDrawCallCounter = drawCallCounter;
+		cmd = nullptr;
 	}
 
 	void BatchRenderer::ResetRenderStates()
