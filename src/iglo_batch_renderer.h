@@ -194,6 +194,8 @@ namespace ig
 		// Gets the number of draw calls that previously occured between Begin() and End().
 		uint64_t GetDrawCallCount() const { return prevDrawCallCounter; }
 
+		CommandList* GetCurrentCommandList() const { return cmd; }
+
 		// Draws and discards all primitives that have been added to the batch so far.
 		// This is mostly used internally by BatchRenderer.
 		void FlushPrimitives();
