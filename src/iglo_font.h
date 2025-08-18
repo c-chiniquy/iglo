@@ -154,8 +154,7 @@ namespace ig
 		// If this font is prebaked, then this function does nothing.
 		void ClearTexture();
 
-		// Gets a description about this font.
-		FontDesc GetFontDesc() const { return fontDesc; }
+		const FontDesc& GetFontDesc() const { return fontDesc; }
 
 		// Gets the number of kerning pairs this font contains.
 		uint32_t GetKernCount() const { return atlas.kernCount; }
