@@ -211,7 +211,7 @@ namespace ig
 		// Returns IntRect(0, 0, 0, 0) if no more room could be allocated.
 		IntRect AllocateRoomForGlyph(uint16_t glyphWidth, uint16_t glyphHeight);
 
-		uint64_t GetKernKey(uint32_t codepointPrev, uint32_t codepointNext) const;
+		inline uint64_t GetKernKey(uint32_t codepointPrev, uint32_t codepointNext) const;
 
 		bool isLoaded = false; // If this font is loaded, it's ready to be used.
 		const IGLOContext* context = nullptr;
