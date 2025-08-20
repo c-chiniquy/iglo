@@ -103,7 +103,7 @@ namespace ig
 	// -------------------- Constants --------------------//
 	constexpr uint32_t NUM_DESCRIPTOR_TYPES = 5;
 	constexpr uint32_t MAX_SIMULTANEOUS_RENDER_TARGETS = 8;
-	constexpr uint32_t MAX_BATCHED_BARRIERS_PER_TYPE = 16;
+	constexpr uint32_t MAX_QUEUED_BARRIERS_PER_TYPE = 16;
 	constexpr uint32_t MAX_VERTEX_BUFFER_BIND_SLOTS = 32;
 	constexpr uint32_t MAX_COMMAND_LISTS_PER_SUBMIT = 64;
 

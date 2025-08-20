@@ -34,9 +34,9 @@ namespace ig
 		std::vector<ComPtr<ID3D12CommandAllocator>> commandAllocator; // One per frame
 		ComPtr<ID3D12GraphicsCommandList7> graphicsCommandList;
 
-		std::array<D3D12_GLOBAL_BARRIER, MAX_BATCHED_BARRIERS_PER_TYPE> globalBarriers = {};
-		std::array<D3D12_TEXTURE_BARRIER, MAX_BATCHED_BARRIERS_PER_TYPE> textureBarriers = {};
-		std::array<D3D12_BUFFER_BARRIER, MAX_BATCHED_BARRIERS_PER_TYPE> bufferBarriers = {};
+		std::array<D3D12_GLOBAL_BARRIER, MAX_QUEUED_BARRIERS_PER_TYPE> globalBarriers = {};
+		std::array<D3D12_TEXTURE_BARRIER, MAX_QUEUED_BARRIERS_PER_TYPE> textureBarriers = {};
+		std::array<D3D12_BUFFER_BARRIER, MAX_QUEUED_BARRIERS_PER_TYPE> bufferBarriers = {};
 		uint32_t numGlobalBarriers = 0;
 		uint32_t numTextureBarriers = 0;
 		uint32_t numBufferBarriers = 0;

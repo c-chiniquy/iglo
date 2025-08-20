@@ -612,7 +612,7 @@ namespace ig
 
 	void CommandList::AddGlobalBarrier(BarrierSync syncBefore, BarrierSync syncAfter, BarrierAccess accessBefore, BarrierAccess accessAfter)
 	{
-		if (impl.numGlobalBarriers >= MAX_BATCHED_BARRIERS_PER_TYPE) FlushBarriers();
+		if (impl.numGlobalBarriers >= MAX_QUEUED_BARRIERS_PER_TYPE) FlushBarriers();
 
 		D3D12_GLOBAL_BARRIER& barrier = impl.globalBarriers[impl.numGlobalBarriers];
 		barrier.SyncBefore = (D3D12_BARRIER_SYNC)syncBefore;
@@ -626,7 +626,7 @@ namespace ig
 	void CommandList::AddTextureBarrier(const Texture& texture, BarrierSync syncBefore, BarrierSync syncAfter,
 		BarrierAccess accessBefore, BarrierAccess accessAfter, BarrierLayout layoutBefore, BarrierLayout layoutAfter, bool discard)
 	{
-		if (impl.numTextureBarriers >= MAX_BATCHED_BARRIERS_PER_TYPE) FlushBarriers();
+		if (impl.numTextureBarriers >= MAX_QUEUED_BARRIERS_PER_TYPE) FlushBarriers();
 
 		D3D12_TEXTURE_BARRIER& barrier = impl.textureBarriers[impl.numTextureBarriers];
 		barrier.pResource = texture.GetD3D12Resource();
@@ -646,7 +646,7 @@ namespace ig
 		BarrierAccess accessBefore, BarrierAccess accessAfter, BarrierLayout layoutBefore, BarrierLayout layoutAfter,
 		uint32_t faceIndex, uint32_t mipIndex, bool discard)
 	{
-		if (impl.numTextureBarriers >= MAX_BATCHED_BARRIERS_PER_TYPE) FlushBarriers();
+		if (impl.numTextureBarriers >= MAX_QUEUED_BARRIERS_PER_TYPE) FlushBarriers();
 
 		D3D12_TEXTURE_BARRIER& barrier = impl.textureBarriers[impl.numTextureBarriers];
 		barrier.pResource = texture.GetD3D12Resource();
@@ -665,7 +665,7 @@ namespace ig
 	void CommandList::AddBufferBarrier(const Buffer& buffer, BarrierSync syncBefore, BarrierSync syncAfter,
 		BarrierAccess accessBefore, BarrierAccess accessAfter)
 	{
-		if (impl.numBufferBarriers >= MAX_BATCHED_BARRIERS_PER_TYPE) FlushBarriers();
+		if (impl.numBufferBarriers >= MAX_QUEUED_BARRIERS_PER_TYPE) FlushBarriers();
 
 		D3D12_BUFFER_BARRIER& barrier = impl.bufferBarriers[impl.numBufferBarriers];
 		barrier.pResource = buffer.GetD3D12Resource();

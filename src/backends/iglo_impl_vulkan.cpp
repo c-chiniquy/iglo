@@ -1604,7 +1604,7 @@ namespace ig
 
 	void CommandList::AddGlobalBarrier(BarrierSync syncBefore, BarrierSync syncAfter, BarrierAccess accessBefore, BarrierAccess accessAfter)
 	{
-		if (impl.numGlobalBarriers >= MAX_BATCHED_BARRIERS_PER_TYPE) FlushBarriers();
+		if (impl.numGlobalBarriers >= MAX_QUEUED_BARRIERS_PER_TYPE) FlushBarriers();
 
 		VkMemoryBarrier2& barrier = impl.globalBarriers[impl.numGlobalBarriers];
 		barrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2;
@@ -1619,7 +1619,7 @@ namespace ig
 	void CommandList::AddTextureBarrier(const Texture& texture, BarrierSync syncBefore, BarrierSync syncAfter,
 		BarrierAccess accessBefore, BarrierAccess accessAfter, BarrierLayout layoutBefore, BarrierLayout layoutAfter, bool discard)
 	{
-		if (impl.numTextureBarriers >= MAX_BATCHED_BARRIERS_PER_TYPE) FlushBarriers();
+		if (impl.numTextureBarriers >= MAX_QUEUED_BARRIERS_PER_TYPE) FlushBarriers();
 
 		VkImageMemoryBarrier2& barrier = impl.textureBarriers[impl.numTextureBarriers];
 		barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
@@ -1656,7 +1656,7 @@ namespace ig
 		BarrierAccess accessBefore, BarrierAccess accessAfter, BarrierLayout layoutBefore, BarrierLayout layoutAfter,
 		uint32_t faceIndex, uint32_t mipIndex, bool discard)
 	{
-		if (impl.numTextureBarriers >= MAX_BATCHED_BARRIERS_PER_TYPE) FlushBarriers();
+		if (impl.numTextureBarriers >= MAX_QUEUED_BARRIERS_PER_TYPE) FlushBarriers();
 
 		VkImageMemoryBarrier2& barrier = impl.textureBarriers[impl.numTextureBarriers];
 		barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
@@ -1679,7 +1679,7 @@ namespace ig
 	void CommandList::AddBufferBarrier(const Buffer& buffer, BarrierSync syncBefore, BarrierSync syncAfter,
 		BarrierAccess accessBefore, BarrierAccess accessAfter)
 	{
-		if (impl.numBufferBarriers >= MAX_BATCHED_BARRIERS_PER_TYPE) FlushBarriers();
+		if (impl.numBufferBarriers >= MAX_QUEUED_BARRIERS_PER_TYPE) FlushBarriers();
 
 		VkBufferMemoryBarrier2& barrier = impl.bufferBarriers[impl.numBufferBarriers];
 		barrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2;

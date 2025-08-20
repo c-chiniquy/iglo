@@ -62,9 +62,9 @@ namespace ig
 		std::vector<VkCommandPool> commandPool; // One per frame
 		std::vector<VkCommandBuffer> commandBuffer; // One per frame
 
-		std::array<VkMemoryBarrier2, MAX_BATCHED_BARRIERS_PER_TYPE> globalBarriers = {};
-		std::array<VkImageMemoryBarrier2, MAX_BATCHED_BARRIERS_PER_TYPE> textureBarriers = {};
-		std::array<VkBufferMemoryBarrier2, MAX_BATCHED_BARRIERS_PER_TYPE> bufferBarriers = {};
+		std::array<VkMemoryBarrier2, MAX_QUEUED_BARRIERS_PER_TYPE> globalBarriers = {};
+		std::array<VkImageMemoryBarrier2, MAX_QUEUED_BARRIERS_PER_TYPE> textureBarriers = {};
+		std::array<VkBufferMemoryBarrier2, MAX_QUEUED_BARRIERS_PER_TYPE> bufferBarriers = {};
 		uint32_t numGlobalBarriers = 0;
 		uint32_t numTextureBarriers = 0;
 		uint32_t numBufferBarriers = 0;
