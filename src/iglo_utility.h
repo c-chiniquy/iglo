@@ -355,10 +355,10 @@ namespace ig
 		// Creates a view matrix (right handed)
 		static Matrix4x4 LookToRH(const Vector3& eyePosition, const Vector3& toDirection, const Vector3& up);
 
-		// Creates an orthogonal projection matrix (left handed)
+		// Creates an orthographic projection matrix (left handed)
 		static Matrix4x4 OrthoLH(float width, float height, float zNear, float zFar);
 
-		// Creates an orthogonal projection matrix (right handed)
+		// Creates an orthographic projection matrix (right handed)
 		static Matrix4x4 OrthoRH(float width, float height, float zNear, float zFar);
 
 		// Creates a world matrix with this multiplication order: Translation * Rotation * Scale.

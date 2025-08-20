@@ -72,24 +72,13 @@ namespace ig
 
 	struct SDFEffect
 	{
-		SDFEffect() :
-			outlineColor(Colors::Black),
-			glowColor(Color(0.0f, 0.0f, 0.0f, 0.5f)),
-			smoothing(0.11f),
-			outlineThickness(0.15f),
-			glowOffset(1.0f, 1.0f),
-			glowSize(0.25f),
-			sdfEffectFlags((uint32_t)SDFEffectFlags::NoEffects)
-		{
-		}
-
-		Color outlineColor;
-		Color glowColor;
-		float smoothing; // For anti alias. Larger value makes it look smoother.
-		float outlineThickness;
-		Vector2 glowOffset;
-		float glowSize;
-		uint32_t sdfEffectFlags;
+		Color outlineColor = Colors::Black;
+		Color glowColor = Color(0.0f, 0.0f, 0.0f, 0.5f);
+		float smoothing = 0.11f; // For anti alias. Larger value makes it look smoother.
+		float outlineThickness = 0.15f;
+		Vector2 glowOffset = ig::Vector2(1.0f, 1.0f);
+		float glowSize = 0.25f;
+		uint32_t sdfEffectFlags = (uint32_t)SDFEffectFlags::NoEffects;
 	};
 
 	typedef uint32_t BatchType;
@@ -184,14 +173,17 @@ namespace ig
 
 		bool IsLoaded() const { return isLoaded; }
 
-		// The BatchRenderer drawing functions should be called in between Begin() and End().
-		// By default, a 2D orthogonal projection is used that matches the size of the backbuffer so that 1 unit = 1 pixel.
-		// If you draw on a rendertarget, you can call SetViewAndProjection2D(width,height) to match the size
-		// of your rendertarget so that 1 unit will equal 1 pixel.
+		// BatchRenderer's drawing functions must be called between Begin() and End().
+		// By default, a 2D orthographic projection is used that matches the backbuffer size
+		// so that 1 unit of space corresponds to 1 pixel.
+		// When rendering to a different render target, you can call SetViewAndProjection2D(width, height)
+		// to keep the 1 unit = 1 pixel mapping.
 		void Begin(CommandList&);
 		void End();
 
-		// Gets the number of draw calls that previously occured between Begin() and End().
+		bool IsActive() const { return isActive; }
+
+		// Returns the number of draw calls that occurred between the previous Begin() and End().
 		uint64_t GetDrawCallCount() const { return prevDrawCallCounter; }
 
 		CommandList* GetCurrentCommandList() const { return cmd; }
@@ -203,17 +195,17 @@ namespace ig
 		void SetViewAndProjection3D(Vector3 position, Vector3 lookToDirection, Vector3 up,
 			float aspectRatio, float fovInDegrees = 90.0f, float zNear = 0.07f, float zFar = 700.0f);
 
-		// Sets view and projection matrices to 2D orthogonal mode.
-		// An object drawn at 'viewX' and 'viewY' will appear in the center of the screen.
+		// Sets view and projection matrices to 2D orthographic mode.
+		// An object drawn at (viewX, viewY) will appear in the center of the screen.
 		// 'viewWidth' and 'viewHeight' behaves like zoom. Small width and height lead to large zoom.
-		// When 'viewWidth' and 'viewHeight' is the size of the current viewport then 1 unit space = 1 pixel.
+		// When 'viewWidth' and 'viewHeight' is the size of the current viewport then 1 unit = 1 pixel.
 		void SetViewAndProjection2D(float viewX, float viewY, float viewWidth, float viewHeight, float zNear = 0.07f, float zFar = 700.0f);
 
-		// Sets view and projection matrices to 2D orthogonal mode with a topleft origin.
-		// Drawing at x=0 and y=0 will have it appear in the topleft corner.
+		// Sets view and projection matrices to 2D orthographic mode with a top-left origin.
+		// Drawing at (0, 0) will have it appear in the top-left corner.
 		void SetViewAndProjection2D(float viewWidth, float viewHeight);
 
-		// Sets view and projection matrices to 2D orthogonal mode.
+		// Sets view and projection matrices to 2D orthographic mode.
 		// 'viewArea' behaves like a 2D camera. By adjusting the location and size of the rectangle you adjust the
 		// camera position and zoom.
 		void SetViewAndProjection2D(FloatRect viewArea);
@@ -402,7 +394,7 @@ namespace ig
 		std::vector<BatchPipeline> batchPipelines; // One for each batch type
 		
 		std::vector<byte> vertices; // Vertex data
-		bool hasBegunDrawing = false;
+		bool isActive = false;
 		uint32_t nextPrimitive = 0; // Index of next primitive to write to
 		uint64_t drawCallCounter = 0;
 		uint64_t prevDrawCallCounter = 0;

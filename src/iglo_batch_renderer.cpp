@@ -193,7 +193,7 @@ namespace ig
 
 		vertices.clear();
 
-		hasBegunDrawing = false;
+		isActive = false;
 		nextPrimitive = 0;
 		drawCallCounter = 0;
 		prevDrawCallCounter = 0;
@@ -208,7 +208,7 @@ namespace ig
 			Log(LogType::Error, "Failed to begin drawing with BatchRenderer. Reason: BatchRenderer isn't loaded!");
 			return;
 		}
-		if (hasBegunDrawing)
+		if (isActive)
 		{
 			Log(LogType::Error, "You must call BatchRenderer::End() at some point after BatchRenderer::Begin().");
 			FlushPrimitives();
@@ -216,7 +216,7 @@ namespace ig
 		cmd = &commandList;
 		drawCallCounter = 0;
 		ResetRenderStates();
-		hasBegunDrawing = true;
+		isActive = true;
 	}
 
 	void BatchRenderer::End()
@@ -225,7 +225,7 @@ namespace ig
 
 		FlushPrimitives();
 
-		hasBegunDrawing = false;
+		isActive = false;
 		prevDrawCallCounter = drawCallCounter;
 		cmd = nullptr;
 	}
