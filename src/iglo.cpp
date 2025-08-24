@@ -1039,6 +1039,19 @@ namespace ig
 			if (isGraphicsQueue) out.layout = BarrierLayout::_GraphicsQueue_UnorderedAccess;
 			if (isComputeQueue) out.layout = BarrierLayout::_ComputeQueue_UnorderedAccess;
 			break;
+
+		case SimpleBarrier::ClearInactiveRenderTarget:
+#ifdef IGLO_D3D12
+			out.sync = BarrierSync::RenderTarget;
+			out.access = BarrierAccess::RenderTarget;
+			out.layout = BarrierLayout::RenderTarget;
+#endif
+#ifdef IGLO_VULKAN
+			out.sync = BarrierSync::Copy;
+			out.access = BarrierAccess::CopyDest;
+			out.layout = BarrierLayout::CopyDest;
+#endif
+			break;
 		}
 
 		return out;

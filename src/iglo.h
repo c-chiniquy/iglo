@@ -1899,6 +1899,7 @@ namespace ig
 		ResolveSource,
 		ResolveDest,
 		ClearUnorderedAccess,
+		ClearInactiveRenderTarget, // For clearing render targets that aren't set as current render target.
 	};
 	struct SimpleBarrierInfo
 	{
