@@ -4,6 +4,8 @@
 	See the bottom of this document for licensing details.
 */
 
+#pragma once
+
 // -------------------- Version --------------------//
 #define IGLO_VERSION_MAJOR 0
 #define IGLO_VERSION_MINOR 3
@@ -17,7 +19,6 @@
     IGLO_STRINGIFY(IGLO_VERSION_PATCH)
 
 // -------------------- Includes --------------------//
-#pragma once
 #include "iglo_config.h"
 #include "iglo_utility.h"
 
@@ -2495,7 +2496,7 @@ namespace ig
 		// 
 		// Problem:
 		// - Unloading a texture mid-frame (e.g., replacing a font atlas texture that has outgrown its size)
-		//   can cause GPU instability if the texture is still referenced in a previous frame's draw calls.
+		//   can cause the GPU to crash if the texture is still referenced in a previous frame's draw calls.
 		//   The GPU may not have finished processing commands that depend on the texture.
 		//
 		// Solution:
@@ -2504,10 +2505,6 @@ namespace ig
 		//   to have finished all pending work referencing the texture.
 		// - When the last shared pointer to the texture is released, `Texture::Unload()` is automatically called
 		//   in the destructor, freeing GPU resources safely.
-		//
-		// Usage:
-		// - Call this ONLY for textures that need mid-frame replacement (e.g., dynamic font atlases).
-		// - For most textures (loaded/unloaded during scene transitions), this is unnecessary.
 		//
 		// Warning:
 		// - NEVER call `texture->Unload()` manually for textures that you manage with this function.
