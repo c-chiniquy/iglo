@@ -1086,24 +1086,24 @@ namespace ig
 		AddPrimitive(V1);
 	}
 
-	void BatchRenderer::DrawCircle(float x, float y, float radius, float borderThickness,
-		Color32 innerColor, Color32 outerColor, Color32 borderColor, float smoothing)
+	void BatchRenderer::DrawCircle(const CircleParams& V)
 	{
 		UsingBatch((BatchType)StandardBatchType::Circles);
-		Vertex_Circle V[] = { Vector2(x, y), radius, smoothing, borderThickness, innerColor, outerColor, borderColor };
-		AddPrimitive(V);
+		AddPrimitive(&V);
 	}
-	void BatchRenderer::DrawCircle(float x, float y, float radius, float borderThickness, Color32 fillColor, Color32 borderColor)
+	void BatchRenderer::DrawCircle(float x, float y, float radius, Color32 color, float smoothing)
 	{
-		DrawCircle(x, y, radius, borderThickness, fillColor, fillColor, borderColor);
-	}
-	void BatchRenderer::DrawCircle(float x, float y, float radius, Color32 innerColor, Color32 outerColor)
-	{
-		DrawCircle(x, y, radius, 0, innerColor, outerColor, Colors::Transparent);
-	}
-	void BatchRenderer::DrawCircle(float x, float y, float radius, Color32 color)
-	{
-		DrawCircle(x, y, radius, 0, color, color, Colors::Transparent);
+		CircleParams params
+		{
+			.position = ig::Vector2(x, y),
+			.radius = radius,
+			.smoothing = smoothing,
+			.borderThickness = 0.0f,
+			.innerColor = color,
+			.outerColor = color,
+			.borderColor = ig::Colors::Transparent,
+		};
+		DrawCircle(params);
 	}
 
 	void BatchRenderer::DrawCake(float x, float y, float radius, uint32_t sides, float degreesStart, float degreesLength,
@@ -1454,25 +1454,23 @@ namespace ig
 	{
 		UsingBatch((BatchType)StandardBatchType::Sprites);
 		UsingTexture(texture);
-		Vertex_Sprite V[] = { Vector2(x, y), width, height, u, v, color };
-		AddPrimitive(V);
+		Vertex_Sprite V = { Vector2(x, y), width, height, u, v, color };
+		AddPrimitive(&V);
 	}
 
 	void BatchRenderer::DrawScaledSprite(const Texture& texture, float x, float y, float width, float height, FloatRect uv, Color32 color)
 	{
 		UsingBatch((BatchType)StandardBatchType::ScaledSprites);
 		UsingTexture(texture);
-		Vertex_ScaledSprite V[] = { Vector2(x, y), width, height, uv, color };
-		AddPrimitive(V);
+		Vertex_ScaledSprite V = { Vector2(x, y), width, height, uv, color };
+		AddPrimitive(&V);
 	}
 
-	void BatchRenderer::DrawTransformedSprite(const Texture& texture, float x, float y, float width, float height,
-		FloatRect uv, Vector2 rotationOrigin, float rotation, Color32 color)
+	void BatchRenderer::DrawTransformedSprite(const Texture& texture, const TransformedSpriteParams& V)
 	{
 		UsingBatch((BatchType)StandardBatchType::TransformedSprites);
 		UsingTexture(texture);
-		Vertex_TransformedSprite V[] = { Vector2(x,y), width, height, uv, rotationOrigin, rotation, color };
-		AddPrimitive(V);
+		AddPrimitive(&V);
 	}
 
 

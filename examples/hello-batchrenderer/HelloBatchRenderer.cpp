@@ -644,9 +644,29 @@ private:
 					// Draw a leaf that fades in and out
 					r.DrawTexture(leafTexture, 290, 100, 100, 100, ig::Color32(255, 255, 255, byte((sinf((float)tick) + 1.0f) * 128.f)));
 					// Draw a leaf that rotates around topleft origin
-					r.DrawTransformedSprite(leafTexture, 520, 100, 64, 64, ig::FloatRect(0, 0, 256, 256), ig::Vector2(0, 0), (float)tick * 2);
+					ig::TransformedSpriteParams transformedSprite =
+					{
+						.position = ig::Vector2(520, 100),
+						.width = 64,
+						.height = 64,
+						.uv = ig::FloatRect(0, 0, 256, 256),
+						.rotationOrigin = ig::Vector2(0, 0),
+						.rotation = (float)tick * 2,
+						.color = ig::Colors::White,
+					};
+					r.DrawTransformedSprite(leafTexture, transformedSprite);
 					// Draw a leaf that rotates around center origin
-					r.DrawTransformedSprite(leafTexture, 620, 100 - 32, 64, 64, ig::FloatRect(0, 0, 256, 256), ig::Vector2(32, 32), (float)tick * 2);
+					transformedSprite =
+					{
+						.position = ig::Vector2(620, 100 - 32),
+						.width = 64,
+						.height = 64,
+						.uv = ig::FloatRect(0, 0, 256, 256),
+						.rotationOrigin = ig::Vector2(32, 32),
+						.rotation = (float)tick * 2,
+						.color = ig::Colors::White,
+					};
+					r.DrawTransformedSprite(leafTexture, transformedSprite);
 					// Draw the origins
 					r.DrawCircle(520, 100, 2, ig::Colors::White);
 					r.DrawCircle(620 + 32, 100, 2, ig::Colors::White);
@@ -654,9 +674,18 @@ private:
 					r.DrawTexture(leafTexture, 70, 330, 128, 128, ig::FloatRect(256, 256, 0, 0), ig::Colors::White);
 					// Draw leaf texture with stretched uv coordinates, making it appear as many leafs
 					r.DrawScaledSprite(leafTexture, 270, 330, 128, 256, ig::FloatRect(0, 0, 128 * 8, 256 * 8));
-					// Draw a portion of the wood texture, with changing rotation, scale and transparency.
-					r.DrawTransformedSprite(woodTexture, 280, 380, 32, 128, ig::FloatRect(0, 0, 32, 128), ig::Vector2(16, 64),
-						(float)tick, ig::Color(1, 1, 1, float(sin(tick) + 1.0f) / 2.0f).ToColor32());
+					// Draw a portion of the wood texture, with changing rotation and transparency.
+					transformedSprite =
+					{
+						.position = ig::Vector2(280, 380),
+						.width = 32,
+						.height = 128,
+						.uv = ig::FloatRect(0, 0, 32, 128),
+						.rotationOrigin = ig::Vector2(16, 64),
+						.rotation = (float)tick,
+						.color = ig::Color(1, 1, 1, float(sin(tick) + 1.0f) / 2.0f).ToColor32(),
+					};
+					r.DrawTransformedSprite(woodTexture, transformedSprite);
 					// Draw a leaf with alpha blending disabled
 					r.DrawTexture(leafTexture, (float)context.GetWidth() - leafTexture.GetWidth(), 0, ig::Colors::White, ig::TextureDrawStyle::BlendDisabled);
 
@@ -728,26 +757,103 @@ private:
 					r.DrawString(390, 450, ig::ToString("Cake shape sides: ", demoCakeSides, "\nPress [K] and [L] to increase/decrease sides."),
 						defaultFont, ig::Colors::White);
 
-					// Draw circles (BatchRenderer internally uses circle shaders to draw these circles, not polygons)
+					// Draw circles (BatchRenderer internally draws circles using circle pixel shaders, not polygons)
 					r.DrawCircle(80, 450, 20, ig::Colors::Green);
-					r.DrawCircle(110 + sinf((float)tick) * 20.0f, 450, 20, 1.0f, ig::Colors::Red, ig::Color32(255, 0, 0, 0), ig::Colors::Red, 1.0f);
-					r.DrawCircle(180, 450, 20, ig::Colors::Green, ig::Colors::Black);
-					r.DrawCircle(230, 450, 20, 7.0f, ig::Colors::Transparent, ig::Colors::Transparent, ig::Colors::Red, 2.0f);
-					r.DrawCircle(80, 350, (sinf((float)tick) + 1.0f) * 15.0f, ig::Colors::White);
-					r.DrawCircle(150, 350, (sinf((float)tick) + 1.0f) * 15.0f, 0.0f, ig::Colors::White, ig::Colors::White, ig::Colors::Transparent, 2.0f);
+					ig::CircleParams circle =
+					{
+						.position = ig::Vector2(110 + sinf((float)tick) * 20.0f, 450),
+						.radius = 20,
+						.smoothing = 1.0f,
+						.borderThickness = 1.0f,
+						.innerColor = ig::Colors::Red,
+						.outerColor = ig::Color32(255, 0, 0, 0),
+						.borderColor = ig::Colors::Red,
+					};
+					r.DrawCircle(circle);
+					circle = {};
+					circle =
+					{
+						.position = ig::Vector2(180, 450),
+						.radius = 20,
+						.innerColor = ig::Colors::Green,
+						.outerColor = ig::Colors::Black,
+					};
+					r.DrawCircle(circle);
+					circle = {};
+					circle =
+					{
+						.position = ig::Vector2(230, 450),
+						.radius = 20,
+						.smoothing = 2.0f,
+						.borderThickness = 7.0f,
+						.innerColor = ig::Colors::Transparent,
+						.outerColor = ig::Colors::Transparent,
+						.borderColor = ig::Colors::Red,
+					};
+					r.DrawCircle(circle);
+					circle = {};
+					circle =
+					{
+						.position = ig::Vector2(80, 350),
+						.radius = (sinf((float)tick) + 1.0f) * 15.0f,
+						.innerColor = ig::Colors::White,
+						.outerColor = ig::Colors::White,
+					};
+					r.DrawCircle(circle);
+					circle.position = ig::Vector2(150, 350);
+					circle.smoothing = 2.0f;
+					r.DrawCircle(circle);
 					ig::Color32 transparentWhite = ig::Color32(255, 255, 255, 0);
-					r.DrawCircle(80, 520, 18, 1.0f, transparentWhite, ig::Colors::White);
-					r.DrawCircle(80 + 50, 520, 18, 2.0f, transparentWhite, ig::Colors::White);
-					r.DrawCircle(80 + 100, 520, 18, 4.0f, transparentWhite, ig::Colors::White);
-					r.DrawCircle(80 + 150, 520, 18, 8.0f, transparentWhite, ig::Colors::White);
-					r.DrawCircle(80, 580, 18, 8.0f, transparentWhite, transparentWhite, ig::Colors::White, 0.0f);
-					r.DrawCircle(80 + 50, 580, 18, 8.0f, transparentWhite, transparentWhite, ig::Colors::White, 1.0f);
-					r.DrawCircle(80 + 100, 580, 18, 8.0f, transparentWhite, transparentWhite, ig::Colors::White, 2.0f);
-					r.DrawCircle(80 + 150, 580, 18, 8.0f, transparentWhite, transparentWhite, ig::Colors::White, 4.0f);
+					circle = {};
+					circle =
+					{
+						.position = ig::Vector2(80, 520),
+						.radius = 18,
+						.borderThickness = 1.0f,
+						.innerColor = transparentWhite,
+						.outerColor = transparentWhite,
+						.borderColor = ig::Colors::White,
+					};
+					r.DrawCircle(circle);
+					circle.position = ig::Vector2(80 + 50, 520);
+					circle.borderThickness = 2.0f;
+					r.DrawCircle(circle);
+					circle.position = ig::Vector2(80 + 100, 520);
+					circle.borderThickness = 4.0f;
+					r.DrawCircle(circle);
+					circle.position = ig::Vector2(80 + 150, 520);
+					circle.borderThickness = 8.0f;
+					r.DrawCircle(circle);
+					circle.position = ig::Vector2(80, 580);
+					circle.smoothing = 0.0f;
+					circle.borderThickness = 8.0f;
+					r.DrawCircle(circle);
+					circle.position = ig::Vector2(80 + 50, 580);
+					circle.smoothing = 1.0f;
+					circle.borderThickness = 8.0f;
+					r.DrawCircle(circle);
+					circle.position = ig::Vector2(80 + 100, 580);
+					circle.smoothing = 2.0f;
+					circle.borderThickness = 8.0f;
+					r.DrawCircle(circle);
+					circle.position = ig::Vector2(80 + 150, 580);
+					circle.smoothing = 4.0f;
+					circle.borderThickness = 8.0f;
+					r.DrawCircle(circle);
 
 					// Draw a circle where the cursor is
-					r.DrawCircle((float)context.GetMouseX(), (float)context.GetMouseY(), 29, 2,
-						ig::Color32(0, 0, 255, 255), ig::Color32(0, 0, 255, 0), ig::Colors::White, 2);
+					circle = {};
+					circle =
+					{
+						.position = ig::Vector2((float)context.GetMouseX(), (float)context.GetMouseY()),
+						.radius = 29,
+						.smoothing = 2,
+						.borderThickness = 2,
+						.innerColor = ig::Color32(0, 0, 255, 255),
+						.outerColor = ig::Color32(0, 0, 255, 0),
+						.borderColor = ig::Colors::White,
+					};
+					r.DrawCircle(circle);
 
 				}
 				else if (currentDemo == 3)

@@ -3048,7 +3048,7 @@ namespace ig
 			// If we can't create a valid swapchain yet
 			if (cappedExtent.width == 0 || cappedExtent.height == 0)
 			{
-				return DetailedResult::MakeFail("Min/max image caps are invalid at the moment.");
+				return DetailedResult::MakeFail("Min/max image caps are invalid.");
 			}
 
 			Event resizeEvent;

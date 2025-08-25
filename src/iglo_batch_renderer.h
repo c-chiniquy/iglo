@@ -41,26 +41,33 @@ namespace ig
 		FloatRect uv;
 		Color32 color;
 	};
+
+	// This struct is more user-facing, so it must have default values.
 	struct Vertex_TransformedSprite
 	{
 		Vector2 position;
-		float width;
-		float height;
+		float width = 0.0f;
+		float height = 0.0f;
 		FloatRect uv;
 		Vector2 rotationOrigin;
-		float rotation;
+		float rotation = 0.0f;
 		Color32 color;
 	};
+	using TransformedSpriteParams = Vertex_TransformedSprite;
+
+	// This struct is more user-facing, so it must have default values.
 	struct Vertex_Circle
 	{
 		Vector2 position;
-		float radius;
-		float smoothing; // For anti alias. Larger value makes it look smoother.
-		float borderThickness;
+		float radius = 0.0f;
+		float smoothing = 1.0f; // For anti alias. Larger value makes it look smoother.
+		float borderThickness = 0.0f; // If you want the circle to have a border, set this to any value above 0.
 		Color32 innerColor;
 		Color32 outerColor;
 		Color32 borderColor;
 	};
+	using CircleParams = Vertex_Circle;
+
 
 	// You can enable multiple SDF effects at the same time.
 	enum class SDFEffectFlags : uint32_t
@@ -244,8 +251,7 @@ namespace ig
 		void DrawSprite(const Texture& texture, float x, float y, IntRect uv, Color32 color = Colors::White);
 		void DrawSprite(const Texture& texture, float x, float y, uint16_t width, uint16_t height, uint16_t u, uint16_t v, Color32 color = Colors::White);
 		void DrawScaledSprite(const Texture& texture, float x, float y, float width, float height, FloatRect uv, Color32 color = Colors::White);
-		void DrawTransformedSprite(const Texture& texture, float x, float y, float width, float height,
-			FloatRect uv, Vector2 rotationOrigin, float rotation, Color32 color = Colors::White);
+		void DrawTransformedSprite(const Texture& texture, const TransformedSpriteParams&);
 
 		void DrawTriangle(float x0, float y0, float x1, float y1, float x2, float y2, Color32 color);
 		void DrawTriangle(Vector2 pos0, Vector2 pos1, Vector2 pos2, Color32 color);
@@ -284,13 +290,8 @@ namespace ig
 		void DrawTexturedRectangularLine(const Texture& texture, float x0, float y0, float x1, float y1, float thickness, Color32 color);
 
 		// Draws a circle using a circle pixel shader.
-		// If you want the circle to have a border, set 'borderThickness' to any value above 0.
-		// The border is drawn precisely at the circle edges.
-		// 'smoothing' determines how much anti alias to use.
-		void DrawCircle(float x, float y, float radius, float borderThickness, Color32 innerColor, Color32 outerColor, Color32 borderColor, float smoothing = 1.0f);
-		void DrawCircle(float x, float y, float radius, float borderThickness, Color32 fillColor, Color32 borderColor);
-		void DrawCircle(float x, float y, float radius, Color32 innerColor, Color32 outerColor);
-		void DrawCircle(float x, float y, float radius, Color32 color);
+		void DrawCircle(const CircleParams&);
+		void DrawCircle(float x, float y, float radius, Color32 color, float smoothing = 1.0f);
 
 		// Draws a cake shape using triangle primitives.
 		void DrawCake(float x, float y, float radius, uint32_t sides, float degreesStart, float degreesLength, Color32 colorCenter, Color32 colorBorder);

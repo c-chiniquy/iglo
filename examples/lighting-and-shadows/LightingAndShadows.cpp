@@ -713,9 +713,19 @@ private:
 				lightPos /= lightPos.w;
 				float screenX = (lightPos.x + 1.0f) * 0.5f * (float)context.GetWidth();
 				float screenY = (1.0f - lightPos.y) * 0.5f * (float)context.GetHeight();
-				ig::Color32 innerColor = ig::Color(0.15f, 0.15f, 0.15f).ToColor32();
+				ig::Color32 fillColor = ig::Color(0.15f, 0.15f, 0.15f).ToColor32();
 				ig::Color32 borderColor = ig::Color(1.0f, 1.0f, 1.0f).ToColor32();
-				r.DrawCircle(screenX, screenY, 70.0f * scaleFactor, 2, innerColor, innerColor, borderColor, 1.0f);
+				ig::CircleParams circle =
+				{
+					.position = ig::Vector2(screenX, screenY),
+					.radius = 70.0f * scaleFactor,
+					.smoothing = 1.0f,
+					.borderThickness = 2.0f,
+					.innerColor = fillColor,
+					.outerColor = fillColor,
+					.borderColor = borderColor,
+				};
+				r.DrawCircle(circle);
 			}
 
 			// Draw depth buffers
