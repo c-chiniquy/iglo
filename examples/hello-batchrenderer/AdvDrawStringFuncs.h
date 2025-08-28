@@ -23,7 +23,7 @@ namespace ig
 
 	// Draws a string inside a given rectangle. Characters are clipped to not appear outside the given rectangle.
 	// Supports wordwrap.
-	void DrawAlignedStringInsideRect(CommandList& cmd, BatchRenderer& r, FloatRect rect, const std::string& str, Font& font, Color32 color,
+	void DrawAlignedStringInsideRect(BatchRenderer& r, FloatRect rect, const std::string& str, Font& font, Color32 color,
 		StringAlignment align, bool wordWrap, bool pixelAligned);
 
 	// Draws a string inside a given rectangle, but characters are not clipped and may appear outside the rectangle.
@@ -31,7 +31,7 @@ namespace ig
 		StringAlignment align, bool pixelAligned);
 
 	// The position and color of each character is animated based on 'animationStep'.
-	void DrawColorfulAnimatedString(CommandList& cmd, BatchRenderer& r, float x, float y, const std::string& str, Font& font,
+	void DrawColorfulAnimatedString(BatchRenderer& r, float x, float y, const std::string& str, Font& font,
 		float animationStep, bool pixelAligned);
 
 }

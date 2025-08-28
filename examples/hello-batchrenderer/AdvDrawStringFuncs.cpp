@@ -136,8 +136,8 @@ namespace ig
 		}
 	}
 
-	void DrawAlignedStringInsideRect(CommandList& cmd, BatchRenderer& r, FloatRect rect, const std::string& str, Font& font,
-		Color32 color, StringAlignment align, bool wordWrap, bool pixelAligned)
+	void DrawAlignedStringInsideRect(BatchRenderer& r, FloatRect rect, const std::string& str, Font& font, Color32 color,
+		StringAlignment align, bool wordWrap, bool pixelAligned)
 	{
 		if (!r.IsLoaded()) return;
 		if (str.length() == 0) return;
@@ -233,7 +233,7 @@ namespace ig
 		AlignStringRectangles(lines, align, rect, (float)font.GetFontDesc().lineGap, pixelAligned);
 
 		// Make sure font texture is up to date
-		if (font.TextureIsDirty()) font.ApplyChangesToTexture(cmd);
+		if (font.TextureIsDirty()) font.ApplyChangesToTexture(*r.GetCurrentCommandList());
 
 		if (font.GetFontType() == FontType::SDF)
 		{
@@ -375,7 +375,7 @@ namespace ig
 		}
 	}
 
-	void DrawColorfulAnimatedString(CommandList& cmd, BatchRenderer& r, float x, float y, const std::string& str, Font& font,
+	void DrawColorfulAnimatedString(BatchRenderer& r, float x, float y, const std::string& str, Font& font,
 		float animationStep, bool pixelAligned)
 	{
 		if (!r.IsLoaded()) return;
@@ -411,7 +411,7 @@ namespace ig
 				if (font.TextureIsDirty())
 				{
 					font.PreloadGlyphs(str);
-					font.ApplyChangesToTexture(cmd);
+					font.ApplyChangesToTexture(*r.GetCurrentCommandList());
 					r.UsingTexture(*font.GetTexture());
 				}
 

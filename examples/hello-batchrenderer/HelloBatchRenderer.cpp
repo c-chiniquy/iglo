@@ -54,7 +54,7 @@ public:
 		this->rect = rect;
 	}
 
-	void Draw(ig::CommandList& commandList, ig::BatchRenderer& r, const ig::Texture& buttonTexture, ig::Font& font)
+	void Draw(ig::BatchRenderer& r, const ig::Texture& buttonTexture, ig::Font& font)
 	{
 		ig::Color32 rectColor = ig::Color32(255, 255, 255, 128);
 		if (mouseHover || (isPressed && mouseHover)) rectColor = ig::Color32(255, 255, 255, 255);
@@ -72,9 +72,9 @@ public:
 		const ig::StringAlignment alignment = ig::StringAlignment::Center;
 		const bool wordWrap = true;
 		const bool pixelAligned = true;
-		ig::DrawAlignedStringInsideRect(commandList, r, rect + offset + ig::IntPoint(1, 1),
+		ig::DrawAlignedStringInsideRect(r, rect + offset + ig::IntPoint(1, 1),
 			text, font, ig::Colors::Black, alignment, wordWrap, pixelAligned);
-		ig::DrawAlignedStringInsideRect(commandList, r, rect + offset,
+		ig::DrawAlignedStringInsideRect(r, rect + offset,
 			text, font, ig::Colors::White, alignment, wordWrap, pixelAligned);
 	}
 
@@ -619,16 +619,16 @@ private:
 						" Hold down left mouse button to resize rectangle."
 						" Press 'F' to change font.";
 					r.DrawRectangle(demoStringRect, ig::Color32(64, 255, 128, 75));
-					ig::DrawAlignedStringInsideRect(cmd, r, demoStringRect, str,
-						*demoStringFont, ig::Colors::White, demoStringAlignment, true, true);
+					ig::DrawAlignedStringInsideRect(r, demoStringRect, str, *demoStringFont, ig::Colors::White,
+						demoStringAlignment, true, true);
 
 					ig::FloatRect rect = demoStringRect + ig::Vector2(1024 / 2, 0);
 					str = "This text is aligned but not\nclipped to be inside the rectangle.";
 					r.DrawRectangle(rect, ig::Color32(64, 128, 255, 75));
 					ig::DrawAlignedString(r, rect, str, *demoStringFont, ig::Colors::White, demoStringAlignment, true);
 
-					ig::DrawColorfulAnimatedString(cmd, r, 70, 450,
-						"This is a colorful animated string!", *demoStringFont, (float)tick, false);
+					ig::DrawColorfulAnimatedString(r, 70, 450, "This is a colorful animated string!",
+						*demoStringFont, (float)tick, false);
 
 				}
 				else if (currentDemo == 1)
@@ -1192,8 +1192,8 @@ private:
 
 				}
 
-				buttonNext.Draw(cmd, r, buttonTexture, vegur);
-				buttonPrev.Draw(cmd, r, buttonTexture, vegur);
+				buttonNext.Draw(r, buttonTexture, vegur);
+				buttonPrev.Draw(r, buttonTexture, vegur);
 
 				std::string topLeftStr = ig::ToString
 				(
