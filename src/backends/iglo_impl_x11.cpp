@@ -1028,7 +1028,7 @@ namespace ig
 					{
 						Event textEvent;
 						textEvent.type = EventType::TextEntered;
-						textEvent.textEntered.character_utf32 = (uint32_t)u32_string[0];
+						textEvent.textEntered.codepoint = (uint32_t)u32_string[0];
 						eventQueue.push(textEvent);
 					}
 				}

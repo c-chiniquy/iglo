@@ -864,7 +864,7 @@ namespace ig
 
 		case WM_CHAR:
 			event_out.type = EventType::TextEntered;
-			event_out.textEntered.character_utf32 = (uint32_t)wParam;
+			event_out.textEntered.codepoint = (uint32_t)wParam;
 			eventQueue.push(event_out);
 			break;
 

@@ -2198,8 +2198,8 @@ namespace ig
 		MouseWheel,
 		MouseButtonDown,
 		MouseButtonUp,
-		KeyDown,
 		KeyPress, // KeyPress repeats after a key is held down long enough.
+		KeyDown,
 		KeyUp,
 		TextEntered,
 		DragAndDrop, // User has dragged and dropped atleast 1 file onto the iglo window
@@ -2234,11 +2234,11 @@ namespace ig
 		};
 		struct TextEnteredEvent
 		{
-			uint32_t character_utf32 = 0; // UTF-32 codepoint
+			uint32_t codepoint = 0; // Unicode codepoint (UTF-32)
 		};
 	public:
 		EventType type;
-		DragAndDropEvent dragAndDrop; // Used by these events: DragAndDrop
+		DragAndDropEvent dragAndDrop; // Used by: DragAndDrop
 		union
 		{
 			Key key; // Used by: KeyDown, KeyPress, KeyUp
