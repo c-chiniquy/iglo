@@ -600,9 +600,9 @@ namespace ig
 	uint32_t utf32_to_upper(uint32_t codepoint);
 	std::u32string utf32_to_lower(const std::u32string& utf32);
 	std::u32string utf32_to_upper(const std::u32string& utf32);
-	std::wstring utf8_to_utf16(const std::string& utf8);
-	std::string utf16_to_utf8(const std::wstring& utf16);
-	std::wstring utf16_to_wstring(const std::string& utf16, bool littleEndian);
+	std::u16string utf8_to_utf16(const std::string& utf8);
+	std::string utf16_to_utf8(const std::u16string& utf16);
+	std::u16string utf16_to_u16string(const std::string& utf16, bool littleEndian);
 	std::u32string utf32_to_u32string(const std::string& utf32, bool littleEndian);
 	std::string CP1252_to_utf8(const std::string& cp1252);
 	std::string CP437_to_utf8(const std::string& cp437);

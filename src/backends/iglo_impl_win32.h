@@ -37,6 +37,7 @@ namespace ig
 		HWND hwnd = 0; // Window handle
 		HICON iconOwned = 0; // This icon should be released with DestroyIcon() when it stops being used.
 		HCURSOR cursor = 0; //TODO: Implement cursor stuff
+		uint16_t pendingHighSurrogate = 0; // Used in WM_CHAR
 		CallbackWndProcHook callbackWndProcHook = nullptr;
 	};
 

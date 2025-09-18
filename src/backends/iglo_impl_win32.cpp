@@ -57,9 +57,10 @@ namespace ig
 
 	void PopupMessage(const std::string& message, const std::string& caption, const IGLOContext* parent)
 	{
-		HWND hwnd = 0;
-		if (parent) hwnd = parent->GetWindowHWND();
-		MessageBoxW(hwnd, utf8_to_utf16(message).c_str(), utf8_to_utf16(caption).c_str(), 0);
+		HWND hwnd = parent ? parent->GetWindowHWND() : NULL;
+		std::u16string utf16_message = utf8_to_utf16(message);
+		std::u16string utf16_caption = utf8_to_utf16(caption);
+		MessageBoxW(hwnd, (wchar_t*)utf16_message.c_str(), (wchar_t*)utf16_caption.c_str(), 0);
 	}
 
 	Extent2D IGLOContext::GetActiveMonitorScreenResolution()
@@ -234,7 +235,8 @@ namespace ig
 	void IGLOContext::SetWindowTitle(std::string title)
 	{
 		window.title = title;
-		SetWindowTextW(window.hwnd, utf8_to_utf16(title).c_str());
+		std::u16string utf16_title = utf8_to_utf16(title);
+		SetWindowTextW(window.hwnd, (wchar_t*)utf16_title.c_str());
 	}
 
 	void IGLOContext::EnterWindowedMode(uint32_t width, uint32_t height)
@@ -306,7 +308,8 @@ namespace ig
 		}
 
 		// Create window
-		window.hwnd = CreateWindowExW(0, windowClassName, utf8_to_utf16(window.title).c_str(), windowStyleWindowed,
+		std::u16string utf16_title = utf8_to_utf16(window.title);
+		window.hwnd = CreateWindowExW(0, windowClassName, (wchar_t*)utf16_title.c_str(), windowStyleWindowed,
 			CW_USEDEFAULT, CW_USEDEFAULT, 0, 0, 0, 0, hInstance, this);
 		if (window.hwnd)
 		{
@@ -408,30 +411,23 @@ namespace ig
 
 			HDROP hDrop = (HDROP)wParam;
 			UINT fileCount = DragQueryFileW(hDrop, 0xFFFFFFFF, 0, 0);
-			UINT maxLength = 0;
 			for (UINT i = 0; i < fileCount; i++)
 			{
-				UINT fileNameLength = DragQueryFileW(hDrop, i, 0, 0) + 1;
-				if (fileNameLength > maxLength)
-				{
-					maxLength = fileNameLength;
-				}
-			}
-			std::vector<wchar_t> filename;
-			filename.clear();
-			filename.resize(maxLength);
-			for (UINT i = 0; i < fileCount; i++)
-			{
-				DragQueryFileW(hDrop, i, filename.data(), maxLength);
+				UINT fileNameLength = DragQueryFileW(hDrop, i, 0, 0) + 1; // +1 for null terminator
+				std::u16string utf16_filename;
+				utf16_filename.resize(fileNameLength);
+				DragQueryFileW(hDrop, i, (wchar_t*)utf16_filename.data(), fileNameLength);
+				std::string filename = utf16_to_utf8(utf16_filename.data());
 
-				event_out.dragAndDrop.filenames.push_back(utf16_to_utf8(filename.data()));
+				event_out.dragAndDrop.filenames.push_back(filename);
 			}
 			DragFinish(hDrop);
+
 			eventQueue.push(event_out);
 			break;
 		}
 
-		// Disable MessageBeep on Invalid Syskeypress
+		// Disable MessageBeep on invalid Syskeypress
 		case WM_MENUCHAR:
 			return MNC_CLOSE << 16;
 
@@ -863,10 +859,41 @@ namespace ig
 		break;
 
 		case WM_CHAR:
-			event_out.type = EventType::TextEntered;
-			event_out.textEntered.codepoint = (uint32_t)wParam;
-			eventQueue.push(event_out);
-			break;
+		{
+			uint32_t codepoint = 0;
+			if (IS_HIGH_SURROGATE(wParam))
+			{
+				window.pendingHighSurrogate = (uint16_t)wParam;
+				break; // Wait for low surrogate
+			}
+			else if (IS_LOW_SURROGATE(wParam))
+			{
+				if (window.pendingHighSurrogate)
+				{
+					codepoint = 0x10000 + (((uint32_t)window.pendingHighSurrogate - 0xD800) << 10) + ((uint32_t)wParam - 0xDC00);
+					window.pendingHighSurrogate = 0;
+				}
+				else
+				{
+					break; // Unexpected low surrogate, ignore
+				}
+			}
+			else
+			{
+				codepoint = (uint32_t)wParam;
+			}
+
+			if (codepoint == '\r') codepoint = '\n';
+
+			// Ignore non-printable characters (except for newline and tab)
+			if (codepoint >= 0x20 || codepoint == '\n' || codepoint == '\t')
+			{
+				Event textEvent;
+				textEvent.type = EventType::TextEntered;
+				textEvent.textEntered.codepoint = codepoint;
+				eventQueue.push(textEvent);
+			}
+		}
 
 		} // switch (msg)
 

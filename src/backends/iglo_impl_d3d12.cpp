@@ -2100,7 +2100,7 @@ namespace ig
 				{
 					// specs for D3D_FEATURE_LEVEL_12_1
 					graphicsSpecs.apiName = "Direct3D 12";
-					graphicsSpecs.rendererName = utf16_to_utf8(adapterDesc.Description);
+					graphicsSpecs.rendererName = utf16_to_utf8((char16_t*)adapterDesc.Description);
 					graphicsSpecs.vendorName = GetGpuVendorNameFromID(adapterDesc.VendorId);
 					graphicsSpecs.maxTextureDimension = 16384;
 					graphicsSpecs.bufferPlacementAlignments =

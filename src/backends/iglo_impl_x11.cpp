@@ -1022,14 +1022,19 @@ namespace ig
 				else if (status == XLookupChars || status == XLookupBoth)
 				{
 					std::string utf8Char(utf8Buffer, len);
-
 					std::u32string u32_string = utf8_to_utf32(utf8Char);
-					if (u32_string.size() >= 1)
+					for (uint32_t codepoint : u32_string)
 					{
-						Event textEvent;
-						textEvent.type = EventType::TextEntered;
-						textEvent.textEntered.codepoint = (uint32_t)u32_string[0];
-						eventQueue.push(textEvent);
+						if (codepoint == '\r') codepoint = '\n';
+
+						// Ignore non-printable characters (except for newline and tab)
+						if (codepoint >= 0x20 || codepoint == '\n' || codepoint == '\t')
+						{
+							Event textEvent;
+							textEvent.type = EventType::TextEntered;
+							textEvent.textEntered.codepoint = codepoint;
+							eventQueue.push(textEvent);
+						}
 					}
 				}
 			}

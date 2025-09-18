@@ -1302,7 +1302,7 @@ namespace ig
 		return out;
 	}
 
-	std::string utf16_to_utf8(const std::wstring& utf16)
+	std::string utf16_to_utf8(const std::u16string& utf16)
 	{
 		// UTF-16 functions rewritten from public domain source: https://github.com/wareya/unishim/blob/master/unishim.h
 
@@ -1370,11 +1370,11 @@ namespace ig
 		return utf8;
 	}
 
-	std::wstring utf16_to_wstring(const std::string& utf16, bool littleEndian)
+	std::u16string utf16_to_u16string(const std::string& utf16, bool littleEndian)
 	{
-		if (utf16.size() <= 1) return std::wstring();
-		std::wstring wutf16;
-		if (utf16.size() > 2) wutf16.reserve(utf16.size() / 2);
+		if (utf16.size() <= 1) return std::u16string();
+		std::u16string utf16_string;
+		if (utf16.size() > 2) utf16_string.reserve(utf16.size() / 2);
 		const byte* unsignedBytes = (byte*)utf16.data();
 		for (size_t i = 0; i < utf16.size(); i += 2)
 		{
@@ -1389,9 +1389,9 @@ namespace ig
 			{
 				v = ((uint16_t)unsignedBytes[i + 1]) + (((uint16_t)unsignedBytes[i]) * 0x0100);
 			}
-			wutf16.push_back((wchar_t)v);
+			utf16_string.push_back((char16_t)v);
 		}
-		return wutf16;
+		return utf16_string;
 	}
 
 	std::u32string utf32_to_u32string(const std::string& utf32, bool littleEndian)
@@ -1424,10 +1424,10 @@ namespace ig
 		return u32_utf32;
 	}
 
-	std::wstring utf8_to_utf16(const std::string& utf8)
+	std::u16string utf8_to_utf16(const std::string& utf8)
 	{
-		if (utf8.size() == 0) return std::wstring();
-		std::wstring utf16;
+		if (utf8.size() == 0) return std::u16string();
+		std::u16string utf16;
 		if (utf8.size() > 4) utf16.reserve(utf8.length() / 4);
 		for (size_t i = 0; i < utf8.length();)
 		{
@@ -2102,8 +2102,8 @@ namespace ig
 			if (bom == ByteOrderMark::UTF16LE) skipBytes = GetByteOrderMarkLength(bom);
 			// Remove byte order mark if exists
 			out.text = std::string((char*)&in.fileContent[skipBytes], in.fileContent.size() - skipBytes);
-			// Convert UTF-16 LE --> wstring --> UTF-8
-			out.text = utf16_to_utf8(utf16_to_wstring(out.text, true));
+			// Convert UTF-16 LE --> u16string --> UTF-8
+			out.text = utf16_to_utf8(utf16_to_u16string(out.text, true));
 			out.success = true;
 			return out;
 		}
@@ -2113,8 +2113,8 @@ namespace ig
 			if (bom == ByteOrderMark::UTF16BE) skipBytes = GetByteOrderMarkLength(bom);
 			// Remove byte order mark if exists
 			out.text = std::string((char*)&in.fileContent[skipBytes], in.fileContent.size() - skipBytes);
-			// Convert UTF-16 BE --> wstring --> UTF-8
-			out.text = utf16_to_utf8(utf16_to_wstring(out.text, false));
+			// Convert UTF-16 BE --> u16string --> UTF-8
+			out.text = utf16_to_utf8(utf16_to_u16string(out.text, false));
 			out.success = true;
 			return out;
 		}
