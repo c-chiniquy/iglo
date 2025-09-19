@@ -858,7 +858,7 @@ namespace ig
 
 	bool FloatRect::ContainsPoint(Vector2 point) const
 	{
-		return point.x >= left && point.x < right && point.y >= top && point.y < bottom;
+		return point.x >= left && point.x < right&& point.y >= top && point.y < bottom;
 	}
 
 	bool FloatRect::ContainsRect(FloatRect rect) const
@@ -1189,50 +1189,76 @@ namespace ig
 
 	bool utf8_next_codepoint(const std::string& utf8, size_t startIndex, size_t endIndex, size_t* out_location, uint32_t* out_codepoint)
 	{
+		constexpr uint32_t replacementChar = 0xFFFD;
+
 		for (size_t i = startIndex; i < endIndex;)
 		{
-			if ((byte)utf8[i] < 0x80)
+			byte c = (byte)utf8[i]; 
+
+			if (c < 0x80)
 			{
-				if (out_codepoint)*out_codepoint = (uint32_t)utf8[i]; // 1 byte
+				if (out_codepoint)*out_codepoint = (uint32_t)c; // 1 byte
 				if (out_location)*out_location = i + 1;
+				return true;
 			}
-			else
+
+			if (i + 1 >= endIndex) break; // cut-off
+
+			if (c < 0xE0) // 2 bytes
 			{
-				if (i + 1 >= endIndex) break; // cut-off
-				if ((byte)utf8[i] < 0xE0) // 2 bytes
+				byte b1 = (byte)utf8[i + 1];
+				if ((b1 & 0xC0) == 0x80) [[likely]]
 				{
-					if (out_codepoint)*out_codepoint = (((byte)utf8[i] & 0x1F) << 6) | ((byte)utf8[i + 1] & 0x3F);
+					if (out_codepoint)*out_codepoint = ((c & 0x1F) << 6) | (b1 & 0x3F);
 					if (out_location)*out_location = i + 2;
+					return true;
 				}
-				else
-				{
-					if (i + 2 >= endIndex) break; // cut-off
-					if ((byte)utf8[i] < 0xF0) // 3 bytes
-					{
-						if (out_codepoint)*out_codepoint = (((byte)utf8[i] & 0x0F) << 12) |
-							(((byte)utf8[i + 1] & 0x3F) << 6) |
-							((byte)utf8[i + 2] & 0x3F);
-						if (out_location)*out_location = i + 3;
-					}
-					else
-					{
-						if (i + 3 >= endIndex) break; // cut-off
-						if ((byte)utf8[i] < 0xF8) // 4 bytes
-						{
-							if (out_codepoint)*out_codepoint = (((byte)utf8[i] & 0x07) << 18) |
-								(((byte)utf8[i + 1] & 0x3F) << 12) |
-								(((byte)utf8[i + 2] & 0x3F) << 6) |
-								((byte)utf8[i + 3] & 0x3F);
-							if (out_location)*out_location = i + 4;
-						}
-						else
-						{
-							i += 1;
-							continue; // Invalid
-						}
-					}
-				}
+				// Invalid
+				if (out_codepoint) *out_codepoint = replacementChar;
+				if (out_location) *out_location = i + 1;
+				return true;
 			}
+
+			if (i + 2 >= endIndex) break; // cut-off
+
+			if (c < 0xF0) // 3 bytes
+			{
+				byte b1 = (byte)utf8[i + 1];
+				byte b2 = (byte)utf8[i + 2];
+				if (((b1 & 0xC0) == 0x80) && ((b2 & 0xC0) == 0x80)) [[likely]]
+				{
+					if (out_codepoint) *out_codepoint = ((c & 0x0F) << 12) | ((b1 & 0x3F) << 6) | (b2 & 0x3F);
+					if (out_location) *out_location = i + 3;
+					return true;
+				}
+				// Invalid
+				if (out_codepoint) *out_codepoint = replacementChar;
+				if (out_location) *out_location = i + 1;
+				return true;
+			}
+
+			if (i + 3 >= endIndex) break; // cut-off
+
+			if (c < 0xF8) // 4 bytes
+			{
+				byte b1 = (byte)utf8[i + 1];
+				byte b2 = (byte)utf8[i + 2];
+				byte b3 = (byte)utf8[i + 3];
+				if (((b1 & 0xC0) == 0x80) && ((b2 & 0xC0) == 0x80) && ((b3 & 0xC0) == 0x80)) [[likely]]
+				{
+					if (out_codepoint)*out_codepoint = ((c & 0x07) << 18) | ((b1 & 0x3F) << 12) | ((b2 & 0x3F) << 6) | (b3 & 0x3F);
+					if (out_location)*out_location = i + 4;
+					return true;
+				}
+				// Invalid
+				if (out_codepoint) *out_codepoint = replacementChar;
+				if (out_location) *out_location = i + 1;
+				return true;
+			}
+
+			// Invalid
+			if (out_codepoint) *out_codepoint = replacementChar;
+			if (out_location) *out_location = i + 1;
 			return true;
 		}
 		return false;
@@ -1872,10 +1898,12 @@ namespace ig
 
 	std::string utf8_to_lower(const std::string& utf8)
 	{
+		//TODO: iterate on the utf8 string directly instead of converting to utf32
 		return utf32_to_utf8(utf32_to_lower(utf8_to_utf32(utf8)));
 	}
 	std::string utf8_to_upper(const std::string& utf8)
 	{
+		//TODO: iterate on the utf8 string directly instead of converting to utf32
 		return utf32_to_utf8(utf32_to_upper(utf8_to_utf32(utf8)));
 	}
 

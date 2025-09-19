@@ -618,7 +618,7 @@ namespace ig
 	// A codepoint whose bytes are cut off prematurely by 'endIndex' is ignored.
 	// Returns false if no codepoint is found after reaching 'endIndex', and in that case, 'out_location' and 'out_codepoint' are not modified.
 	// 'out_location' and 'out_codepoint' are optional. Specify nullptr to not retreive those values.
-	// Given an invalid utf8 string, can produce incorrect codepoints, but will not throw exceptions and will not do undefined behaviour.
+	// Invalid UTF-8 sequences will produce replacement characters (U+FFFD).
 	bool utf8_next_codepoint(const std::string& utf8, size_t startIndex, size_t endIndex, size_t* out_location, uint32_t* out_codepoint);
 
 	// Iterates codepoints in a utf8 string, similar to utf8_next_codepoint.
