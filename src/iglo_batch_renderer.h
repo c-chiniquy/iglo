@@ -322,12 +322,19 @@ namespace ig
 		void UsingTexture(const Texture& texture);
 		void UsingRenderConstants(const Descriptor& descriptor);
 
-		void AddPrimitive(const void* data);
-		void AddPrimitives(const void* data, uint32_t numPrimitives);
+		void AddPrimitive(const void* vertexData);
+		void AddPrimitives(const void* vertexData, uint32_t numPrimitives);
+
+		// Immediately issues a draw call using externally provided vertex data.
+		// Unlike other DrawX() functions, DrawImmediate() does not batch primitives
+		// with previous or subsequent draw calls. Use it when you have pre-built
+		// vertex data that should be rendered as-is.
+		void DrawImmediate(const void* vertexData, uint32_t numPrimitives, BatchType batchType,
+			const Texture* texture = nullptr, Descriptor renderConstants = Descriptor());
 
 	private:
-
 		void ResetRenderStates();
+		void InternalDraw(const void* vertexData, uint32_t numPrimitives);
 
 		struct PushConstants
 		{

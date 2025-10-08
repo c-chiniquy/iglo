@@ -653,23 +653,23 @@ namespace ig
 		tempConstantSDFEffect = context->CreateTempConstant(&sdf, sizeof(sdf));
 	}
 
-	void BatchRenderer::AddPrimitive(const void* data)
+	void BatchRenderer::AddPrimitive(const void* vertexData)
 	{
 		if (nextPrimitive >= state.maxPrimitives)
 		{
 			FlushPrimitives();
 		}
-		memcpy(vertices.data() + ((size_t)nextPrimitive * state.bytesPerPrimitive), data, (size_t)state.bytesPerPrimitive);
+		memcpy(vertices.data() + ((size_t)nextPrimitive * state.bytesPerPrimitive), vertexData, state.bytesPerPrimitive);
 		nextPrimitive++;
 	}
 
-	void BatchRenderer::AddPrimitives(const void* data, uint32_t numPrimitives)
+	void BatchRenderer::AddPrimitives(const void* vertexData, uint32_t numPrimitives)
 	{
 		uint32_t primIndex = 0;
 		while (primIndex < numPrimitives)
 		{
 			// If no more primitives can fit
-			if (nextPrimitive + 1 > state.maxPrimitives)
+			if (nextPrimitive >= state.maxPrimitives)
 			{
 				FlushPrimitives();
 			}
@@ -682,7 +682,7 @@ namespace ig
 			}
 
 			memcpy(vertices.data() + ((size_t)nextPrimitive * state.bytesPerPrimitive),
-				((byte*)data) + ((size_t)primIndex * state.bytesPerPrimitive),
+				((byte*)vertexData) + ((size_t)primIndex * state.bytesPerPrimitive),
 				(size_t)primsToCopy * state.bytesPerPrimitive);
 
 			primIndex += primsToCopy;
@@ -690,17 +690,34 @@ namespace ig
 		}
 	}
 
-	void BatchRenderer::FlushPrimitives()
+	void BatchRenderer::DrawImmediate(const void* vertexData, uint32_t numPrimitives, BatchType batchType,
+		const Texture* texture, Descriptor renderConstants)
 	{
-		if (nextPrimitive == 0) return;
+		FlushPrimitives();
+		if (numPrimitives == 0) return;
+
+		UsingBatch(batchType);
+		if (texture) UsingTexture(*texture);
+		if (!renderConstants.IsNull()) UsingRenderConstants(renderConstants);
+
+		InternalDraw(vertexData, numPrimitives);
+	}
+
+	void BatchRenderer::InternalDraw(const void* vertexData, uint32_t numPrimitives)
+	{
+		const char* errStr = "Failed to draw BatchRenderer primitives. Reason: ";
+		if (!isActive)
+		{
+			Log(LogType::Error, ToString(errStr, "Didn't properly use Begin() and End()."));
+			return;
+		}
 		if (batchPipelines[state.batchType].pipeline == nullptr)
 		{
-			Log(LogType::Error, "BatchRenderer failed to draw pending primitives. Reason: Invalid batch type.");
-			nextPrimitive = 0;
+			Log(LogType::Error, ToString(errStr, "Invalid batch type."));
 			return;
 		}
 
-		uint32_t numVertices = nextPrimitive * state.batchDesc.inputVerticesPerPrimitive;
+		uint32_t numVertices = numPrimitives * state.batchDesc.inputVerticesPerPrimitive;
 
 		cmd->SetPipeline(*(batchPipelines[state.batchType].pipeline.get()));
 
@@ -708,7 +725,7 @@ namespace ig
 			state.batchDesc.vertGenMethod == BatchDesc::VertexGenerationMethod::Instancing ||
 			state.batchDesc.vertGenMethod == BatchDesc::VertexGenerationMethod::Indexing)
 		{
-			cmd->SetTempVertexBuffer(vertices.data(), (uint64_t)nextPrimitive * state.bytesPerPrimitive, state.batchDesc.bytesPerVertex);
+			cmd->SetTempVertexBuffer(vertexData, (uint64_t)numPrimitives * state.bytesPerPrimitive, state.batchDesc.bytesPerVertex);
 		}
 
 		if (state.batchDesc.vertGenMethod == BatchDesc::VertexGenerationMethod::Indexing)
@@ -718,12 +735,12 @@ namespace ig
 
 		if (state.batchDesc.vertGenMethod == BatchDesc::VertexGenerationMethod::VertexPullingStructured)
 		{
-			state.pushConstants.rawOrStructuredBufferIndex = context->CreateTempStructuredBuffer(vertices.data(),
+			state.pushConstants.rawOrStructuredBufferIndex = context->CreateTempStructuredBuffer(vertexData,
 				state.batchDesc.bytesPerVertex, numVertices).heapIndex;
 		}
 		else if (state.batchDesc.vertGenMethod == BatchDesc::VertexGenerationMethod::VertexPullingRaw)
 		{
-			state.pushConstants.rawOrStructuredBufferIndex = context->CreateTempRawBuffer(vertices.data(),
+			state.pushConstants.rawOrStructuredBufferIndex = context->CreateTempRawBuffer(vertexData,
 				(uint64_t)state.batchDesc.bytesPerVertex * numVertices).heapIndex;
 		}
 
@@ -740,7 +757,7 @@ namespace ig
 			break;
 
 		case BatchDesc::VertexGenerationMethod::Indexing:
-			cmd->DrawIndexed(nextPrimitive * state.batchDesc.outputVerticesPerPrimitive);
+			cmd->DrawIndexed(numPrimitives * state.batchDesc.outputVerticesPerPrimitive);
 			break;
 
 		case BatchDesc::VertexGenerationMethod::VertexPullingStructured:
@@ -753,6 +770,13 @@ namespace ig
 		}
 
 		drawCallCounter++;
+	}
+
+	void BatchRenderer::FlushPrimitives()
+	{
+		if (nextPrimitive == 0) return;
+
+		InternalDraw(vertices.data(), nextPrimitive);
 		nextPrimitive = 0;
 	}
 

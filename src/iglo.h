@@ -666,7 +666,7 @@ namespace ig
 	{
 		Descriptor()
 		{
-			SetToNull(); // The default constructor must produce a null descriptor.
+			SetToNull(); // Construct a null descriptor
 			type = DescriptorType::ConstantBuffer_CBV; // dummy value
 		}
 		Descriptor(uint32_t heapIndex, DescriptorType type)
