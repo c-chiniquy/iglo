@@ -894,7 +894,7 @@ private:
 
 					std::string str = "Move mouse to rotate text.\n"
 						"Hold left or right mouse buttons to change SDF style.\n"
-						"Hold middle mouse button to show string rectangle area.";
+						"Hold middle mouse button to show measured string area.";
 					ig::Vector2 strSize = r.MeasureString(str, vegur);
 					float x = roundf(float(context.GetWidth() / 2) - (strSize.x / 2.0f));
 					float y = 20;
@@ -916,6 +916,11 @@ private:
 					if (context.IsMouseButtonDown(ig::MouseButton::Left))
 					{
 						sdfEffect.sdfEffectFlags = (uint32_t)ig::SDFEffectFlags::Glow;
+					}
+					if (context.IsMouseButtonDown(ig::MouseButton::Left) &&
+						context.IsMouseButtonDown(ig::MouseButton::Right))
+					{
+						sdfEffect.sdfEffectFlags = (uint32_t)ig::SDFEffectFlags::NoEffects;
 					}
 					r.SetSDFEffect(sdfEffect);
 

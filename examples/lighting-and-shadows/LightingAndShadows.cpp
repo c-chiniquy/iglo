@@ -802,7 +802,6 @@ private:
 
 				ig::SDFEffect sdfEffect;
 				sdfEffect.sdfEffectFlags = (uint32_t)ig::SDFEffectFlags::Outline | (uint32_t)ig::SDFEffectFlags::Glow;
-				sdfEffect.outlineThickness = 0.21f;
 				r.SetSDFEffect(sdfEffect);
 
 				float bottomStrHeight = r.MeasureString(strBottom, trimSDF).y;
