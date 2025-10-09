@@ -575,7 +575,6 @@ private:
 
 				ig::SDFEffect sdfEffect;
 				sdfEffect.sdfEffectFlags = (uint32_t)ig::SDFEffectFlags::Glow | (uint32_t)ig::SDFEffectFlags::Outline;
-				sdfEffect.outlineThickness = 0.25f;
 				r.SetSDFEffect(sdfEffect);
 
 				ig::Vector2 strPos = ig::Vector2(7, 2);
