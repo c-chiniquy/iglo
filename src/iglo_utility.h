@@ -774,7 +774,7 @@ namespace ig
 	public:
 		UniformRandom() = default;
 
-		// min and max are inclusive bounds. The random number can be max, and it can be min.
+		// min and max are inclusive bounds.
 		int32_t NextInt32(int32_t min, int32_t max);
 		uint32_t NextUInt32();
 
@@ -812,7 +812,7 @@ namespace ig
 			These functions are fast but have low quality randomness, so don't use for important stuff.
 		*/
 
-		// min and max are inclusive bounds. The random number can be max, and it can be min.
+		// min and max are inclusive bounds.
 		int32_t NextInt32(int32_t min, int32_t max);
 		uint32_t NextUInt32();
 		// 50% chance of returning true.
