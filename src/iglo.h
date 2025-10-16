@@ -2376,6 +2376,9 @@ namespace ig
 		// Checks if a keyboard key is currently down
 		bool IsKeyDown(Key key) const;
 
+		const PackedBoolArray& GetMouseButtonState() const { return mouseButtonIsDown; }
+		const PackedBoolArray& GetKeyState() const { return keyIsDown; }
+
 		// Sets windowed mode visibility.
 		void SetWindowVisible(bool visible);
 		// Gets windowed mode visibility.
