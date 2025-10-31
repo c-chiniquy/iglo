@@ -395,6 +395,73 @@ namespace ig
 		XFlush(display);
 	}
 
+	std::string IGLOContext::PasteTextFromClipboard()
+	{
+		Window owner = XGetSelectionOwner(window.display, window.atom_CLIPBOARD);
+		if (owner == window.handle) return window.clipboardText; // we own the clipboard
+		if (owner == None_) return "";
+
+		std::string result;
+		Atom property = XInternAtom(window.display, "MY_CLIP_TEMP", False);
+
+		// Ask for clipboard
+		XConvertSelection(window.display, window.atom_CLIPBOARD, window.atom_UTF8_STRING, property, window.handle, CurrentTime);
+		XFlush(window.display);
+
+		auto start = std::chrono::steady_clock::now();
+		for (;;)
+		{
+			// 1 second timeout
+			if (std::chrono::steady_clock::now() - start > std::chrono::seconds(1)) break;
+
+			XEvent e;
+			XNextEvent(window.display, &e);
+
+			// Handle clipboard reply
+			if (e.type == SelectionNotify && e.xselection.requestor == window.handle)
+			{
+				if (e.xselection.property == None_) break; // failed or empty
+
+				Atom type;
+				int format;
+				unsigned long nItems, bytesAfter;
+				unsigned char* data = nullptr;
+
+				XGetWindowProperty(window.display, window.handle, property, 0, LONG_MAX, False,
+					window.atom_UTF8_STRING, &type, &format, &nItems, &bytesAfter, &data);
+
+				if (type == window.atom_UTF8_STRING && format == 8 && data) result.assign(reinterpret_cast<char*>(data), nItems);
+
+				if (data) XFree(data);
+				XDeleteProperty(window.display, window.handle, property);
+				break;
+			}
+			else if (e.type == ClientMessage && (Atom)e.xclient.data.l[0] == window.atom_WM_DELETE_WINDOW)
+			{
+				// User closed window
+				result.clear();
+				break;
+			}
+			else if (e.type == DestroyNotify)
+			{
+				// Window destroyed
+				result.clear();
+				break;
+			}
+
+			// All other events are thrown away
+		}
+
+		return result;
+	}
+
+	bool IGLOContext::CopyTextToClipboard(const std::string& utf8_str)
+	{
+		window.clipboardText = utf8_str;
+		XSetSelectionOwner(window.display, window.atom_CLIPBOARD, window.handle, CurrentTime);
+		return true;
+	}
+
 	void IGLOContext::Impl_SetWindowVisible(bool visible)
 	{
 		if (visible) XMapWindow(window.display, window.handle);
@@ -605,6 +672,13 @@ namespace ig
 		window.screenId = DefaultScreen(window.display);
 		window.x11fileDescriptor = ConnectionNumber(window.display);
 
+		// Clipboard handling
+		window.atom_CLIPBOARD = XInternAtom(window.display, "CLIPBOARD", False);
+		window.atom_UTF8_STRING = XInternAtom(window.display, "UTF8_STRING", False);
+		window.atom_TARGETS = XInternAtom(window.display, "TARGETS", False);
+		window.atom_SELECTION = XInternAtom(window.display, "SELECTION", False);
+		window.clipboardText = "";
+
 		XSetErrorHandler(X11ErrorHandler);
 
 		int depth = 24;
@@ -632,8 +706,8 @@ namespace ig
 			window.visualInfo.visual, CWBackPixel | CWColormap | CWBorderPixel | CWEventMask, &window.attributes);
 
 		// Redirect Close
-		window.atomWmDeleteWindow = XInternAtom(window.display, "WM_DELETE_WINDOW", False);
-		XSetWMProtocols(window.display, window.handle, &window.atomWmDeleteWindow, 1);
+		window.atom_WM_DELETE_WINDOW = XInternAtom(window.display, "WM_DELETE_WINDOW", False);
+		XSetWMProtocols(window.display, window.handle, &window.atom_WM_DELETE_WINDOW, 1);
 
 		XSelectInput(window.display, window.handle,
 			KeyPressMask | KeyReleaseMask | ButtonPressMask | ButtonReleaseMask |
@@ -705,6 +779,76 @@ namespace ig
 
 		switch (e.type)
 		{
+
+			// Clipboard handling
+		case SelectionRequest:
+		{
+			XSelectionRequestEvent* req = &e.xselectionrequest;
+			XSelectionEvent sev{};
+			sev.type = SelectionNotify;
+			sev.display = req->display;
+			sev.requestor = req->requestor;
+			sev.selection = req->selection;
+			sev.target = req->target;
+			sev.property = req->property;
+			sev.time = req->time;
+
+			if (sev.selection == window.atom_CLIPBOARD)
+			{
+				if (sev.target == window.atom_TARGETS)
+				{
+					// List supported targets
+					Atom targets[2] = { window.atom_TARGETS, window.atom_UTF8_STRING };
+					XChangeProperty(sev.display, sev.requestor, sev.property, XA_ATOM, 32, PropModeReplace, (unsigned char*)targets, 2);
+					XSendEvent(window.display, sev.requestor, False, 0, (XEvent*)&sev);
+				}
+				else if (sev.target == window.atom_UTF8_STRING)
+				{
+					// Provide UTF-8 text
+					XChangeProperty(sev.display, sev.requestor, sev.property, window.atom_UTF8_STRING, 8, PropModeReplace,
+						(unsigned char*)window.clipboardText.c_str(), window.clipboardText.length());
+					XSendEvent(window.display, sev.requestor, False, 0, (XEvent*)&sev);
+				}
+				else
+				{
+					// Unsupported target. Refuse request.
+					sev.property = None_;
+					XSendEvent(window.display, sev.requestor, False, 0, (XEvent*)&sev);
+				}
+			}
+		}
+		break;
+
+		// Clipboard handling
+		case SelectionNotify:
+		{
+			XSelectionEvent* ev = &e.xselection;
+			if (ev->property == None_)
+			{
+				// Conversion failed or data unavailable
+				return;
+			}
+
+			Atom type;
+			int format;
+			unsigned long nItems, bytesAfter;
+			unsigned char* data = nullptr;
+
+			// Read the property containing the clipboard data
+			XGetWindowProperty(ev->display, ev->requestor, ev->property, 0, LONG_MAX, False, ev->target,
+				&type, &format, &nItems, &bytesAfter, &data);
+
+			if (type == window.atom_UTF8_STRING && format == 8 && data)
+			{
+				std::string text(reinterpret_cast<char*>(data), nItems);
+				window.clipboardText = text;
+			}
+
+			if (data) XFree(data);
+			XDeleteProperty(ev->display, ev->requestor, ev->property);
+		}
+		break;
+
 		case PropertyNotify:
 		{
 			bool oldMinimizedState = window.minimized;
@@ -1042,7 +1186,7 @@ namespace ig
 		break;
 
 		case ClientMessage:
-			if ((Atom)e.xclient.data.l[0] == window.atomWmDeleteWindow)
+			if ((Atom)e.xclient.data.l[0] == window.atom_WM_DELETE_WINDOW)
 			{
 				event_out.type = EventType::CloseRequest;
 				eventQueue.push(event_out);

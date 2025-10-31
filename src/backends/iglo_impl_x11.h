@@ -39,11 +39,18 @@ namespace ig
 		XVisualInfo visualInfo;
 		int screenId = 0;
 		XSetWindowAttributes attributes;
-		Atom atomWmDeleteWindow = 0;
+		Atom atom_WM_DELETE_WINDOW = 0;
 		int x11fileDescriptor = 0;
 		XIC xic = 0;
 		XIM xim = 0;
 		CallbackX11EventHook callbackX11EventHook = nullptr;
+
+		// Clipboard handling
+		Atom atom_CLIPBOARD;
+		Atom atom_UTF8_STRING;
+		Atom atom_TARGETS;
+		Atom atom_SELECTION;
+		std::string clipboardText;
 	};
 
 	void SetXDecorationsVisible(Display* display, Window window, bool enable);

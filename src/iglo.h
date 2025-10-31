@@ -8,8 +8,8 @@
 
 // -------------------- Version --------------------//
 #define IGLO_VERSION_MAJOR 0
-#define IGLO_VERSION_MINOR 3
-#define IGLO_VERSION_PATCH 2
+#define IGLO_VERSION_MINOR 4
+#define IGLO_VERSION_PATCH 0
 
 #define IGLO_STRINGIFY_HELPER(x) #x
 #define IGLO_STRINGIFY(x) IGLO_STRINGIFY_HELPER(x)
@@ -2457,6 +2457,9 @@ namespace ig
 		void EnterFullscreenMode();
 
 		DisplayMode GetDisplayMode() const { return displayMode; }
+
+		std::string PasteTextFromClipboard();
+		bool CopyTextToClipboard(const std::string& utf8_str);
 
 		//------------------ Graphics ------------------//
 

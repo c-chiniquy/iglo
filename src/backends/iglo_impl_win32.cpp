@@ -278,6 +278,121 @@ namespace ig
 		SetWindowState_Win32(window, temp, true, true);
 	}
 
+	std::string IGLOContext::PasteTextFromClipboard()
+	{
+		const char* errStr = "Failed to paste text from clipboard. Reason: ";
+
+		if (!OpenClipboard(nullptr))
+		{
+			Log(LogType::Error, ToString(errStr, "Failed to open clipboard."));
+			return "";
+		}
+
+		std::string out;
+
+		// Prefer Unicode text
+		if (IsClipboardFormatAvailable(CF_UNICODETEXT))
+		{
+			HANDLE hData = GetClipboardData(CF_UNICODETEXT);
+			if (hData)
+			{
+				char16_t* ptrLock = (char16_t*)GlobalLock(hData);
+				if (ptrLock)
+				{
+					std::u16string u16_str(ptrLock);
+					out = utf16_to_utf8(u16_str);
+					GlobalUnlock(hData);
+				}
+				else
+				{
+					Log(LogType::Error, ToString(errStr, "Failed to lock CF_UNICODETEXT data."));
+				}
+			}
+			else
+			{
+				Log(LogType::Error, ToString(errStr, "Failed to get CF_UNICODETEXT handle."));
+			}
+		}
+		else if (IsClipboardFormatAvailable(CF_TEXT))
+		{
+			HANDLE hData = GetClipboardData(CF_TEXT);
+			if (hData)
+			{
+				char* ptrLock = (char*)GlobalLock(hData);
+				if (ptrLock)
+				{
+					// CF_TEXT is null-terminated ANSI (often Windows-1252)
+					std::string ansi_str(ptrLock);
+					out = CP1252_to_utf8(ansi_str);
+					GlobalUnlock(hData);
+				}
+				else
+				{
+					Log(LogType::Error, ToString(errStr, "Failed to lock CF_TEXT data."));
+				}
+			}
+			else
+			{
+				Log(LogType::Error, ToString(errStr, "Failed to get CF_TEXT handle."));
+			}
+		}
+		else
+		{
+			Log(LogType::Error, ToString(errStr, "No compatible text format available (CF_UNICODETEXT or CF_TEXT)."));
+		}
+
+		CloseClipboard();
+
+		return out;
+	}
+
+	bool IGLOContext::CopyTextToClipboard(const std::string& utf8_str)
+	{
+		const char* errStr = "Failed to copy text to clipboard. Reason: ";
+		if (!OpenClipboard(nullptr))
+		{
+			Log(LogType::Error, ToString(errStr, "Failed to open clipboard."));
+			return false;
+		}
+
+		EmptyClipboard();
+
+		std::u16string u16_str = utf8_to_utf16(utf8_str);
+
+		// +1 size for null terminator
+		HGLOBAL hGlobal = GlobalAlloc(GMEM_MOVEABLE, (u16_str.size() + 1) * sizeof(char16_t));
+		if (!hGlobal)
+		{
+			Log(LogType::Error, ToString(errStr, "Failed to allocate global memory."));
+			CloseClipboard();
+			return false;
+		}
+
+		wchar_t* ptrLock = (wchar_t*)GlobalLock(hGlobal);
+		if (!ptrLock)
+		{
+			Log(LogType::Error, ToString(errStr, "Failed to lock global memory."));
+			GlobalFree(hGlobal);
+			CloseClipboard();
+			return false;
+		}
+
+		memcpy(ptrLock, u16_str.c_str(), u16_str.size() * sizeof(char16_t));
+		ptrLock[u16_str.size()] = L'\0'; // null terminator
+		GlobalUnlock(hGlobal);
+
+		if (!SetClipboardData(CF_UNICODETEXT, hGlobal))
+		{
+			Log(LogType::Error, ToString(errStr, "Failed to set clipboard data."));
+			GlobalFree(hGlobal);
+			CloseClipboard();
+			return false;
+		}
+
+		CloseClipboard();
+		return true;
+	}
+
 	DetailedResult IGLOContext::Impl_LoadWindow(const WindowSettings& windowSettings)
 	{
 		HINSTANCE hInstance = (HINSTANCE)GetModuleHandleW(0);
