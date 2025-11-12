@@ -2458,8 +2458,8 @@ namespace ig
 
 		DisplayMode GetDisplayMode() const { return displayMode; }
 
-		std::string PasteTextFromClipboard();
-		bool CopyTextToClipboard(const std::string& utf8_str);
+		std::string PasteTextFromClipboard() const;
+		bool CopyTextToClipboard(const std::string& utf8_str) const;
 
 		//------------------ Graphics ------------------//
 

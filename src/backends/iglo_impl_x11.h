@@ -50,7 +50,7 @@ namespace ig
 		Atom atom_UTF8_STRING;
 		Atom atom_TARGETS;
 		Atom atom_SELECTION;
-		std::string clipboardText;
+		mutable std::string clipboardText;
 	};
 
 	void SetXDecorationsVisible(Display* display, Window window, bool enable);

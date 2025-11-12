@@ -395,7 +395,7 @@ namespace ig
 		XFlush(display);
 	}
 
-	std::string IGLOContext::PasteTextFromClipboard()
+	std::string IGLOContext::PasteTextFromClipboard() const
 	{
 		Window owner = XGetSelectionOwner(window.display, window.atom_CLIPBOARD);
 		if (owner == window.handle) return window.clipboardText; // we own the clipboard
@@ -455,7 +455,7 @@ namespace ig
 		return result;
 	}
 
-	bool IGLOContext::CopyTextToClipboard(const std::string& utf8_str)
+	bool IGLOContext::CopyTextToClipboard(const std::string& utf8_str) const
 	{
 		window.clipboardText = utf8_str;
 		XSetSelectionOwner(window.display, window.atom_CLIPBOARD, window.handle, CurrentTime);

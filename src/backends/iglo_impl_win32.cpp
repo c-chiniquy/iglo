@@ -278,7 +278,7 @@ namespace ig
 		SetWindowState_Win32(window, temp, true, true);
 	}
 
-	std::string IGLOContext::PasteTextFromClipboard()
+	std::string IGLOContext::PasteTextFromClipboard() const
 	{
 		const char* errStr = "Failed to paste text from clipboard. Reason: ";
 
@@ -346,7 +346,7 @@ namespace ig
 		return out;
 	}
 
-	bool IGLOContext::CopyTextToClipboard(const std::string& utf8_str)
+	bool IGLOContext::CopyTextToClipboard(const std::string& utf8_str) const
 	{
 		const char* errStr = "Failed to copy text to clipboard. Reason: ";
 		if (!OpenClipboard(nullptr))
