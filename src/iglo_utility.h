@@ -46,7 +46,8 @@ namespace ig
 	struct FloatRect;
 	struct Color32;
 	struct Color;
-	enum class Encoding;
+	struct ListDirectoryResult;
+	enum class CharacterEncoding;
 	struct ReadTextFileResult;
 	struct ReadFileResult;
 	class UniformRandom;
@@ -671,8 +672,7 @@ namespace ig
 	// If 'listSubDirectories' is true, all files and folders in all subdirectories will also be listed.
 	ListDirectoryResult ListDirectory(const std::string& directoryPath, bool listSubDirectories = false);
 
-	// Character encoding
-	enum class Encoding
+	enum class CharacterEncoding
 	{
 		Unknown = 0,
 		UTF8,
@@ -686,7 +686,7 @@ namespace ig
 
 	struct ReadTextFileResult
 	{
-		std::string text; // The contents of the file, encoded as UTF-8 string.
+		std::string text; // The contents of the file, encoded in UTF-8.
 		bool success = false; // If the file could be successfully read or not.
 	};
 
@@ -694,7 +694,7 @@ namespace ig
 	// depending on the file encoding to ensure the returned string is always encoded as UTF-8.
 	// If you don't specify the encoding of the file, this function will determine its encoding by checking
 	// the byte order mark and string validity. Specifying the file encoding may speed up this function by x2.
-	ReadTextFileResult ReadTextFile(const std::string& filename, Encoding encoding = Encoding::Unknown);
+	ReadTextFileResult ReadTextFile(const std::string& filename, CharacterEncoding encoding = CharacterEncoding::Unknown);
 
 	struct ReadFileResult
 	{
@@ -832,6 +832,7 @@ namespace ig
 	// The alignment is required to be a power of 2.
 	uint64_t AlignUp(uint64_t value, uint64_t alignment);
 	bool IsPowerOf2(uint64_t value);
+	float Lerp(float a, float b, float t);
 
 } // namespace ig
 

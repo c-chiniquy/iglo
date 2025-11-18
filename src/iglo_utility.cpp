@@ -2041,7 +2041,7 @@ namespace ig
 		return 0;
 	}
 
-	ReadTextFileResult ReadTextFile(const std::string& filename, Encoding encoding)
+	ReadTextFileResult ReadTextFile(const std::string& filename, CharacterEncoding encoding)
 	{
 		ReadTextFileResult out;
 		out.success = false;
@@ -2057,15 +2057,15 @@ namespace ig
 		}
 
 		ByteOrderMark bom = GetByteOrderMark(in.fileContent.data(), in.fileContent.size());
-		Encoding determinedEncoding = encoding;
+		CharacterEncoding determinedEncoding = encoding;
 
 		// Unknown encoding.
-		if (determinedEncoding == Encoding::Unknown)
+		if (determinedEncoding == CharacterEncoding::Unknown)
 		{
 			// UTF-8 BOM
 			if (bom == ByteOrderMark::UTF8)
 			{
-				determinedEncoding = Encoding::UTF8;
+				determinedEncoding = CharacterEncoding::UTF8;
 			}
 			else
 			{
@@ -2073,7 +2073,7 @@ namespace ig
 				if (bom == ByteOrderMark::UTF16LE ||
 					bom == ByteOrderMark::UTF32LE_Or_UTF16LE_WithNullChar)
 				{
-					determinedEncoding = Encoding::UTF16_LE;
+					determinedEncoding = CharacterEncoding::UTF16_LE;
 				}
 				else
 				{
@@ -2081,19 +2081,19 @@ namespace ig
 					if (bom == ByteOrderMark::UTF16BE ||
 						bom == ByteOrderMark::UTF32BE_Or_UTF16BE_WithNullChar)
 					{
-						determinedEncoding = Encoding::UTF16_BE;
+						determinedEncoding = CharacterEncoding::UTF16_BE;
 					}
 					else
 					{
 						// No relevant BOM found. Test UTF-8 validity.
 						if (utf8_is_valid((const char*)in.fileContent.data(), in.fileContent.size()))
 						{
-							determinedEncoding = Encoding::UTF8;
+							determinedEncoding = CharacterEncoding::UTF8;
 						}
 						else
 						{
 							// As a last resort, assume it's CP1252.
-							determinedEncoding = Encoding::CP1252;
+							determinedEncoding = CharacterEncoding::CP1252;
 						}
 					}
 				}
@@ -2102,7 +2102,7 @@ namespace ig
 
 		uint32_t skipBytes = 0; // How many bytes to skip (for skipping byte order mark)
 
-		if (determinedEncoding == Encoding::UTF32_LE)
+		if (determinedEncoding == CharacterEncoding::UTF32_LE)
 		{
 			// Has byte order mark
 			if (bom == ByteOrderMark::UTF32LE_Or_UTF16LE_WithNullChar) skipBytes = GetByteOrderMarkLength(bom);
@@ -2113,7 +2113,7 @@ namespace ig
 			out.success = true;
 			return out;
 		}
-		else if (determinedEncoding == Encoding::UTF32_BE)
+		else if (determinedEncoding == CharacterEncoding::UTF32_BE)
 		{
 			// Has byte order mark
 			if (bom == ByteOrderMark::UTF32BE_Or_UTF16BE_WithNullChar) skipBytes = GetByteOrderMarkLength(bom);
@@ -2124,7 +2124,7 @@ namespace ig
 			out.success = true;
 			return out;
 		}
-		else if (determinedEncoding == Encoding::UTF16_LE)
+		else if (determinedEncoding == CharacterEncoding::UTF16_LE)
 		{
 			// Has byte order mark
 			if (bom == ByteOrderMark::UTF16LE) skipBytes = GetByteOrderMarkLength(bom);
@@ -2135,7 +2135,7 @@ namespace ig
 			out.success = true;
 			return out;
 		}
-		else if (determinedEncoding == Encoding::UTF16_BE)
+		else if (determinedEncoding == CharacterEncoding::UTF16_BE)
 		{
 			// Has byte order mark
 			if (bom == ByteOrderMark::UTF16BE) skipBytes = GetByteOrderMarkLength(bom);
@@ -2146,7 +2146,7 @@ namespace ig
 			out.success = true;
 			return out;
 		}
-		else if (determinedEncoding == Encoding::UTF8)
+		else if (determinedEncoding == CharacterEncoding::UTF8)
 		{
 			// Has byte order mark
 			if (bom == ByteOrderMark::UTF8) skipBytes = GetByteOrderMarkLength(bom);
@@ -2156,7 +2156,7 @@ namespace ig
 			out.success = true;
 			return out;
 		}
-		else if (determinedEncoding == Encoding::CP437)
+		else if (determinedEncoding == CharacterEncoding::CP437)
 		{
 			// Include all bytes
 			out.text = std::string((char*)in.fileContent.data(), in.fileContent.size());
@@ -2397,6 +2397,13 @@ namespace ig
 	{
 		if (value == 0) return false;
 		return ((value & (value - 1)) == 0);
+	}
+
+	float Lerp(float a, float b, float t)
+	{
+		if (t <= 0.0f) return a;
+		if (t >= 1.0f) return b;
+		return a + (b - a) * t;
 	}
 
 } // namespace ig
