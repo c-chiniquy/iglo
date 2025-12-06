@@ -873,7 +873,7 @@ namespace ig
 
 	FloatRect FloatRect::GetNormalized() const
 	{
-		FloatRect sorted = FloatRect(left, top, right, bottom);
+		FloatRect sorted = *this;
 		if (top > bottom)
 		{
 			sorted.top = bottom;
@@ -885,6 +885,16 @@ namespace ig
 			sorted.right = left;
 		}
 		return sorted;
+	}
+
+	FloatRect FloatRect::CroppedTo(const FloatRect& bounds) const
+	{
+		FloatRect out = *this;
+		if (out.left < bounds.left) out.left = bounds.left;
+		if (out.top < bounds.top) out.top = bounds.top;
+		if (out.right > bounds.right) out.right = bounds.right;
+		if (out.bottom > bounds.bottom) out.bottom = bounds.bottom;
+		return out;
 	}
 
 	bool FloatRect::operator == (const FloatRect& a) const

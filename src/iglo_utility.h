@@ -15,7 +15,6 @@
 #include <memory>
 #endif
 
-
 #define IGLO_PI	(3.14159265358979323846)
 #define IGLO_SQR2 (1.41421356237309504880)
 #define IGLO_ToRadian(degree) ((degree) * (IGLO_PI / 180.0))
@@ -97,7 +96,6 @@ namespace ig
 		uint64_t booleanCount = 0;
 		std::unique_ptr<uint8_t[]> data;
 	};
-
 
 	// Stopwatch timer
 	class Timer
@@ -246,7 +244,6 @@ namespace ig
 		float w;
 	};
 
-
 	struct Quaternion
 	{
 		// Quaternion identity
@@ -279,7 +276,6 @@ namespace ig
 		float z;
 		float w;
 	};
-
 
 	struct Matrix4x4
 	{
@@ -395,7 +391,6 @@ namespace ig
 		uint32_t height;
 	};
 
-
 	struct Extent3D
 	{
 		Extent3D() :width(0), height(0), depth(0) {};
@@ -410,7 +405,6 @@ namespace ig
 		uint32_t height;
 		uint32_t depth;
 	};
-
 
 	struct IntPoint
 	{
@@ -430,7 +424,6 @@ namespace ig
 		int32_t x;
 		int32_t y;
 	};
-
 
 	struct IntRect
 	{
@@ -467,7 +460,6 @@ namespace ig
 		int32_t bottom;
 	};
 
-
 	struct FloatRect
 	{
 		FloatRect() :left(0), top(0), right(0), bottom(0) {};
@@ -482,6 +474,7 @@ namespace ig
 		float GetHeight() const { return bottom - top; }
 
 		FloatRect GetNormalized() const;
+		FloatRect CroppedTo(const FloatRect& bounds) const;
 
 		bool InclusiveContainsPoint(Vector2 point) const; // Inclusive
 		bool InclusiveContainsPoint(float pointX, float pointY) const; // Inclusive
