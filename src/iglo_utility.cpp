@@ -887,6 +887,15 @@ namespace ig
 		return sorted;
 	}
 
+	FloatRect FloatRect::GetExpanded(float amount) const
+	{
+		return FloatRect(
+			left - amount,
+			top - amount,
+			right + amount,
+			bottom + amount);
+	}
+
 	FloatRect FloatRect::CroppedTo(const FloatRect& bounds) const
 	{
 		FloatRect out = *this;

@@ -252,6 +252,7 @@ namespace ig
 		void DrawSprite(const Texture& texture, float x, float y, uint16_t width, uint16_t height, uint16_t u, uint16_t v, Color32 color = Colors::White);
 		void DrawScaledSprite(const Texture& texture, float x, float y, float width, float height, FloatRect uv, Color32 color = Colors::White);
 		void DrawTransformedSprite(const Texture& texture, const TransformedSpriteParams&);
+		void DrawNineSliceSprite(const Texture& texture, ig::FloatRect quad, ig::FloatRect uv, Color32 color = ig::Colors::White);
 
 		void DrawTriangle(float x0, float y0, float x1, float y1, float x2, float y2, Color32 color);
 		void DrawTriangle(Vector2 pos0, Vector2 pos1, Vector2 pos2, Color32 color);
@@ -281,9 +282,6 @@ namespace ig
 		void DrawRoundedRectangle(float x, float y, float width, float height, Color32 color, float circleRadius, uint32_t circleSides = 16);
 		// Draws a rounded rectangle border using line primitives.
 		void DrawRoundedRectangleBorder(float x, float y, float width, float height, Color32 color, float circleRadius, uint32_t circleSides = 16);
-		// Draws a texture that stretches only the center pixels when stretched.
-		void DrawCenterStretchedTexture(const Texture& texture, float x, float y, float width, float height, Color32 color = Colors::White,
-			TextureDrawStyle style = TextureDrawStyle::Auto);
 		// Draws a line using triangle primitives.
 		void DrawRectangularLine(float x0, float y0, float x1, float y1, float thickness, Color32 color);
 		// Draws a textured line using textured triangle primitives.

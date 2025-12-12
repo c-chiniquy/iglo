@@ -474,6 +474,7 @@ namespace ig
 		float GetHeight() const { return bottom - top; }
 
 		FloatRect GetNormalized() const;
+		FloatRect GetExpanded(float amount) const;
 		FloatRect CroppedTo(const FloatRect& bounds) const;
 
 		bool InclusiveContainsPoint(Vector2 point) const; // Inclusive

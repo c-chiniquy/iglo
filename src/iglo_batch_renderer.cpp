@@ -1397,78 +1397,6 @@ namespace ig
 		}
 	}
 
-	void BatchRenderer::DrawCenterStretchedTexture(const Texture& texture, float x, float y, float width, float height, Color32 color, TextureDrawStyle style)
-	{
-		/*
-			center stretched texture		not stretched (normal)
-			 ___________________			 _________
-			|A	|H1			|  B|			|A	 |   B|
-			|___|___________|___|			|____|____|
-			|V1	|Center		|V2	|			| 	 |	  |
-			|___|___________|___|			|C___|___D|
-			| 	|H2			|   |
-			|C__|___________|__D|
-
-		*/
-		bool splitHorizontal = (width > texture.GetWidth());
-		bool splitVertical = (height > texture.GetHeight());
-
-		FloatRect A = FloatRect(x, y, x + (width / 2), y + (height / 2));
-		if (splitHorizontal) A.right = x + (texture.GetWidth() * 0.5f);
-		if (splitVertical) A.bottom = y + (texture.GetHeight() * 0.5f);
-
-		FloatRect B = FloatRect(x + (width / 2), y, x + width, y + (height / 2));
-		if (splitHorizontal) B.left = x + width - (texture.GetWidth() * 0.5f);
-		if (splitVertical) B.bottom = y + (texture.GetHeight() * 0.5f);
-
-		FloatRect C = FloatRect(x, y + (height / 2), x + (width / 2), y + height);
-		if (splitHorizontal) C.right = x + (texture.GetWidth() * 0.5f);
-		if (splitVertical) C.top = y + height - (texture.GetHeight() * 0.5f);
-
-		FloatRect D = FloatRect(x + (width / 2), y + (height / 2), x + width, y + height);
-		if (splitHorizontal) D.left = x + width - (texture.GetWidth() * 0.5f);
-		if (splitVertical) D.top = y + height - (texture.GetHeight() * 0.5f);
-
-		FloatRect	  V1 = FloatRect(A.left, A.bottom, A.right, C.top);
-		FloatRect	  V2 = FloatRect(B.left, B.bottom, B.right, D.top);
-		FloatRect	  H1 = FloatRect(A.right, A.top, B.left, A.bottom);
-		FloatRect	  H2 = FloatRect(C.right, C.top, D.left, C.bottom);
-		FloatRect Center = FloatRect(V1.right, H1.bottom, V2.left, H2.top);
-
-		// Texture UV coordinates of all quads
-		float W = (float)texture.GetWidth();
-		float H = (float)texture.GetHeight();
-		FloatRect	   A_UV = FloatRect(0.0f * W, 0.0f * H, 0.5f * W, 0.5f * H);
-		FloatRect	   B_UV = FloatRect(0.5f * W, 0.0f * H, 1.0f * W, 0.5f * H);
-		FloatRect	   C_UV = FloatRect(0.0f * W, 0.5f * H, 0.5f * W, 1.0f * H);
-		FloatRect	   D_UV = FloatRect(0.5f * W, 0.5f * H, 1.0f * W, 1.0f * H);
-		FloatRect	  V1_UV = FloatRect(0.0f * W, 0.5f * H, 0.5f * W, 0.5f * H);
-		FloatRect	  V2_UV = FloatRect(0.5f * W, 0.5f * H, 1.0f * W, 0.5f * H);
-		FloatRect	  H1_UV = FloatRect(0.5f * W, 0.0f * H, 0.5f * W, 0.5f * H);
-		FloatRect	  H2_UV = FloatRect(0.5f * W, 0.5f * H, 0.5f * W, 1.0f * H);
-		FloatRect Center_UV = FloatRect(0.5f * W, 0.5f * H, 0.5f * W, 0.5f * H);
-
-		DrawTexture(texture, A.left, A.top, A.GetWidth(), A.GetHeight(), A_UV, color, style);
-		DrawTexture(texture, B.left, B.top, B.GetWidth(), B.GetHeight(), B_UV, color, style);
-		DrawTexture(texture, C.left, C.top, C.GetWidth(), C.GetHeight(), C_UV, color, style);
-		DrawTexture(texture, D.left, D.top, D.GetWidth(), D.GetHeight(), D_UV, color, style);
-
-		if (splitVertical)
-		{
-			DrawTexture(texture, V1.left, V1.top, V1.GetWidth(), V1.GetHeight(), V1_UV, color, style);
-			DrawTexture(texture, V2.left, V2.top, V2.GetWidth(), V2.GetHeight(), V2_UV, color, style);
-		}
-		if (splitHorizontal)
-		{
-			DrawTexture(texture, H1.left, H1.top, H1.GetWidth(), H1.GetHeight(), H1_UV, color, style);
-			DrawTexture(texture, H2.left, H2.top, H2.GetWidth(), H2.GetHeight(), H2_UV, color, style);
-		}
-		if (splitVertical && splitHorizontal)
-		{
-			DrawTexture(texture, Center.left, Center.top, Center.GetWidth(), Center.GetHeight(), Center_UV, color, style);
-		}
-	}
-
 	void BatchRenderer::DrawSprite(const Texture& texture, float x, float y, IntRect uv, Color32 color)
 	{
 		DrawSprite(texture, x, y, (uint16_t)uv.GetWidth(), (uint16_t)uv.GetHeight(), (uint16_t)uv.left, (uint16_t)uv.top, color);
@@ -1497,6 +1425,104 @@ namespace ig
 		AddPrimitive(&V);
 	}
 
+	void BatchRenderer::DrawNineSliceSprite(const Texture& texture, ig::FloatRect quad, ig::FloatRect uv, Color32 color)
+	{
+		/*
+			      stretched                not stretched
+			 ___________________             _________
+			|A  |H1         |  B|           |A   |   B|
+			|___|___________|___|           |____|____|
+			|V1 |Center     |V2	|           |    |    |
+			|___|___________|___|           |C___|___D|
+			|   |H2         |   |
+			|C__|___________|__D|
+		*/
+
+		UsingBatch((BatchType)StandardBatchType::ScaledSprites);
+		UsingTexture(texture);
+
+		const float x = quad.left;
+		const float y = quad.top;
+		const float width = quad.GetWidth();
+		const float height = quad.GetHeight();
+		const float uvWidth = uv.GetWidth();
+		const float uvHeight = uv.GetHeight();
+
+		const bool splitHorizontal = (width > uvWidth);
+		const bool splitVertical = (height > uvHeight);
+
+		ig::FloatRect A = ig::FloatRect(x, y, x + (width / 2), y + (height / 2));
+		if (splitHorizontal) A.right = x + (uvWidth * 0.5f);
+		if (splitVertical) A.bottom = y + (uvHeight * 0.5f);
+
+		ig::FloatRect B = ig::FloatRect(x + (width / 2), y, x + width, y + (height / 2));
+		if (splitHorizontal) B.left = x + width - (uvWidth * 0.5f);
+		if (splitVertical) B.bottom = y + (uvHeight * 0.5f);
+
+		ig::FloatRect C = ig::FloatRect(x, y + (height / 2), x + (width / 2), y + height);
+		if (splitHorizontal) C.right = x + (uvWidth * 0.5f);
+		if (splitVertical) C.top = y + height - (uvHeight * 0.5f);
+
+		ig::FloatRect D = ig::FloatRect(x + (width / 2), y + (height / 2), x + width, y + height);
+		if (splitHorizontal) D.left = x + width - (uvWidth * 0.5f);
+		if (splitVertical) D.top = y + height - (uvHeight * 0.5f);
+
+		ig::FloatRect	  V1 = ig::FloatRect(A.left, A.bottom, A.right, C.top);
+		ig::FloatRect	  V2 = ig::FloatRect(B.left, B.bottom, B.right, D.top);
+		ig::FloatRect	  H1 = ig::FloatRect(A.right, A.top, B.left, A.bottom);
+		ig::FloatRect	  H2 = ig::FloatRect(C.right, C.top, D.left, C.bottom);
+		ig::FloatRect Center = ig::FloatRect(V1.right, H1.bottom, V2.left, H2.top);
+
+		// Texture UV coordinates of all quads
+		float W = (float)uvWidth;
+		float H = (float)uvHeight;
+		ig::FloatRect	   A_UV = ig::FloatRect(0.0f * W, 0.0f * H, 0.5f * W, 0.5f * H) + ig::Vector2(uv.left, uv.top);
+		ig::FloatRect	   B_UV = ig::FloatRect(0.5f * W, 0.0f * H, 1.0f * W, 0.5f * H) + ig::Vector2(uv.left, uv.top);
+		ig::FloatRect	   C_UV = ig::FloatRect(0.0f * W, 0.5f * H, 0.5f * W, 1.0f * H) + ig::Vector2(uv.left, uv.top);
+		ig::FloatRect	   D_UV = ig::FloatRect(0.5f * W, 0.5f * H, 1.0f * W, 1.0f * H) + ig::Vector2(uv.left, uv.top);
+		ig::FloatRect	  V1_UV = ig::FloatRect(0.0f * W, 0.5f * H, 0.5f * W, 0.5f * H) + ig::Vector2(uv.left, uv.top);
+		ig::FloatRect	  V2_UV = ig::FloatRect(0.5f * W, 0.5f * H, 1.0f * W, 0.5f * H) + ig::Vector2(uv.left, uv.top);
+		ig::FloatRect	  H1_UV = ig::FloatRect(0.5f * W, 0.0f * H, 0.5f * W, 0.5f * H) + ig::Vector2(uv.left, uv.top);
+		ig::FloatRect	  H2_UV = ig::FloatRect(0.5f * W, 0.5f * H, 0.5f * W, 1.0f * H) + ig::Vector2(uv.left, uv.top);
+		ig::FloatRect Center_UV = ig::FloatRect(0.5f * W, 0.5f * H, 0.5f * W, 0.5f * H) + ig::Vector2(uv.left, uv.top);
+		{
+			Vertex_ScaledSprite V[] =
+			{
+				ig::Vector2(A.left, A.top), A.GetWidth(), A.GetHeight(), A_UV, color,
+				ig::Vector2(B.left, B.top), B.GetWidth(), B.GetHeight(), B_UV, color,
+				ig::Vector2(C.left, C.top), C.GetWidth(), C.GetHeight(), C_UV, color,
+				ig::Vector2(D.left, D.top), D.GetWidth(), D.GetHeight(), D_UV, color,
+			};
+			AddPrimitives(V, 4);
+		}
+
+		if (splitVertical)
+		{
+			Vertex_ScaledSprite V[] =
+			{
+				ig::Vector2(V1.left, V1.top), V1.GetWidth(), V1.GetHeight(), V1_UV, color,
+				ig::Vector2(V2.left, V2.top), V2.GetWidth(), V2.GetHeight(), V2_UV, color,
+			};
+			AddPrimitives(V, 2);
+		}
+		if (splitHorizontal)
+		{
+			Vertex_ScaledSprite V[] =
+			{
+				ig::Vector2(H1.left, H1.top), H1.GetWidth(), H1.GetHeight(), H1_UV, color,
+				ig::Vector2(H2.left, H2.top), H2.GetWidth(), H2.GetHeight(), H2_UV, color,
+			};
+			AddPrimitives(V, 2);
+		}
+		if (splitVertical && splitHorizontal)
+		{
+			Vertex_ScaledSprite V[] =
+			{
+				ig::Vector2(Center.left, Center.top), Center.GetWidth(), Center.GetHeight(), Center_UV, color,
+			};
+			AddPrimitive(V);
+		}
+	}
 
 
 } //end of namespace ig

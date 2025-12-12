@@ -63,12 +63,9 @@ public:
 		if (mouseHover) offset = ig::IntPoint(-1, -1);
 		if (isPressed) offset = ig::IntPoint(1, 1);
 
-		// 'DrawCenterStretchedTexture' makes circle textures look like rounded rectangles when stretched out,
-		// which suits well for button graphics.
-		r.DrawCenterStretchedTexture(buttonTexture, (float)rect.left + offset.x, (float)rect.top + offset.y,
-			(float)rect.GetWidth(), (float)rect.GetHeight(), rectColor);
+		const ig::FloatRect uv = ig::FloatRect(0, 0, (float)buttonTexture.GetWidth(), (float)buttonTexture.GetHeight());
+		r.DrawNineSliceSprite(buttonTexture, rect + offset, uv, rectColor);
 
-		// Draw the text with a black shadow and with center alignment
 		const ig::StringAlignment alignment = ig::StringAlignment::Center;
 		const bool wordWrap = true;
 		const bool pixelAligned = true;
