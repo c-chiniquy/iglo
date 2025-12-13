@@ -3,6 +3,10 @@ This document contains my personal thoughts behind various design decisions i ha
 
 # Design decisions
 
+- iglo's design philosophy is to avoid behaving like an engine.
+  Engines often hide the interesting parts of graphics programming, while raw APIs bury you in boilerplate.
+  The goal is to let you write graphics code that reads like pseudocode, while still giving full access to the underlying APIs.
+
 - iglo should use the native D3D12/Vulkan command buffers directly.
   Don't use command buffer abstractions on top of the native API ones.
   ([I'm following the advice from this post](https://alextardif.com/RenderingAbstractionLayers.html))
