@@ -136,7 +136,8 @@ namespace ig
 		// Gets a glyph that corresponds to the specified UTF-32 codepoint.
 		// If the glyph hasn't been loaded yet, it is rasterized and placed on the glyph atlas texture.
 		// New glyphs placed on the atlas texture are not immediately visible, calling ApplyChangesToTexture() makes the new glyphs visible.
-		Glyph GetGlyph(uint32_t codepoint);
+		// If this font doesn't contain the requested glyph, an error glyph (usually a square) is returned.
+		Glyph GetGlyph(uint32_t codepoint, bool* out_isErrorGlyph = nullptr);
 
 		// Gets the extra X advance per character combination.
 		int16_t GetKerning(uint32_t prev, uint32_t next) const;

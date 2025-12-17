@@ -967,11 +967,12 @@ namespace ig
 		}
 	}
 
-	Glyph Font::GetGlyph(uint32_t codepoint)
+	Glyph Font::GetGlyph(uint32_t codepoint, bool* out_isErrorGlyph)
 	{
 		// If codepoint is too high
 		if (codepoint > atlas.highestGlyphCodepoint)
 		{
+			if (out_isErrorGlyph) *out_isErrorGlyph = true;
 			return atlas.errorGlyph;
 		}
 
@@ -982,6 +983,7 @@ namespace ig
 			uint16_t flag = (uint16_t)Atlas::GlyphFlags::IsLoaded;
 			if ((atlas.glyphTable[codepoint].flags & flag) == flag)
 			{
+				if (out_isErrorGlyph) *out_isErrorGlyph = false;
 				return atlas.glyphTable[codepoint];
 			}
 		}
@@ -991,6 +993,7 @@ namespace ig
 			auto pos = atlas.glyphMap.find(codepoint);
 			if (pos != atlas.glyphMap.end())
 			{
+				if (out_isErrorGlyph) *out_isErrorGlyph = false;
 				return pos->second;
 			}
 		}
@@ -998,18 +1001,17 @@ namespace ig
 		if (isPrebaked)
 		{
 			// If font is prebaked, can't load new glyphs, so return error glyph
+			if (out_isErrorGlyph) *out_isErrorGlyph = true;
 			return atlas.errorGlyph;
 		}
 		else
 		{
 			// If font is dynamic, load new glyph
 
-			// If for some weird reason there is no pointer to file data, return error glyph
+			// If for some weird reason there is no pointer to file data
 			if (!fileDataReadOnly)
 			{
-				Log(LogType::Warning, "Failed to load new glyph for font '" + fontDesc.fontName +
-					"'. Reason: Font doesn't have a font file to read from. This should be impossible.");
-				return atlas.errorGlyph;
+				throw std::runtime_error("Font doesn't have a font file to read from. This should be impossible.");
 			}
 
 			int stbttGlyphIndex = stbtt_FindGlyphIndex(&stbttFontInfo, codepoint);
@@ -1017,6 +1019,7 @@ namespace ig
 			// If font does not contain glyph
 			if (stbttGlyphIndex == 0)
 			{
+				if (out_isErrorGlyph) *out_isErrorGlyph = true;
 				return atlas.errorGlyph;
 			}
 
@@ -1037,6 +1040,7 @@ namespace ig
 			{
 				atlas.glyphMap[codepoint] = out;
 			}
+			if (out_isErrorGlyph) *out_isErrorGlyph = false;
 			return out;
 		}
 	}

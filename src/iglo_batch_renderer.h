@@ -192,7 +192,7 @@ namespace ig
 
 		// Returns the number of draw calls that occurred between the previous Begin() and End().
 		uint64_t GetDrawCallCount() const { return prevDrawCallCounter; }
-
+		BatchType GetCurrentBatchType() const { return state.batchType; }
 		CommandList* GetCurrentCommandList() const { return cmd; }
 
 		// Draws and discards all primitives that have been added to the batch so far.
