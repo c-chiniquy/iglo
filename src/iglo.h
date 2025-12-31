@@ -2502,18 +2502,18 @@ namespace ig
 		// 
 		// Problem:
 		// - Unloading a texture mid-frame (e.g., replacing a font atlas texture that has outgrown its size)
-		//   can cause the GPU to crash if the texture is still referenced in a previous frame's draw calls.
+		//   can crash the GPU if the texture is still referenced in a previous frame's draw calls.
 		//   The GPU may not have finished processing commands that depend on the texture.
 		//
 		// Solution:
-		// - Instead of calling `texture->Unload()` directly, pass ownership to IGLOContext via this function
+		// - Instead of calling `texture.Unload()` directly, pass ownership to IGLOContext via this function
 		//   using a `shared_ptr<Texture>`. IGLOContext will retain the shared pointer until the GPU is guaranteed
 		//   to have finished all pending work referencing the texture.
 		// - When the last shared pointer to the texture is released, `Texture::Unload()` is automatically called
 		//   in the destructor, freeing GPU resources safely.
 		//
 		// Warning:
-		// - NEVER call `texture->Unload()` manually for textures that you manage with this function.
+		// - Don't call `texture->Unload()` manually for textures that you manage with this function.
 		void DelayedTextureUnload(std::shared_ptr<Texture> texture) const;
 
 		Descriptor CreateTempConstant(const void* data, uint64_t numBytes) const;
