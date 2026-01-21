@@ -350,7 +350,7 @@ namespace ig
 		}
 	};
 	static_assert(sizeof(PrebakedFontFileHeader) == 80, "Unexpected struct size");
-
+	static_assert(sizeof(CodepointGlyph) == 20, "Unexpected struct size");
 
 	bool PrebakedFontData::SaveToFile(const std::string& filename)
 	{
@@ -488,8 +488,16 @@ namespace ig
 		this->kerns.resize((size_t)header->numKerns);
 		for (size_t i = 0; i < this->kerns.size(); i++)
 		{
-			memcpy(&this->kerns[i], src, PrebakedFontFileHeader::GetSingleKernSize());
-			src += PrebakedFontFileHeader::GetSingleKernSize();
+			Kerning& k = this->kerns[i];
+
+			memcpy(&k.codepointPrev, src, sizeof(uint32_t));
+			src += sizeof(uint32_t);
+
+			memcpy(&k.codepointNext, src, sizeof(uint32_t));
+			src += sizeof(uint32_t);
+
+			memcpy(&k.x, src, sizeof(int16_t));
+			src += sizeof(int16_t);
 		}
 
 		ImageDesc imageDesc =

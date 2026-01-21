@@ -914,7 +914,7 @@ namespace ig
 			else if (e.xbutton.button == 4)
 			{
 				event_out.type = EventType::MouseWheel;
-				event_out.mouse.scrollWheel = 1; // Scroll up
+				event_out.mouse.scrollWheel = 1.0f; // Scroll up
 				event_out.mouse.button = MouseButton::None;
 				event_out.mouse.x = mousePosition.x;
 				event_out.mouse.y = mousePosition.y;
@@ -924,7 +924,7 @@ namespace ig
 			else if (e.xbutton.button == 5)
 			{
 				event_out.type = EventType::MouseWheel;
-				event_out.mouse.scrollWheel = -1; // Scroll down
+				event_out.mouse.scrollWheel = -1.0f; // Scroll down
 				event_out.mouse.button = MouseButton::None;
 				event_out.mouse.x = mousePosition.x;
 				event_out.mouse.y = mousePosition.y;

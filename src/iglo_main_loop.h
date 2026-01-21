@@ -46,7 +46,7 @@ namespace ig
 			CallbackOnEvent,
 			bool useModalLoopCallback = true);
 
-		// Tells MainLoop that it should exit the loop the first chance it gets.
+		// Tells MainLoop to exit the loop the first chance it gets.
 		void Quit();
 		// If true, Quit() has been called and the loop will exit soon.
 		bool IsQuitting() const { return !mainLoopRunning; }

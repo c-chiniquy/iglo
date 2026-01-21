@@ -787,17 +787,22 @@ namespace ig
 			break;
 
 		case WM_MOUSEWHEEL:
-			if ((int)wParam != 0)
+		{
+			int delta = GET_WHEEL_DELTA_WPARAM(wParam);
+			if (delta != 0)
 			{
 				event_out.type = EventType::MouseWheel;
-				event_out.mouse.scrollWheel = GET_WHEEL_DELTA_WPARAM(wParam);
+				event_out.mouse.scrollWheel = (float)delta / (float)WHEEL_DELTA;
+
 				// WM_MOUSEWHEEL gives incorrect mouse coordinates, so use previous mouse coords instead
 				event_out.mouse.x = mousePosition.x;
 				event_out.mouse.y = mousePosition.y;
 				event_out.mouse.button = MouseButton::None;
+
 				eventQueue.push(event_out);
 			}
-			break;
+		}
+		break;
 
 		case WM_SYSKEYDOWN:
 		case WM_SYSKEYUP:

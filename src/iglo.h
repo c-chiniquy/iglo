@@ -2225,7 +2225,7 @@ namespace ig
 		{
 			int32_t x = 0;
 			int32_t y = 0;
-			int32_t scrollWheel = 0;
+			float scrollWheel = 0.0f;
 			MouseButton button = MouseButton::None;
 		};
 		struct DragAndDropEvent
