@@ -427,30 +427,20 @@ namespace ig
 			return;
 		}
 
-		std::vector<Color32> pixels;
-		uint32_t* pixelPtr = nullptr;
-		if (icon.GetFormat() == Format::BYTE_BYTE_BYTE_BYTE_BGRA ||
-			icon.GetFormat() == Format::BYTE_BYTE_BYTE_BYTE_BGRA_sRGB)
+		// Convert RGBA to BGRA if needed
+		Image iconBGRA;
+		if (icon.GetFormat() == Format::BYTE_BYTE_BYTE_BYTE ||
+			icon.GetFormat() == Format::BYTE_BYTE_BYTE_BYTE_sRGB)
 		{
-			// We can use the image pixel data directly if the format is already BGRA.
-			pixelPtr = (uint32_t*)icon.GetPixels();
-		}
-		else
-		{
-			// We must have BGRA format. Swap blue and red channels to convert RGBA to BGRA.
-			pixels.resize(icon.GetSize() / 4);
-			for (size_t i = 0; i < icon.GetSize() / 4; i++)
-			{
-				Color32* src = (Color32*)icon.GetPixels();
-				pixels[i].red = src[i].blue;
-				pixels[i].green = src[i].green;
-				pixels[i].blue = src[i].red;
-				pixels[i].alpha = src[i].alpha;
-			}
-			pixelPtr = (uint32_t*)pixels.data();
+			iconBGRA.Load(icon.GetDesc());
+			memcpy(iconBGRA.GetPixels(), icon.GetPixels(), icon.GetSize());
+			iconBGRA.SwapRedBlue();
 		}
 
-		Impl_SetWindowIconFromImage_BGRA(icon.GetWidth(), icon.GetHeight(), pixelPtr);
+		const uint32_t* pixels = iconBGRA.IsLoaded() ?
+			(uint32_t*)iconBGRA.GetPixels() :
+			(uint32_t*)icon.GetPixels();
+		Impl_SetWindowIconFromImage_BGRA(icon.GetExtent(), pixels);
 	}
 
 	void IGLOContext::ToggleFullscreen()
@@ -746,7 +736,7 @@ namespace ig
 		}
 
 		this->isLoaded = true;
-		return DetailedResult::MakeSuccess();
+		return DetailedResult::Success();
 	}
 
 	void DescriptorHeap::NextFrame()
@@ -1163,17 +1153,17 @@ namespace ig
 	{
 		if (sizeInBytes > MAX_PUSH_CONSTANTS_BYTE_SIZE)
 		{
-			return DetailedResult::MakeFail(ToString("Exceeded maximum push constants byte size (", MAX_PUSH_CONSTANTS_BYTE_SIZE, ")."));
+			return DetailedResult::Fail(ToString("Exceeded maximum push constants byte size (", MAX_PUSH_CONSTANTS_BYTE_SIZE, ")."));
 		}
 		if (sizeInBytes % 4 != 0 || destOffsetInBytes % 4 != 0)
 		{
-			return DetailedResult::MakeFail("Push constants byte size and offset must be multiples of 4.");
+			return DetailedResult::Fail("Push constants byte size and offset must be multiples of 4.");
 		}
 		if (!data || sizeInBytes == 0)
 		{
-			return DetailedResult::MakeFail("No data provided.");
+			return DetailedResult::Fail("No data provided.");
 		}
-		return DetailedResult::MakeSuccess();
+		return DetailedResult::Success();
 	}
 
 	void CommandList::SetPushConstants(const void* data, uint32_t sizeInBytes, uint32_t destOffsetInBytes)
@@ -1383,7 +1373,7 @@ namespace ig
 				if (page.IsNull())
 				{
 					Unload();
-					return DetailedResult::MakeFail("The buffer allocator failed to allocate memory.");
+					return DetailedResult::Fail("The buffer allocator failed to allocate memory.");
 				}
 				frame.linearPages.push_back(page);
 			}
@@ -1395,7 +1385,7 @@ namespace ig
 		this->frameIndex = 0;
 		this->numFrames = numFramesInFlight;
 		this->linearPageSize = linearPageSize;
-		return DetailedResult::MakeSuccess();
+		return DetailedResult::Success();
 	}
 
 	bool TempBufferAllocator::LogErrorIfNotLoaded()
@@ -1520,6 +1510,145 @@ namespace ig
 		assert(frameIndex < perFrame.size());
 		const PerFrame& current = perFrame[frameIndex];
 		return current.largePages.size() + current.linearPages.size();
+	}
+
+	void Cursor::Unload()
+	{
+		Impl_Unload();
+
+		isLoaded = false;
+		context = nullptr;
+	}
+
+	Cursor::Cursor(Cursor&& other) noexcept
+	{
+		*this = std::move(other);
+	}
+	Cursor& Cursor::operator=(Cursor&& other) noexcept
+	{
+		Unload();
+
+		std::swap(this->isLoaded, other.isLoaded);
+		std::swap(this->context, other.context);
+		std::swap(this->impl, other.impl);
+
+		return *this;
+	}
+
+	bool Cursor::LoadFromSystem(const IGLOContext& context, SystemCursor systemCursor)
+	{
+		Unload();
+
+		const char* errStr = "Failed to load system cursor. Reason: ";
+
+		if (!context.IsLoaded())
+		{
+			Log(LogType::Error, ToString(errStr, "IGLOContext must be loaded first."));
+			return false;
+		}
+
+		this->context = &context;
+
+		DetailedResult result = Impl_LoadFromSystem(context, systemCursor);
+		if (!result)
+		{
+			Log(LogType::Error, errStr + result.errorMessage);
+			Unload();
+			return false;
+		}
+
+		this->isLoaded = true;
+		return true;
+	}
+
+	bool Cursor::LoadFromFile(const IGLOContext& context, const std::string& filename, IntPoint hotspot)
+	{
+		Unload();
+
+		const char* errStr = "Failed to load cursor from file. Reason: ";
+
+		if (!context.IsLoaded())
+		{
+			Log(LogType::Error, ToString(errStr, "IGLOContext must be loaded first."));
+			return false;
+		}
+
+		ReadFileResult file = ReadFile(filename);
+		if (!file.success)
+		{
+			Log(LogType::Error, ToString(errStr, "Couldn't open '" + filename + "'."));
+			return false;
+		}
+		if (file.fileContent.size() == 0)
+		{
+			Log(LogType::Error, ToString(errStr, "File '" + filename + "' is empty."));
+			return false;
+		}
+		Image image;
+		if (!image.LoadFromMemory(file.fileContent.data(), file.fileContent.size()))
+		{
+			Log(LogType::Error, ToString(errStr, "Image loading failed."));
+			return false;
+		}
+		return LoadFromMemory(context, image, hotspot);
+	}
+
+	bool Cursor::LoadFromMemory(const IGLOContext& context, const Image& cursorImage, IntPoint hotspot)
+	{
+		Unload();
+
+		const char* errStr = "Failed to load cursor from image. Reason: ";
+
+		if (!context.IsLoaded())
+		{
+			Log(LogType::Error, ToString(errStr, "IGLOContext must be loaded first."));
+			return false;
+		}
+
+		FormatInfo info = GetFormatInfo(cursorImage.GetFormat());
+		uint32_t bitsPerPixel = info.bytesPerPixel * 8;
+		uint32_t numChannels = info.elementCount;
+		if (bitsPerPixel != 32 || numChannels != 4 || !cursorImage.IsLoaded())
+		{
+			Log(LogType::Error, ToString(errStr, "Image must have 4 color channels and be 32 bits per pixel."));
+			return false;
+		}
+
+		if (hotspot.x < 0 ||
+			hotspot.y < 0 ||
+			hotspot.x >= (int32_t)cursorImage.GetWidth() ||
+			hotspot.y >= (int32_t)cursorImage.GetHeight())
+		{
+			Log(LogType::Error, ToString(errStr, "Invalid hotspot."));
+			return false;
+		}
+
+		// Convert RGBA to BGRA if needed
+		Image imageBGRA;
+		if (cursorImage.GetFormat() == Format::BYTE_BYTE_BYTE_BYTE ||
+			cursorImage.GetFormat() == Format::BYTE_BYTE_BYTE_BYTE_sRGB)
+		{
+			imageBGRA.Load(cursorImage.GetDesc());
+			memcpy(imageBGRA.GetPixels(), cursorImage.GetPixels(), cursorImage.GetSize());
+			imageBGRA.SwapRedBlue();
+		}
+
+		const uint32_t* pixels = imageBGRA.IsLoaded() ?
+			(uint32_t*)imageBGRA.GetPixels() :
+			(uint32_t*)cursorImage.GetPixels();
+
+		this->context = &context;
+
+		DetailedResult result = Impl_LoadFromMemory_BGRA(context, cursorImage.GetExtent(), pixels, hotspot);
+		if (!result)
+		{
+			Log(LogType::Error, errStr + result.errorMessage);
+			Unload();
+			return false;
+		}
+
+		this->isLoaded = true;
+		return true;
 	}
 
 	void IGLOContext::SetFrameBuffering(uint32_t numFramesInFlight, uint32_t numBackBuffers)
@@ -1664,7 +1793,8 @@ namespace ig
 
 		if (renderSettings.maxFramesInFlight > renderSettings.numBackBuffers)
 		{
-			Log(LogType::Error, "Failed to load IGLOContext. Reason: You can't have more frames in flight than back buffers!");
+			Log(LogType::Error, "Failed to load IGLOContext. Reason:"
+				" You can't have more frames in flight than the number of back buffers!");
 			return false;
 		}
 
@@ -1724,6 +1854,8 @@ namespace ig
 		mousePosition = IntPoint();
 		mouseButtonIsDown.Clear();
 		keyIsDown.Clear();
+
+		currentCursor = nullptr;
 
 		Impl_UnloadWindow();
 	}
@@ -1847,7 +1979,7 @@ namespace ig
 			}
 		}
 
-		return DetailedResult::MakeSuccess();
+		return DetailedResult::Success();
 	}
 
 	void CommandQueue::Unload()
@@ -1872,7 +2004,7 @@ namespace ig
 		}
 
 		this->isLoaded = true;
-		return DetailedResult::MakeSuccess();
+		return DetailedResult::Success();
 	}
 
 	Receipt CommandQueue::SubmitCommands(const CommandList& commandList)
@@ -1969,19 +2101,19 @@ namespace ig
 	{
 		if (extent.width == 0 || extent.height == 0)
 		{
-			return DetailedResult::MakeFail("Width and height must be nonzero.");
+			return DetailedResult::Fail("Width and height must be nonzero.");
 		}
 		if (format == Format::None)
 		{
-			return DetailedResult::MakeFail("Bad format.");
+			return DetailedResult::Fail("Bad format.");
 		}
 		if (mipLevels < 1 || numFaces < 1)
 		{
-			return DetailedResult::MakeFail("mipLevels and numFaces must be 1 or higher.");
+			return DetailedResult::Fail("mipLevels and numFaces must be 1 or higher.");
 		}
 		if (isCubemap && (numFaces % 6 != 0))
 		{
-			return DetailedResult::MakeFail("The number of faces in a cubemap image must be a multiple of 6.");
+			return DetailedResult::Fail("The number of faces in a cubemap image must be a multiple of 6.");
 		}
 		FormatInfo info = GetFormatInfo(format);
 		if (info.blockSize > 0)
@@ -1990,10 +2122,10 @@ namespace ig
 			bool heightIsMultipleOf4 = (extent.height % 4 == 0);
 			if (!widthIsMultipleOf4 || !heightIsMultipleOf4)
 			{
-				return DetailedResult::MakeFail("Width and height must be multiples of 4 when using a block compression format.");
+				return DetailedResult::Fail("Width and height must be multiples of 4 when using a block compression format.");
 			}
 		}
-		return DetailedResult::MakeSuccess();
+		return DetailedResult::Success();
 	}
 
 	bool Image::Load(uint32_t width, uint32_t height, Format format)
@@ -2679,42 +2811,82 @@ namespace ig
 		return GetFormatInfo(desc.format).is_sRGB;
 	}
 
-	void Image::ReplaceColors(Color32 colorA, Color32 colorB)
+	bool Image::ReplaceColors(Color32 colorA, Color32 colorB)
 	{
-		if (!IsLoaded()) return;
+		if (!IsLoaded()) return false;
 
-		if (desc.format == ig::Format::BYTE_BYTE_BYTE_BYTE ||
-			desc.format == Format::BYTE_BYTE_BYTE_BYTE_NotNormalized ||
+		bool formatIsSupported = (
+			desc.format == Format::BYTE_BYTE_BYTE_BYTE ||
 			desc.format == Format::BYTE_BYTE_BYTE_BYTE_sRGB ||
-			desc.format == ig::Format::BYTE_BYTE_BYTE_BYTE_BGRA ||
+			desc.format == Format::BYTE_BYTE_BYTE_BYTE_BGRA ||
+			desc.format == Format::BYTE_BYTE_BYTE_BYTE_BGRA_sRGB ||
+			desc.format == Format::BYTE_BYTE_BYTE_BYTE_NotNormalized);
+
+		if (!formatIsSupported)
+		{
+			Log(LogType::Error, "Failed to replace colors in image. Reason: Image format does not support this operation.");
+			return false;
+		}
+
+		if (colorA == colorB) return true; // nothing needs to be done
+		
+		uint32_t findValue = colorA.rgba;
+		uint32_t replaceValue = colorB.rgba;
+
+		// Convert colorA and colorB from RGBA to BGRA
+		if (desc.format == ig::Format::BYTE_BYTE_BYTE_BYTE_BGRA ||
 			desc.format == Format::BYTE_BYTE_BYTE_BYTE_BGRA_sRGB)
 		{
-			if (colorA == colorB)
-			{
-				return; // nothing needs to be done
-			}
-
-			uint32_t findValue = colorA.rgba;
-			uint32_t replaceValue = colorB.rgba;
-
-			// Convert colorA and colorB from RGBA to BGRA
-			if (desc.format == ig::Format::BYTE_BYTE_BYTE_BYTE_BGRA ||
-				desc.format == Format::BYTE_BYTE_BYTE_BYTE_BGRA_sRGB)
-			{
-				findValue = Color32(colorA.blue, colorA.green, colorA.red, colorA.alpha).rgba;
-				replaceValue = Color32(colorB.blue, colorB.green, colorB.red, colorB.alpha).rgba;
-			}
-			uint32_t* p32 = (uint32_t*)pixelsPtr;
-			size_t pixelCount = this->size / 4;
-			for (size_t i = 0; i < pixelCount; i++)
-			{
-				if (p32[i] == findValue) p32[i] = replaceValue;
-			}
+			findValue = Color32(colorA.blue, colorA.green, colorA.red, colorA.alpha).rgba;
+			replaceValue = Color32(colorB.blue, colorB.green, colorB.red, colorB.alpha).rgba;
 		}
-		else
+		uint32_t* p32 = (uint32_t*)this->pixelsPtr;
+		size_t pixelCount = this->size / 4;
+		for (size_t i = 0; i < pixelCount; i++)
 		{
-			Log(LogType::Warning, "Failed to replace colors in image. Reason: Incompatible format.");
+			if (p32[i] == findValue) p32[i] = replaceValue;
 		}
+
+		return true;
+	}
+
+	bool Image::SwapRedBlue()
+	{
+		if (!IsLoaded()) return false;
+
+		bool formatIsSupported = (
+			desc.format == Format::BYTE_BYTE_BYTE_BYTE ||
+			desc.format == Format::BYTE_BYTE_BYTE_BYTE_sRGB ||
+			desc.format == Format::BYTE_BYTE_BYTE_BYTE_BGRA ||
+			desc.format == Format::BYTE_BYTE_BYTE_BYTE_BGRA_sRGB);
+
+		if (!formatIsSupported)
+		{
+			Log(LogType::Error, "SwapRedBlue failed. Reason: Image format does not support RGBA/BGRA swapping.");
+			return false;
+		}
+
+		uint32_t* p32 = (uint32_t*)this->pixelsPtr;
+		size_t pixelCount = this->size / 4;
+		for (size_t i = 0; i < pixelCount; i++)
+		{
+			byte* p = (byte*)&p32[i];
+			std::swap(p[0], p[2]); // R <-> B
+		}
+
+		// Update format enum to reflect the swap
+		switch (desc.format)
+		{
+		case Format::BYTE_BYTE_BYTE_BYTE: desc.format = Format::BYTE_BYTE_BYTE_BYTE_BGRA; break;
+		case Format::BYTE_BYTE_BYTE_BYTE_BGRA: desc.format = Format::BYTE_BYTE_BYTE_BYTE; break;
+		case Format::BYTE_BYTE_BYTE_BYTE_sRGB: desc.format = Format::BYTE_BYTE_BYTE_BYTE_BGRA_sRGB; break;
+		case Format::BYTE_BYTE_BYTE_BYTE_BGRA_sRGB: desc.format = Format::BYTE_BYTE_BYTE_BYTE_sRGB; break;
+
+		default:
+			throw std::invalid_argument("Unexpected format.");
+		}
+
+		return true;
 	}
 
 	void IGLOContext::SetModalLoopCallback(CallbackModalLoop callbackModalLoop)
@@ -2797,13 +2969,13 @@ namespace ig
 		{
 			VkResult result = commandQueue.Present(graphics.swapChain);
 			HandleVulkanSwapChainResult(result, "presentation");
-		}
+	}
 #endif
 
 		endOfFrame[frameIndex].graphicsReceipt = commandQueue.SubmitSignal(CommandListType::Graphics);
 
 		MoveToNextFrame();
-	}
+}
 
 	Receipt IGLOContext::Submit(const CommandList& commandList)
 	{
@@ -2902,7 +3074,7 @@ namespace ig
 			if (!dr)
 			{
 				Log(LogType::Error, "Failed to replace swapchain. Reason: " + dr.errorMessage);
-			}
+	}
 			WaitForIdleDevice();
 		}
 #endif
@@ -3569,26 +3741,26 @@ namespace ig
 	{
 		if (!image.IsLoaded())
 		{
-			return DetailedResult::MakeFail("The provided image isn't loaded.");
+			return DetailedResult::Fail("The provided image isn't loaded.");
 		}
 		if (GetFormatInfo(image.GetFormat()).blockSize != 0)
 		{
-			return DetailedResult::MakeFail("Mipmap generation is not supported for block compression formats.");
+			return DetailedResult::Fail("Mipmap generation is not supported for block compression formats.");
 		}
 		else if (image.GetNumFaces() > 1)
 		{
-			return DetailedResult::MakeFail("Mipmap generation is not yet supported for cube maps and texture arrays.");
+			return DetailedResult::Fail("Mipmap generation is not yet supported for cube maps and texture arrays.");
 		}
 		else if (!IsPowerOf2(image.GetWidth()) || !IsPowerOf2(image.GetHeight()))
 		{
-			return DetailedResult::MakeFail("Mipmap generation is not yet supported for non power of 2 textures.");
+			return DetailedResult::Fail("Mipmap generation is not yet supported for non power of 2 textures.");
 		}
 		else if (cmdListType == CommandListType::Copy)
 		{
-			return DetailedResult::MakeFail("Mipmap generation can't be performed with a 'Copy' command list type.");
+			return DetailedResult::Fail("Mipmap generation can't be performed with a 'Copy' command list type.");
 		}
 
-		return DetailedResult::MakeSuccess();
+		return DetailedResult::Success();
 	}
 
 	DetailedResult Texture::GenerateMips(CommandList& cmd, const Image& image)
@@ -3615,7 +3787,7 @@ namespace ig
 		unorderedDesc.createDescriptors = false;
 		if (!unordered->Load(*context, unorderedDesc))
 		{
-			return DetailedResult::MakeFail("Failed to create unordered access texture for mipmap generation.");
+			return DetailedResult::Fail("Failed to create unordered access texture for mipmap generation.");
 		}
 
 		// To give the GPU enough time to use this texture, we will keep it alive past this function.
@@ -3647,7 +3819,7 @@ namespace ig
 			Descriptor uav = heap.AllocateTemp(DescriptorType::Texture_UAV);
 			if (srv.IsNull() || uav.IsNull())
 			{
-				return DetailedResult::MakeFail("Failed to allocate temporary resource descriptors for mipmap generation.");
+				return DetailedResult::Fail("Failed to allocate temporary resource descriptors for mipmap generation.");
 			}
 			pushConstants.srcTextureIndex = srv.heapIndex;
 			pushConstants.destTextureIndex = uav.heapIndex;
@@ -3695,7 +3867,7 @@ namespace ig
 			VkImageView srcImageView = VK_NULL_HANDLE;
 			if (heap.CreateTempVulkanImageView(device, &srcViewInfo, nullptr, &srcImageView) != VK_SUCCESS)
 			{
-				return DetailedResult::MakeFail("Failed to create source image view for mipmap generation.");
+				return DetailedResult::Fail("Failed to create source image view for mipmap generation.");
 			}
 			heap.WriteImageDescriptor(srv, srcImageView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
@@ -3706,8 +3878,8 @@ namespace ig
 			VkImageView destImageView = VK_NULL_HANDLE;
 			if (heap.CreateTempVulkanImageView(device, &destViewInfo, nullptr, &destImageView) != VK_SUCCESS)
 			{
-				return DetailedResult::MakeFail("Failed to create destination image view for mipmap generation.");
-			}
+				return DetailedResult::Fail("Failed to create destination image view for mipmap generation.");
+		}
 			heap.WriteImageDescriptor(uav, destImageView, VK_IMAGE_LAYOUT_GENERAL);
 
 #endif
@@ -3729,12 +3901,12 @@ namespace ig
 			cmd.FlushBarriers();
 
 			cmd.CopyTextureSubresource(*unordered, 0, i, *this, 0, i + 1);
-		}
+	}
 
 		cmd.AddTextureBarrierAtSubresource(*this, SimpleBarrier::CopyDest, SimpleBarrier::PixelShaderResource, 0, desc.mipLevels - 1);
 		cmd.FlushBarriers();
 
-		return DetailedResult::MakeSuccess();
+		return DetailedResult::Success();
 	}
 
 	void Texture::SetPixels(CommandList& cmd, const Image& srcImage)
@@ -3801,7 +3973,7 @@ namespace ig
 		}
 
 		cmd.CopyTempBufferToTexture(tempBuffer, *this);
-	}
+		}
 
 	void Texture::SetPixels(CommandList& cmd, const void* pixelData)
 	{
@@ -3884,7 +4056,7 @@ namespace ig
 		}
 
 		cmd.CopyTempBufferToTextureSubresource(tempBuffer, *this, destFaceIndex, destMipIndex);
-	}
+		}
 
 	void Texture::SetPixelsAtSubresource(CommandList& cmd, const void* pixelData, uint32_t destFaceIndex, uint32_t destMipIndex)
 	{
@@ -3897,7 +4069,7 @@ namespace ig
 		ImageDesc imageDesc;
 		imageDesc.extent = Image::CalculateMipExtent(desc.extent, destMipIndex);
 		imageDesc.format = desc.format;
-		
+
 		Image image;
 		image.LoadAsPointer((byte*)pixelData, imageDesc);
 
@@ -3959,7 +4131,7 @@ namespace ig
 		imageDesc.mipLevels = desc.mipLevels;
 		imageDesc.numFaces = desc.numFaces;
 		imageDesc.isCubemap = desc.isCubemap;
-		
+
 		Image image;
 		if (!image.Load(imageDesc))
 		{
@@ -4011,4 +4183,4 @@ namespace ig
 	}
 
 
-} //end of namespace ig
+	} //end of namespace ig

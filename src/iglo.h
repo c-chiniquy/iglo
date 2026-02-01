@@ -89,6 +89,8 @@ namespace ig
 	struct TempBuffer;
 	class TempBufferAllocator;
 	struct Viewport;
+	enum class SystemCursor;
+	class Cursor;
 	enum class MouseButton;
 	enum class Key;
 	enum class EventType;
@@ -177,8 +179,14 @@ namespace ig
 		const bool success = false;
 		const std::string errorMessage; // Will be empty if the operation succeeded.
 
-		[[nodiscard]] static DetailedResult MakeSuccess() { return { true }; }
-		[[nodiscard]] static DetailedResult MakeFail(const std::string& errorMessage) { return { false, errorMessage }; }
+		[[nodiscard]] static DetailedResult Success()
+		{
+			return { .success = true, .errorMessage = {} };
+		}
+		[[nodiscard]] static DetailedResult Fail(const std::string& errorMessage)
+		{
+			return { .success = false, .errorMessage = errorMessage };
+		}
 		explicit operator bool() const { return success; }
 	};
 
@@ -942,10 +950,16 @@ namespace ig
 		// Not all formats support being sRGB. If the requested sRGB or non-sRGB format does not exist, no changes will be made.
 		void SetSRGB(bool sRGB);
 
-		// Replaces all pixel values that are colorA with colorB (applies to all miplevels and faces).
-		// For this method to work, the format must be 32 bits per pixel unsigned integer with 4 color channels.
+		// Replaces all pixel values that are colorA with colorB.
+		// Applies to all mips and faces.
+		// The format must be 32 bits per pixel unsigned integer with 4 color channels.
 		// This is useful for adding transparency to sprite textures.
-		void ReplaceColors(Color32 colorA, Color32 colorB);
+		bool ReplaceColors(Color32 colorA, Color32 colorB);
+
+		// Swaps red and blue channels in-place (RGBA <-> BGRA).
+		// Applies to all mips and faces.
+		// The format must be 32 bits per pixel unsigned integer with 4 color channels.
+		bool SwapRedBlue();
 
 		// Gets the byte size of this image (including all faces and mipLevels).
 		size_t GetSize() const { return size; }
@@ -2146,6 +2160,69 @@ namespace ig
 		float maxDepth = 0;
 	};
 
+	enum class SystemCursor
+	{
+		Arrow = 0,
+		IBeam,
+		Wait,
+		Crosshair,
+		Size_NWSE,
+		Size_NESW,
+		Size_WE,
+		Size_NS,
+		Size_All,
+		No,
+		Hand,
+
+		COUNT, // Not a cursor. Used to keep count.
+	};
+
+	class Cursor
+	{
+	public:
+		Cursor() = default;
+		~Cursor() { Unload(); }
+
+		Cursor& operator=(Cursor&) = delete;
+		Cursor(Cursor&) = delete;
+
+		Cursor& operator=(Cursor&&) noexcept; // Move assignment operator
+		Cursor(Cursor&&) noexcept; // Move constructor
+
+		// It's safe to unload a cursor even if it's currently set as the active cursor.
+		// In that case, the active cursor will be reset to the default cursor automatically.
+		void Unload();
+		bool IsLoaded() const { return isLoaded; }
+
+		// Load a standard system cursor
+		bool LoadFromSystem(const IGLOContext&, SystemCursor);
+
+		// Load a cursor from an image file.
+		// The image must be 32 bits per pixel with 4 color channels (RGBA or BGRA).
+		bool LoadFromFile(const IGLOContext&, const std::string& filename, IntPoint hotspot);
+
+		// Load a cursor from an image in memory.
+		// The image must be 32 bits per pixel with 4 color channels (RGBA or BGRA).
+		bool LoadFromMemory(const IGLOContext&, const Image& cursorImage, IntPoint hotspot);
+
+#ifdef _WIN32
+		HCURSOR GetWin32CursorHandle() const { return impl.handle; }
+#endif
+#ifdef __linux__
+		X11Cursor GetX11CursorHandle() const { return impl.xcursor; }
+#endif
+
+	private:
+		bool isLoaded = false;
+		const IGLOContext* context = nullptr;
+
+		Impl_Cursor impl;
+
+		void Impl_Unload();
+		DetailedResult Impl_LoadFromSystem(const IGLOContext&, SystemCursor);
+		DetailedResult Impl_LoadFromMemory_BGRA(const IGLOContext&, Extent2D extent, const uint32_t* pixels, IntPoint hotspot);
+	};
+
 	enum class MouseButton
 	{
 		None = 0,
@@ -2417,6 +2494,9 @@ namespace ig
 		bool GetDragAndDropEnabled() { return window.enableDragAndDrop; }
 
 		void SetWindowIconFromImage(const Image& icon);
+		void SetCursor(const Cursor& cursor) const;
+		void ResetCursor() const;
+		const Cursor* GetCursor() const { return currentCursor; }
 #ifdef _WIN32
 		// Sets the window icon from a resource defined in 'resource.h'. Example usage: SetWindowIconFromResource(IDI_ICON1).
 		// This function is only available on the Windows platform.
@@ -2580,6 +2660,7 @@ namespace ig
 		Impl_WindowData window; // Window context
 		WindowState windowedMode; // The window states to use while in windowed mode
 		WindowResizeConstraints windowResizeConstraints;
+		mutable const Cursor* currentCursor = nullptr;
 
 		CallbackModalLoop callbackModalLoop = nullptr;
 		bool insideModalLoopCallback = false; // If true, the main thread is inside a callback function called from inside a modal operation.
@@ -2593,7 +2674,7 @@ namespace ig
 		void Impl_SetWindowPosition(int32_t x, int32_t y);
 		void Impl_SetWindowResizable(bool resizable);
 		void Impl_SetWindowBordersVisible(bool visible);
-		void Impl_SetWindowIconFromImage_BGRA(uint32_t width, uint32_t height, const uint32_t* iconPixels);
+		void Impl_SetWindowIconFromImage_BGRA(Extent2D extent, const uint32_t* pixels);
 
 		//------------------ WIN32 Specific ------------------//
 #ifdef _WIN32

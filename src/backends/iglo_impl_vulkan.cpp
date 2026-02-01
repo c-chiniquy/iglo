@@ -74,13 +74,13 @@ namespace ig
 			// Graphics queue
 			if (!fams.graphicsFamily)
 			{
-				return DetailedResult::MakeFail("The device lacks a graphics queue family.");
+				return DetailedResult::Fail("The device lacks a graphics queue family.");
 			}
 
 			// Present queue
 			if (!fams.presentFamily)
 			{
-				return DetailedResult::MakeFail("The device lacks a queue family that can present images to the screen.");
+				return DetailedResult::Fail("The device lacks a queue family that can present images to the screen.");
 			}
 		}
 
@@ -92,7 +92,7 @@ namespace ig
 			if (props.apiVersion < vulkanVersion)
 			{
 				std::string vulkanVersionString = ToString(VK_API_VERSION_MAJOR(vulkanVersion), ".", VK_API_VERSION_MINOR(vulkanVersion));
-				return DetailedResult::MakeFail(ToString(
+				return DetailedResult::Fail(ToString(
 					"Vulkan ", vulkanVersionString, " is not supported on this device."));
 			}
 		}
@@ -116,7 +116,7 @@ namespace ig
 					errStr.append("\n");
 					errStr.append(s);
 				}
-				return DetailedResult::MakeFail(errStr);
+				return DetailedResult::Fail(errStr);
 			}
 		}
 
@@ -197,7 +197,7 @@ namespace ig
 					if (i != notSupported.size() - 1) str.append(", ");
 				}
 				str.append(".");
-				return DetailedResult::MakeFail(str);
+				return DetailedResult::Fail(str);
 			}
 
 		}
@@ -209,11 +209,11 @@ namespace ig
 			VulkanSwapChainInfo swapChainInfo = GetVulkanSwapChainInfo(physicalDevice, surface);
 			if (swapChainInfo.formats.empty() || swapChainInfo.presentModes.empty())
 			{
-				return DetailedResult::MakeFail("The swapchain for this device lacks the required features.");
+				return DetailedResult::Fail("The swapchain for this device lacks the required features.");
 			}
 		}
 
-		return DetailedResult::MakeSuccess();
+		return DetailedResult::Success();
 	}
 
 	VulkanQueueFamilies GetVulkanQueueFamilies(VkPhysicalDevice physicalDevice, VkSurfaceKHR surface)
@@ -609,7 +609,7 @@ namespace ig
 				*/
 
 				std::string descriptorName = vk::to_string((vk::DescriptorType)vkDescriptorTypeTable[i]);
-				return DetailedResult::MakeFail(ToString(
+				return DetailedResult::Fail(ToString(
 					"Failed to allocate bindless descriptors:\n"
 					"  - Requested: ", totalAlloc, " ", descriptorName, " descriptors\n"
 					"  - Supported: ", propMax[i], " ", descriptorName, " descriptors\n"
@@ -666,7 +666,7 @@ namespace ig
 			VkResult result = vkCreateDescriptorSetLayout(device, &layoutInfo, nullptr, &impl.descriptorSetLayout);
 			if (result != VK_SUCCESS)
 			{
-				return DetailedResult::MakeFail(CreateVulkanErrorMsg("vkCreateDescriptorSetLayout", result));
+				return DetailedResult::Fail(CreateVulkanErrorMsg("vkCreateDescriptorSetLayout", result));
 			}
 		}
 
@@ -686,7 +686,7 @@ namespace ig
 			VkResult result = vkCreateDescriptorPool(device, &poolInfo, nullptr, &impl.descriptorPool);
 			if (result != VK_SUCCESS)
 			{
-				return DetailedResult::MakeFail(CreateVulkanErrorMsg("vkCreateDescriptorPool", result));
+				return DetailedResult::Fail(CreateVulkanErrorMsg("vkCreateDescriptorPool", result));
 			}
 		}
 
@@ -701,7 +701,7 @@ namespace ig
 			VkResult result = vkAllocateDescriptorSets(device, &allocInfo, &impl.descriptorSet);
 			if (result != VK_SUCCESS)
 			{
-				return DetailedResult::MakeFail(CreateVulkanErrorMsg("vkAllocateDescriptorSets", result));
+				return DetailedResult::Fail(CreateVulkanErrorMsg("vkAllocateDescriptorSets", result));
 			}
 		}
 
@@ -722,11 +722,11 @@ namespace ig
 			VkResult result = vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &impl.bindlessPipelineLayout);
 			if (result != VK_SUCCESS)
 			{
-				return DetailedResult::MakeFail(CreateVulkanErrorMsg("vkCreatePipelineLayout", result));
+				return DetailedResult::Fail(CreateVulkanErrorMsg("vkCreatePipelineLayout", result));
 			}
 		}
 
-		return DetailedResult::MakeSuccess();
+		return DetailedResult::Success();
 	}
 
 	void DescriptorHeap::Impl_NextFrame()
@@ -938,7 +938,7 @@ namespace ig
 		case Cull::Front: vkCullMode = VK_CULL_MODE_FRONT_BIT; break;
 		case Cull::Back: vkCullMode = VK_CULL_MODE_BACK_BIT; break;
 		default:
-			return DetailedResult::MakeFail("Invalid cull mode.");
+			return DetailedResult::Fail("Invalid cull mode.");
 		}
 
 		VkBool32 enableDepthBias = (desc.rasterizerState.depthBias != 0 ||
@@ -1088,10 +1088,10 @@ namespace ig
 		VkResult result = vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &impl.pipeline);
 		if (result != VK_SUCCESS)
 		{
-			return DetailedResult::MakeFail(CreateVulkanErrorMsg("vkCreateGraphicsPipelines", result));
+			return DetailedResult::Fail(CreateVulkanErrorMsg("vkCreateGraphicsPipelines", result));
 		}
 
-		return DetailedResult::MakeSuccess();
+		return DetailedResult::Success();
 	}
 
 	DetailedResult Pipeline::Impl_LoadAsCompute(const IGLOContext& context, const Shader& CS)
@@ -1120,9 +1120,9 @@ namespace ig
 		VkResult result = vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &impl.pipeline);
 		if (result != VK_SUCCESS)
 		{
-			return DetailedResult::MakeFail(CreateVulkanErrorMsg("vkCreateComputePipelines", result));
+			return DetailedResult::Fail(CreateVulkanErrorMsg("vkCreateComputePipelines", result));
 		}
-		return DetailedResult::MakeSuccess();
+		return DetailedResult::Success();
 	}
 
 	void CommandQueue::DestroySwapChainSemaphores()
@@ -1219,14 +1219,14 @@ namespace ig
 				VkResult result = vkCreateSemaphore(device, &createInfo, nullptr, &impl.timelineSemaphores[i]);
 				if (result != VK_SUCCESS)
 				{
-					return DetailedResult::MakeFail(CreateVulkanErrorMsg("vkCreateSemaphore", result));
+					return DetailedResult::Fail(CreateVulkanErrorMsg("vkCreateSemaphore", result));
 				}
 			}
 		}
 
 		RecreateSwapChainSemaphores(numFramesInFlight, numBackBuffers);
 
-		return DetailedResult::MakeSuccess();
+		return DetailedResult::Success();
 	}
 
 	void CommandQueue::RecreateSwapChainSemaphores(uint32_t numFramesInFlight, uint32_t numBackBuffers)
@@ -1492,7 +1492,7 @@ namespace ig
 			VkResult result = vkCreateCommandPool(device, &poolInfo, nullptr, &impl.commandPool[i]);
 			if (result != VK_SUCCESS)
 			{
-				return DetailedResult::MakeFail(CreateVulkanErrorMsg("vkCreateCommandPool", result));
+				return DetailedResult::Fail(CreateVulkanErrorMsg("vkCreateCommandPool", result));
 			}
 
 			VkCommandBufferAllocateInfo allocInfo = {};
@@ -1504,7 +1504,7 @@ namespace ig
 			result = vkAllocateCommandBuffers(device, &allocInfo, &impl.commandBuffer[i]);
 			if (result != VK_SUCCESS)
 			{
-				return DetailedResult::MakeFail(CreateVulkanErrorMsg("vkAllocateCommandBuffers", result));
+				return DetailedResult::Fail(CreateVulkanErrorMsg("vkAllocateCommandBuffers", result));
 			}
 		}
 
@@ -1515,7 +1515,7 @@ namespace ig
 		impl.currentRenderTextures = {};
 		impl.renderInfo = {};
 
-		return DetailedResult::MakeSuccess();
+		return DetailedResult::Success();
 	}
 
 	void CommandList::Impl_Begin()
@@ -2428,7 +2428,7 @@ namespace ig
 		VkFormat vkFormat = ConvertToVulkanFormat(desc.format);
 		if (vkFormat == VK_FORMAT_UNDEFINED)
 		{
-			return DetailedResult::MakeFail(ToString("This iglo format is not supported in Vulkan: ", (uint32_t)desc.format, "."));
+			return DetailedResult::Fail(ToString("This iglo format is not supported in Vulkan: ", (uint32_t)desc.format, "."));
 		}
 
 		uint32_t numImages = (desc.usage == TextureUsage::Readable) ? context.GetMaxFramesInFlight() : 1;
@@ -2509,7 +2509,7 @@ namespace ig
 			VkResult result = vkCreateImage(device, &imageInfo, nullptr, &impl.image[i]);
 			if (result != VK_SUCCESS)
 			{
-				return DetailedResult::MakeFail(CreateVulkanErrorMsg("vkCreateImage", result));
+				return DetailedResult::Fail(CreateVulkanErrorMsg("vkCreateImage", result));
 			}
 
 			VkMemoryRequirements memRequirements;
@@ -2520,14 +2520,14 @@ namespace ig
 			std::optional<uint32_t> memoryType = FindVulkanMemoryType(physicalDevice, memRequirements.memoryTypeBits, memProperties);
 			if (!memoryType)
 			{
-				return DetailedResult::MakeFail("Failed to find suitable memory type.");
+				return DetailedResult::Fail("Failed to find suitable memory type.");
 			}
 			allocInfo.memoryTypeIndex = memoryType.value();
 
 			result = vkAllocateMemory(device, &allocInfo, nullptr, &impl.memory[i]);
 			if (result != VK_SUCCESS)
 			{
-				return DetailedResult::MakeFail(CreateVulkanErrorMsg("vkAllocateMemory", result));
+				return DetailedResult::Fail(CreateVulkanErrorMsg("vkAllocateMemory", result));
 			}
 
 			vkBindImageMemory(device, impl.image[i], impl.memory[i], 0);
@@ -2540,7 +2540,7 @@ namespace ig
 				result = vkMapMemory(device, impl.memory[i], 0, memRequirements.size, 0, &mappedPtr);
 				if (result != VK_SUCCESS)
 				{
-					return DetailedResult::MakeFail(CreateVulkanErrorMsg("vkMapMemory", result));
+					return DetailedResult::Fail(CreateVulkanErrorMsg("vkMapMemory", result));
 				}
 
 				readMapped.push_back(mappedPtr);
@@ -2586,7 +2586,7 @@ namespace ig
 		{
 			// Allocate descriptor
 			srvDescriptor = heap.AllocatePersistent(DescriptorType::Texture_SRV);
-			if (srvDescriptor.IsNull()) return DetailedResult::MakeFail("Failed to allocate descriptor.");
+			if (srvDescriptor.IsNull()) return DetailedResult::Fail("Failed to allocate descriptor.");
 
 			VkImageViewType srvViewType = VK_IMAGE_VIEW_TYPE_2D;
 			if (desc.isCubemap)
@@ -2609,7 +2609,7 @@ namespace ig
 
 			// SRV
 			impl.imageView_SRV = CreateImageView(impl.image[0], srvViewType, srvFormat, srvAspect);
-			if (!impl.imageView_SRV) return DetailedResult::MakeFail("Failed to create SRV image view.");
+			if (!impl.imageView_SRV) return DetailedResult::Fail("Failed to create SRV image view.");
 			heap.WriteImageDescriptor(srvDescriptor, impl.imageView_SRV, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 		}
 
@@ -2617,13 +2617,13 @@ namespace ig
 		{
 			// Allocate descriptor
 			uavDescriptor = heap.AllocatePersistent(DescriptorType::Texture_UAV);
-			if (uavDescriptor.IsNull()) return DetailedResult::MakeFail("Failed to allocate descriptor.");
+			if (uavDescriptor.IsNull()) return DetailedResult::Fail("Failed to allocate descriptor.");
 
 			VkImageViewType viewType = (desc.numFaces == 1) ? VK_IMAGE_VIEW_TYPE_2D : VK_IMAGE_VIEW_TYPE_2D_ARRAY;
 
 			// UAV
 			impl.imageView_UAV = CreateImageView(impl.image[0], viewType, vkFormat, VK_IMAGE_ASPECT_COLOR_BIT);
-			if (!impl.imageView_UAV) return DetailedResult::MakeFail("Failed to create UAV image view.");
+			if (!impl.imageView_UAV) return DetailedResult::Fail("Failed to create UAV image view.");
 			heap.WriteImageDescriptor(uavDescriptor, impl.imageView_UAV, VK_IMAGE_LAYOUT_GENERAL);
 		}
 
@@ -2645,7 +2645,7 @@ namespace ig
 			{
 				aspectFlags = VK_IMAGE_ASPECT_COLOR_BIT;
 				impl.imageView_RTV_DSV = CreateImageView(impl.image[0], viewType, vkFormat, aspectFlags);
-				if (!impl.imageView_RTV_DSV) return DetailedResult::MakeFail("Failed to create RTV image view.");
+				if (!impl.imageView_RTV_DSV) return DetailedResult::Fail("Failed to create RTV image view.");
 			}
 			else if (desc.usage == TextureUsage::DepthBuffer)
 			{
@@ -2655,11 +2655,11 @@ namespace ig
 					aspectFlags |= VK_IMAGE_ASPECT_STENCIL_BIT;
 				}
 				impl.imageView_RTV_DSV = CreateImageView(impl.image[0], viewType, vkFormat, aspectFlags);
-				if (!impl.imageView_RTV_DSV) return DetailedResult::MakeFail("Failed to create DSV image view.");
+				if (!impl.imageView_RTV_DSV) return DetailedResult::Fail("Failed to create DSV image view.");
 			}
 		}
 
-		return DetailedResult::MakeSuccess();
+		return DetailedResult::Success();
 	}
 
 	VkImage Texture::GetVulkanImage() const
@@ -2798,7 +2798,7 @@ namespace ig
 			VkResult result = vkCreateBuffer(device, &bufferInfo, nullptr, &impl.buffer[i]);
 			if (result != VK_SUCCESS)
 			{
-				return DetailedResult::MakeFail(CreateVulkanErrorMsg("vkCreateBuffer", result));
+				return DetailedResult::Fail(CreateVulkanErrorMsg("vkCreateBuffer", result));
 			}
 
 			VkMemoryRequirements memRequirements;
@@ -2807,7 +2807,7 @@ namespace ig
 			std::optional<uint32_t> memType = FindVulkanMemoryType(physicalDevice, memRequirements.memoryTypeBits, memoryProperties);
 			if (!memType)
 			{
-				return DetailedResult::MakeFail("FindVulkanMemoryType failed.");
+				return DetailedResult::Fail("FindVulkanMemoryType failed.");
 			}
 
 			VkMemoryAllocateInfo allocInfo = {};
@@ -2818,7 +2818,7 @@ namespace ig
 			result = vkAllocateMemory(device, &allocInfo, nullptr, &impl.memory[i]);
 			if (result != VK_SUCCESS)
 			{
-				return DetailedResult::MakeFail(CreateVulkanErrorMsg("vkAllocateMemory", result));
+				return DetailedResult::Fail(CreateVulkanErrorMsg("vkAllocateMemory", result));
 			}
 
 			vkBindBufferMemory(device, impl.buffer[i], impl.memory[i], 0);
@@ -2831,7 +2831,7 @@ namespace ig
 				result = vkMapMemory(device, impl.memory[i], 0, bufferSize, 0, &mappedPtr);
 				if (result != VK_SUCCESS)
 				{
-					return DetailedResult::MakeFail(CreateVulkanErrorMsg("vkMapMemory", result));
+					return DetailedResult::Fail(CreateVulkanErrorMsg("vkMapMemory", result));
 				}
 
 				mapped.push_back(mappedPtr);
@@ -2855,7 +2855,7 @@ namespace ig
 					: DescriptorType::RawOrStructuredBuffer_SRV_UAV;
 
 				Descriptor allocatedDescriptor = heap.AllocatePersistent(descriptorType);
-				if (allocatedDescriptor.IsNull()) return DetailedResult::MakeFail("Failed to allocate descriptor.");
+				if (allocatedDescriptor.IsNull()) return DetailedResult::Fail("Failed to allocate descriptor.");
 
 				heap.WriteBufferDescriptor(allocatedDescriptor, impl.buffer[i], 0, size);
 
@@ -2867,12 +2867,12 @@ namespace ig
 		if (usage == BufferUsage::UnorderedAccess)
 		{
 			descriptor_UAV = heap.AllocatePersistent(DescriptorType::RawOrStructuredBuffer_SRV_UAV);
-			if (descriptor_UAV.IsNull()) return DetailedResult::MakeFail("Failed to allocate UAV descriptor.");
+			if (descriptor_UAV.IsNull()) return DetailedResult::Fail("Failed to allocate UAV descriptor.");
 
 			heap.WriteBufferDescriptor(descriptor_UAV, impl.buffer[0], 0, size);
 		}
 
-		return DetailedResult::MakeSuccess();
+		return DetailedResult::Success();
 	}
 
 	VkBuffer Buffer::GetVulkanBuffer() const
@@ -2917,7 +2917,7 @@ namespace ig
 		descriptor = heap.AllocatePersistent(DescriptorType::Sampler);
 		if (descriptor.IsNull())
 		{
-			return DetailedResult::MakeFail("Failed to allocate sampler descriptor.");
+			return DetailedResult::Fail("Failed to allocate sampler descriptor.");
 		}
 
 		VkClearColorValue borderColor = {};
@@ -2954,12 +2954,12 @@ namespace ig
 		VkResult result = vkCreateSampler(device, &samplerInfo, nullptr, &vkSampler);
 		if (result != VK_SUCCESS)
 		{
-			return DetailedResult::MakeFail(CreateVulkanErrorMsg("vkCreateSampler", result));
+			return DetailedResult::Fail(CreateVulkanErrorMsg("vkCreateSampler", result));
 		}
 
 		heap.WriteSamplerDescriptor(descriptor, vkSampler);
 
-		return DetailedResult::MakeSuccess();
+		return DetailedResult::Success();
 	}
 
 	uint32_t IGLOContext::Impl_GetMaxMultiSampleCount(Format textureFormat) const
@@ -3048,7 +3048,7 @@ namespace ig
 			// If we can't create a valid swapchain yet
 			if (cappedExtent.width == 0 || cappedExtent.height == 0)
 			{
-				return DetailedResult::MakeFail("Min/max image caps are invalid.");
+				return DetailedResult::Fail("Min/max image caps are invalid.");
 			}
 
 			Event resizeEvent;
@@ -3095,7 +3095,7 @@ namespace ig
 		VkResult result = vkCreateSwapchainKHR(graphics.device, &createInfo, nullptr, &newSwapchain);
 		if (result != VK_SUCCESS)
 		{
-			return DetailedResult::MakeFail(CreateVulkanErrorMsg("vkCreateSwapchainKHR", result));
+			return DetailedResult::Fail(CreateVulkanErrorMsg("vkCreateSwapchainKHR", result));
 		}
 
 		DestroySwapChainResources();
@@ -3131,7 +3131,7 @@ namespace ig
 		result = vkGetSwapchainImagesKHR(graphics.device, graphics.swapChain, &imageCount, swapchainImages.data());
 		if (result != VK_SUCCESS)
 		{
-			return DetailedResult::MakeFail(CreateVulkanErrorMsg("vkGetSwapchainImagesKHR", result));
+			return DetailedResult::Fail(CreateVulkanErrorMsg("vkGetSwapchainImagesKHR", result));
 		}
 
 		// Wrap backbuffers
@@ -3189,7 +3189,7 @@ namespace ig
 			Log(LogType::Error, "Failed to acquire swapchain image at swapchain creation (" + vk::to_string((vk::Result)result) + ").");
 		}
 
-		return DetailedResult::MakeSuccess();
+		return DetailedResult::Success();
 	}
 
 	void IGLOContext::HandleVulkanSwapChainResult(VkResult result, const std::string& scenario)
@@ -3300,7 +3300,7 @@ namespace ig
 				}
 				errStr.append("\n");
 				errStr.append(strEnsureLatestDrivers);
-				return DetailedResult::MakeFail(errStr);
+				return DetailedResult::Fail(errStr);
 			}
 		}
 
@@ -3353,7 +3353,7 @@ namespace ig
 			}
 			else
 			{
-				return DetailedResult::MakeFail(ToString("The requested validation layer ", validationLayerName, " is not present."));
+				return DetailedResult::Fail(ToString("The requested validation layer ", validationLayerName, " is not present."));
 			}
 		}
 #endif
@@ -3361,7 +3361,7 @@ namespace ig
 		VkResult result = vkCreateInstance(&instanceInfo, nullptr, &graphics.instance);
 		if (result != VK_SUCCESS)
 		{
-			return DetailedResult::MakeFail(CreateVulkanErrorMsg("vkCreateInstance", result));
+			return DetailedResult::Fail(CreateVulkanErrorMsg("vkCreateInstance", result));
 		}
 
 #ifdef _DEBUG
@@ -3369,7 +3369,7 @@ namespace ig
 		result = CreateDebugUtilsMessengerEXT(graphics.instance, &debugInfo, nullptr, &graphics.debugMessenger);
 		if (result != VK_SUCCESS)
 		{
-			return DetailedResult::MakeFail(CreateVulkanErrorMsg("CreateDebugUtilsMessengerEXT", result));
+			return DetailedResult::Fail(CreateVulkanErrorMsg("CreateDebugUtilsMessengerEXT", result));
 		}
 #endif
 
@@ -3383,7 +3383,7 @@ namespace ig
 			result = vkCreateWin32SurfaceKHR(graphics.instance, &win32SurfaceInfo, nullptr, &graphics.surface);
 			if (result != VK_SUCCESS)
 			{
-				return DetailedResult::MakeFail(CreateVulkanErrorMsg("vkCreateWin32SurfaceKHR", result));
+				return DetailedResult::Fail(CreateVulkanErrorMsg("vkCreateWin32SurfaceKHR", result));
 			}
 		}
 #endif
@@ -3397,7 +3397,7 @@ namespace ig
 			VkResult result = vkCreateXlibSurfaceKHR(graphics.instance, &xlibSurfaceInfo, nullptr, &graphics.surface);
 			if (result != VK_SUCCESS)
 			{
-				return DetailedResult::MakeFail(CreateVulkanErrorMsg("vkCreateXlibSurfaceKHR", result));
+				return DetailedResult::Fail(CreateVulkanErrorMsg("vkCreateXlibSurfaceKHR", result));
 			}
 		}
 #endif
@@ -3408,7 +3408,7 @@ namespace ig
 			vkEnumeratePhysicalDevices(graphics.instance, &physicalDeviceCount, nullptr);
 			if (physicalDeviceCount == 0)
 			{
-				return DetailedResult::MakeFail("No Vulkan compatible device found.");
+				return DetailedResult::Fail("No Vulkan compatible device found.");
 			}
 			std::vector<VkPhysicalDevice> physicalDeviceList(physicalDeviceCount);
 			vkEnumeratePhysicalDevices(graphics.instance, &physicalDeviceCount, physicalDeviceList.data());
@@ -3489,7 +3489,7 @@ namespace ig
 				}
 				errStr.append("\n");
 				errStr.append(strEnsureLatestDrivers);
-				return DetailedResult::MakeFail(errStr);
+				return DetailedResult::Fail(errStr);
 			}
 
 			graphics.physicalDevice = physicalDeviceList[bestIndex];
@@ -3514,7 +3514,7 @@ namespace ig
 			vkGetPhysicalDeviceSurfacePresentModesKHR(graphics.physicalDevice, graphics.surface, &presentModeCount, nullptr);
 			if (presentModeCount == 0)
 			{
-				return DetailedResult::MakeFail("No present modes are supported. This should be impossible.");
+				return DetailedResult::Fail("No present modes are supported. This should be impossible.");
 			}
 			std::vector<VkPresentModeKHR> presentModes(presentModeCount);
 			vkGetPhysicalDeviceSurfacePresentModesKHR(graphics.physicalDevice, graphics.surface, &presentModeCount, presentModes.data());
@@ -3632,10 +3632,10 @@ namespace ig
 		result = vkCreateDevice(graphics.physicalDevice, &deviceInfo, nullptr, &graphics.device);
 		if (result != VK_SUCCESS)
 		{
-			return DetailedResult::MakeFail(CreateVulkanErrorMsg("vkCreateDevice", result));
+			return DetailedResult::Fail(CreateVulkanErrorMsg("vkCreateDevice", result));
 		}
 
-		return DetailedResult::MakeSuccess();
+		return DetailedResult::Success();
 	}
 
 	void IGLOContext::Impl_UnloadGraphicsDevice()

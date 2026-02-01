@@ -147,9 +147,22 @@ function(add_example name)
             target_link_libraries(${name} PRIVATE vulkan)
         endif()
     endif()
+
     if(UNIX)
         find_package(X11 REQUIRED)
-        target_link_libraries(${name} PRIVATE X11)
+
+        if(NOT X11_Xcursor_FOUND)
+            message(FATAL_ERROR "Xcursor library not found.")
+        endif()
+
+        target_include_directories(${name} PRIVATE
+            ${X11_Xcursor_INCLUDE_PATH}
+        )
+
+        target_link_libraries(${name} PRIVATE
+            X11
+            ${X11_Xcursor_LIB}
+        )
     endif()
 
     # create 'iglo' filter

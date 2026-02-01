@@ -7,6 +7,8 @@
 #include <X11/Xatom.h>
 #include <X11/XKBlib.h>
 #include <X11/XF86keysym.h>
+#include <X11/cursorfont.h>
+#include <X11/Xcursor/Xcursor.h>
 #include <cstring>
 
 namespace ig
@@ -367,7 +369,7 @@ namespace ig
 
 		bool minimized = false;
 
-		if (status == Success && prop)
+		if (status == Success_ && prop)
 		{
 			Atom* atoms = (Atom*)prop;
 			for (unsigned long i = 0; i < nitems; i++)
@@ -393,6 +395,127 @@ namespace ig
 		XChangeProperty(display, window, net_wm_name, utf8_string, 8, PropModeReplace,
 			(const unsigned char*)title.c_str(), title.length());
 		XFlush(display);
+	}
+
+	void Cursor::Impl_Unload()
+	{
+		if (impl.xcursor)
+		{
+			if (!context || !context->IsLoaded()) throw std::runtime_error("This should be impossible.");
+			if (context->GetCursor() == this) context->ResetCursor();
+			XFreeCursor(impl.display, impl.xcursor);
+		}
+		
+		impl = Impl_Cursor();
+	}
+
+	DetailedResult Cursor::Impl_LoadFromSystem(const IGLOContext& context, SystemCursor systemCursor)
+	{
+		Display* display = context.GetX11WindowDisplay();
+
+		const char* cursorName = nullptr;
+		switch (systemCursor)
+		{
+		case SystemCursor::Arrow:      cursorName = "default"; break;
+		case SystemCursor::IBeam:      cursorName = "text"; break;
+		case SystemCursor::Wait:       cursorName = "wait"; break;
+		case SystemCursor::Crosshair:  cursorName = "crosshair"; break;
+		case SystemCursor::Size_NWSE:  cursorName = "bottom_right_corner"; break;
+		case SystemCursor::Size_NESW:  cursorName = "bottom_left_corner"; break;
+		case SystemCursor::Size_WE:    cursorName = "sb_h_double_arrow"; break;
+		case SystemCursor::Size_NS:    cursorName = "sb_v_double_arrow"; break;
+		case SystemCursor::Size_All:   cursorName = "fleur"; break;
+		case SystemCursor::No:         cursorName = "no-drop"; break;
+		case SystemCursor::Hand:       cursorName = "hand2"; break;
+
+		default:
+			return DetailedResult::Fail("Unknown system cursor.");
+		}
+
+		// Load cursor from Xcursor library
+		X11Cursor xcursor = XcursorLibraryLoadCursor(display, cursorName);
+		if (!xcursor)
+		{
+			return DetailedResult::Fail("XcursorLibraryLoadCursor failed. Maybe the Xcursor library is missing?");
+		}
+
+		impl.display = display;
+		impl.xcursor = xcursor;
+
+		return DetailedResult::Success();
+	}
+
+	DetailedResult Cursor::Impl_LoadFromMemory_BGRA(const IGLOContext& context, Extent2D extent, const uint32_t* pixels, IntPoint hotspot)
+	{
+		Display* display = context.GetX11WindowDisplay();
+
+		XcursorImage* image = XcursorImageCreate(extent.width, extent.height);
+		if (!image) return DetailedResult::Fail("XcursorImageCreate failed.");
+
+		image->xhot = hotspot.x;
+		image->yhot = hotspot.y;
+		
+		// Premultiply alpha
+		const size_t pixelCount = (size_t)extent.width * extent.height;
+		uint32_t* dest = (uint32_t*)image->pixels;
+		for (size_t i = 0; i < pixelCount; i++)
+		{
+			uint32_t p = pixels[i];
+
+			byte a = (p >> 24) & 0xFF;
+			byte r = (p >> 16) & 0xFF;
+			byte g = (p >> 8) & 0xFF;
+			byte b = (p >> 0) & 0xFF;
+
+			if (a == 255)
+			{
+				dest[i] = p;
+			}
+			else if (a == 0)
+			{
+				dest[i] = 0;
+			}
+			else
+			{
+				r = (r * a + 127) / 255;
+				g = (g * a + 127) / 255;
+				b = (b * a + 127) / 255;
+
+				dest[i] = (uint32_t(a) << 24) | (uint32_t(r) << 16) | (uint32_t(g) << 8) | uint32_t(b);
+			}
+		}
+
+		X11Cursor xcursor = XcursorImageLoadCursor(display, image);
+		XcursorImageDestroy(image);
+
+		if (!xcursor) return DetailedResult::Fail("XcursorImageLoadCursor failed.");
+
+		impl.display = display;
+		impl.xcursor = xcursor;
+
+		return DetailedResult::Success();
+	}
+
+	void IGLOContext::SetCursor(const Cursor& cursor) const
+	{
+		if (!cursor.IsLoaded())
+		{
+			Log(LogType::Error, "Failed to set cursor. Reason: Invalid cursor.");
+			return;
+		}
+
+		currentCursor = &cursor;
+
+		XDefineCursor(window.display, window.handle, cursor.GetX11CursorHandle());
+		XFlush(window.display);
+	}
+
+	void IGLOContext::ResetCursor() const
+	{
+		currentCursor = nullptr;
+
+		XDefineCursor(window.display, window.handle, window.defaultCursor);
+		XFlush(window.display);
 	}
 
 	std::string IGLOContext::PasteTextFromClipboard() const
@@ -486,16 +609,15 @@ namespace ig
 		SetXDecorationsVisible(window.display, window.handle, visible);
 	}
 
-	void IGLOContext::Impl_SetWindowIconFromImage_BGRA(uint32_t width, uint32_t height, const uint32_t* iconPixels)
+	void IGLOContext::Impl_SetWindowIconFromImage_BGRA(Extent2D extent, const uint32_t* pixels)
 	{
-		// Total length: 2 (width + height) + pixels
-		uint32_t dataLength = 2 + (width * height);
+		uint32_t dataLength = 2 + (extent.width * extent.height);
 
 		std::vector<uint32_t> iconData(dataLength);
-		iconData[0] = width;
-		iconData[1] = height;
+		iconData[0] = extent.width;
+		iconData[1] = extent.height;
 
-		std::copy(iconPixels, iconPixels + (width * height), iconData.begin() + 2);
+		std::copy(pixels, pixels + (extent.width * extent.height), iconData.begin() + 2);
 
 		SetXWindowIcon(window.display, window.handle, iconData.data(), dataLength);
 	}
@@ -645,6 +767,7 @@ namespace ig
 		// Cleanup X11
 		if (window.display)
 		{
+			if (window.defaultCursor) XFreeCursor(window.display, window.defaultCursor);
 			if (window.xic) XDestroyIC(window.xic);
 			if (window.xim) XCloseIM(window.xim);
 			if (window.handle)
@@ -666,7 +789,7 @@ namespace ig
 		window.display = XOpenDisplay(0);
 		if (!window.display)
 		{
-			return DetailedResult::MakeFail("Failed to open display.");
+			return DetailedResult::Fail("Failed to open display.");
 		}
 		window.screen = DefaultScreenOfDisplay(window.display);
 		window.screenId = DefaultScreen(window.display);
@@ -686,12 +809,12 @@ namespace ig
 
 		if (!XMatchVisualInfo(window.display, window.screenId, depth, visualClass, &window.visualInfo))
 		{
-			return DetailedResult::MakeFail("No matching visual found.");
+			return DetailedResult::Fail("No matching visual found.");
 		}
 
 		if (window.screenId != window.visualInfo.screen)
 		{
-			return DetailedResult::MakeFail("screenId does not match visualInfo.");
+			return DetailedResult::Fail("screenId does not match visualInfo.");
 		}
 
 		// Open the window
@@ -726,13 +849,13 @@ namespace ig
 		window.xim = XOpenIM(window.display, 0, 0, 0);
 		if (!window.xim)
 		{
-			return DetailedResult::MakeFail("Failed to open input method.");
+			return DetailedResult::Fail("Failed to open input method.");
 		}
 
 		XIMStyles* ximStyles = nullptr;
 		if (XGetIMValues(window.xim, XNQueryInputStyle, &ximStyles, NULL) || ximStyles == nullptr)
 		{
-			return DetailedResult::MakeFail("Failed to get input styles.");
+			return DetailedResult::Fail("Failed to get input styles.");
 		}
 
 		XIMStyle bestStyle = 0;
@@ -749,7 +872,7 @@ namespace ig
 
 		if (!bestStyle)
 		{
-			return DetailedResult::MakeFail("Failed to find matching input style.");
+			return DetailedResult::Fail("Failed to find matching input style.");
 		}
 
 		window.xic = XCreateIC(window.xim, XNInputStyle, bestStyle,
@@ -757,7 +880,7 @@ namespace ig
 			XNFocusWindow, window.handle, NULL);
 		if (!window.xic)
 		{
-			return DetailedResult::MakeFail("Failed to create input context.");
+			return DetailedResult::Fail("Failed to create input context.");
 		}
 
 		SetXWindowTitle(window.display, window.handle, window.title);
@@ -765,7 +888,11 @@ namespace ig
 		SetXDecorationsVisible(window.display, window.handle, windowedMode.bordersVisible);
 		XClearWindow(window.display, window.handle);
 
-		return DetailedResult::MakeSuccess();
+		window.defaultCursor = XCreateFontCursor(window.display, XC_left_ptr);
+		XDefineCursor(window.display, window.handle, window.defaultCursor);
+		XFlush(window.display);
+
+		return DetailedResult::Success();
 	}
 
 	void IGLOContext::ProcessX11Event(XEvent e)

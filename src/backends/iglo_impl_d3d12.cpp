@@ -342,9 +342,9 @@ namespace ig
 		HRESULT hr = context.GetD3D12Device()->CreateGraphicsPipelineState(&pipe, IID_PPV_ARGS(&impl.pipeline));
 		if (FAILED(hr))
 		{
-			return DetailedResult::MakeFail(CreateD3D12ErrorMsg("ID3D12Device::CreateGraphicsPipelineState", hr));
+			return DetailedResult::Fail(CreateD3D12ErrorMsg("ID3D12Device::CreateGraphicsPipelineState", hr));
 		}
-		return DetailedResult::MakeSuccess();
+		return DetailedResult::Success();
 	}
 
 	DetailedResult Pipeline::Impl_LoadAsCompute(const IGLOContext& context, const Shader& CS)
@@ -356,10 +356,10 @@ namespace ig
 		HRESULT hr = context.GetD3D12Device()->CreateComputePipelineState(&computeDesc, IID_PPV_ARGS(&impl.pipeline));
 		if (FAILED(hr))
 		{
-			return DetailedResult::MakeFail(CreateD3D12ErrorMsg("ID3D12Device::CreateComputePipelineState", hr));
+			return DetailedResult::Fail(CreateD3D12ErrorMsg("ID3D12Device::CreateComputePipelineState", hr));
 		}
 
-		return DetailedResult::MakeSuccess();
+		return DetailedResult::Success();
 	}
 
 	void CommandQueue::Impl_Unload()
@@ -395,13 +395,13 @@ namespace ig
 			HRESULT hr = context.GetD3D12Device()->CreateCommandQueue(&queueDesc[i], IID_PPV_ARGS(&impl.commandQueues[i]));
 			if (FAILED(hr))
 			{
-				return DetailedResult::MakeFail(CreateD3D12ErrorMsg("ID3D12Device10::CreateCommandQueue", hr));
+				return DetailedResult::Fail(CreateD3D12ErrorMsg("ID3D12Device10::CreateCommandQueue", hr));
 			}
 
 			hr = context.GetD3D12Device()->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&impl.fences[i]));
 			if (FAILED(hr))
 			{
-				return DetailedResult::MakeFail(CreateD3D12ErrorMsg("ID3D12Device10::CreateCommandQueue", hr));
+				return DetailedResult::Fail(CreateD3D12ErrorMsg("ID3D12Device10::CreateCommandQueue", hr));
 			}
 
 			impl.fenceValues[i] = 0;
@@ -410,10 +410,10 @@ namespace ig
 		impl.fenceEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr);
 		if (!impl.fenceEvent)
 		{
-			return DetailedResult::MakeFail("Failed to create fence event.");
+			return DetailedResult::Fail("Failed to create fence event.");
 		}
 
-		return DetailedResult::MakeSuccess();
+		return DetailedResult::Success();
 	}
 
 	Receipt CommandQueue::Impl_SubmitCommands(const CommandList* const* commandLists, uint32_t numCommandLists, CommandListType cmdType)
@@ -500,7 +500,7 @@ namespace ig
 			HRESULT hr = device->CreateCommandAllocator(d3d12CmdType, IID_PPV_ARGS(&impl.commandAllocator[i]));
 			if (FAILED(hr))
 			{
-				return DetailedResult::MakeFail(CreateD3D12ErrorMsg("ID3D12Device::CreateCommandAllocator", hr));
+				return DetailedResult::Fail(CreateD3D12ErrorMsg("ID3D12Device::CreateCommandAllocator", hr));
 			}
 		}
 
@@ -511,12 +511,12 @@ namespace ig
 				nullptr, IID_PPV_ARGS(&cmdList0));
 			if (FAILED(hr))
 			{
-				return DetailedResult::MakeFail(CreateD3D12ErrorMsg("ID3D12Device::CreateCommandList", hr));
+				return DetailedResult::Fail(CreateD3D12ErrorMsg("ID3D12Device::CreateCommandList", hr));
 			}
 			hr = cmdList0.As(&impl.graphicsCommandList);
 			if (FAILED(hr))
 			{
-				return DetailedResult::MakeFail(CreateD3D12ErrorMsg("ComPtr::As", hr));
+				return DetailedResult::Fail(CreateD3D12ErrorMsg("ComPtr::As", hr));
 			}
 		}
 		impl.graphicsCommandList->Close();
@@ -525,7 +525,7 @@ namespace ig
 		impl.textureBarriers = {};
 		impl.bufferBarriers = {};
 
-		return DetailedResult::MakeSuccess();
+		return DetailedResult::Success();
 	}
 
 	void CommandList::Impl_Begin()
@@ -990,7 +990,7 @@ namespace ig
 		FormatInfoDXGI formatInfoD3D = GetFormatInfoDXGI(desc.format);
 		if (formatInfoD3D.dxgiFormat == DXGI_FORMAT_UNKNOWN)
 		{
-			return DetailedResult::MakeFail(ToString("This iglo format is not supported in D3D12: ", (uint32_t)desc.format, "."));
+			return DetailedResult::Fail(ToString("This iglo format is not supported in D3D12: ", (uint32_t)desc.format, "."));
 		}
 
 		uint32_t numResources = (desc.usage == TextureUsage::Readable) ? context.GetMaxFramesInFlight() : 1;
@@ -1075,7 +1075,7 @@ namespace ig
 				initLayout, ptrClearValue, nullptr, 0, nullptr, IID_PPV_ARGS(&impl.resource[i]));
 			if (FAILED(hr))
 			{
-				return DetailedResult::MakeFail(CreateD3D12ErrorMsg("ID3D12Device10::CreateCommittedResource3", hr));
+				return DetailedResult::Fail(CreateD3D12ErrorMsg("ID3D12Device10::CreateCommittedResource3", hr));
 			}
 
 			// Map resources
@@ -1085,7 +1085,7 @@ namespace ig
 				hr = impl.resource[i]->Map(0, nullptr, &mappedPtr);
 				if (FAILED(hr))
 				{
-					return DetailedResult::MakeFail(CreateD3D12ErrorMsg("ID3D12Resource::Map", hr));
+					return DetailedResult::Fail(CreateD3D12ErrorMsg("ID3D12Resource::Map", hr));
 				}
 
 				readMapped.push_back(mappedPtr);
@@ -1108,7 +1108,7 @@ namespace ig
 			srvDescriptor = heap.AllocatePersistent(DescriptorType::Texture_SRV);
 			if (srvDescriptor.IsNull())
 			{
-				return DetailedResult::MakeFail("Failed to allocate descriptor.");
+				return DetailedResult::Fail("Failed to allocate descriptor.");
 			}
 
 			D3D12_SHADER_RESOURCE_VIEW_DESC srv = {};
@@ -1181,7 +1181,7 @@ namespace ig
 			uavDescriptor = heap.AllocatePersistent(DescriptorType::Texture_UAV);
 			if (uavDescriptor.IsNull())
 			{
-				return DetailedResult::MakeFail("Failed to allocate descriptor.");
+				return DetailedResult::Fail("Failed to allocate descriptor.");
 			}
 
 			D3D12_UNORDERED_ACCESS_VIEW_DESC uav = GenerateD3D12Desc_UAV(desc.format, desc.msaa, desc.numFaces);
@@ -1204,7 +1204,7 @@ namespace ig
 			impl.desc_cpu.uav = GenerateD3D12Desc_UAV(desc.format, desc.msaa, desc.numFaces);
 		}
 
-		return DetailedResult::MakeSuccess();
+		return DetailedResult::Success();
 	}
 
 	ID3D12Resource* Texture::GetD3D12Resource() const
@@ -1436,7 +1436,7 @@ namespace ig
 				nullptr, nullptr, 0, nullptr, IID_PPV_ARGS(&impl.resource[i]));
 			if (FAILED(hr))
 			{
-				return DetailedResult::MakeFail(CreateD3D12ErrorMsg("ID3D12Device10::CreateCommittedResource3", hr));
+				return DetailedResult::Fail(CreateD3D12ErrorMsg("ID3D12Device10::CreateCommittedResource3", hr));
 			}
 
 			if (usage == BufferUsage::Dynamic ||
@@ -1447,7 +1447,7 @@ namespace ig
 				hr = impl.resource[i]->Map(0, (usage == BufferUsage::Readable) ? nullptr : &noRead, &mappedPtr);
 				if (FAILED(hr))
 				{
-					return DetailedResult::MakeFail(CreateD3D12ErrorMsg("ID3D12Resource::Map", hr));
+					return DetailedResult::Fail(CreateD3D12ErrorMsg("ID3D12Resource::Map", hr));
 				}
 
 				mapped.push_back(mappedPtr);
@@ -1472,7 +1472,7 @@ namespace ig
 				Descriptor allocatedDescriptor = heap.AllocatePersistent(descriptorType);
 				if (allocatedDescriptor.IsNull())
 				{
-					return DetailedResult::MakeFail("Failed to allocate descriptor.");
+					return DetailedResult::Fail("Failed to allocate descriptor.");
 				}
 
 				if (type == BufferType::ShaderConstant)
@@ -1520,7 +1520,7 @@ namespace ig
 			descriptor_UAV = heap.AllocatePersistent(DescriptorType::RawOrStructuredBuffer_SRV_UAV);
 			if (descriptor_UAV.IsNull())
 			{
-				return DetailedResult::MakeFail("Failed to allocate descriptor.");
+				return DetailedResult::Fail("Failed to allocate descriptor.");
 			}
 
 			if (type == BufferType::StructuredBuffer)
@@ -1536,7 +1536,7 @@ namespace ig
 			device->CreateUnorderedAccessView(impl.resource[0].Get(), nullptr, &impl.desc_cpu_uav, heap.GetD3D12CPUHandle(descriptor_UAV));
 		}
 
-		return DetailedResult::MakeSuccess();
+		return DetailedResult::Success();
 	}
 
 	ID3D12Resource* Buffer::GetD3D12Resource() const
@@ -1598,7 +1598,7 @@ namespace ig
 		descriptor = heap.AllocatePersistent(DescriptorType::Sampler);
 		if (descriptor.IsNull())
 		{
-			return DetailedResult::MakeFail("Failed to allocate sampler descriptor.");
+			return DetailedResult::Fail("Failed to allocate sampler descriptor.");
 		}
 
 		D3D12TextureFilter filterD3D = ConvertToD3D12TextureFilter(desc.filter);
@@ -1619,7 +1619,7 @@ namespace ig
 		samplerDesc.BorderColor[3] = desc.borderColor.alpha;
 		device->CreateSampler(&samplerDesc, heap.GetD3D12CPUHandle(descriptor));
 
-		return DetailedResult::MakeSuccess();
+		return DetailedResult::Success();
 	}
 
 	void TempBufferAllocator::Page::Impl_Free(const IGLOContext& context)
@@ -1713,7 +1713,7 @@ namespace ig
 
 			if (FAILED(hrRTV) || FAILED(hrDSV) || FAILED(hrUAV))
 			{
-				return DetailedResult::MakeFail("Failed to create CPU-only descriptor heaps.");
+				return DetailedResult::Fail("Failed to create CPU-only descriptor heaps.");
 			}
 		}
 
@@ -1735,7 +1735,7 @@ namespace ig
 
 			if (FAILED(hrRes) || FAILED(hrSampler))
 			{
-				return DetailedResult::MakeFail("Failed to create shader visible descriptor heaps.");
+				return DetailedResult::Fail("Failed to create shader visible descriptor heaps.");
 			}
 		}
 
@@ -1766,14 +1766,14 @@ namespace ig
 			HRESULT hr = D3D12SerializeVersionedRootSignature(&versionedRootSignatureDesc, &signature, &error);
 			if (FAILED(hr))
 			{
-				return DetailedResult::MakeFail(CreateD3D12ErrorMsg("D3D12SerializeRootSignature", hr));
+				return DetailedResult::Fail(CreateD3D12ErrorMsg("D3D12SerializeRootSignature", hr));
 			}
 
 			hr = device->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(),
 				IID_PPV_ARGS(&impl.bindlessRootSignature));
 			if (FAILED(hr))
 			{
-				return DetailedResult::MakeFail(CreateD3D12ErrorMsg("CreateRootSignature", hr));
+				return DetailedResult::Fail(CreateD3D12ErrorMsg("CreateRootSignature", hr));
 			}
 		}
 
@@ -1783,7 +1783,7 @@ namespace ig
 		impl.descriptorSize_Sampler = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
 		impl.descriptorSize_CBV_SRV_UAV = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
-		return DetailedResult::MakeSuccess();
+		return DetailedResult::Success();
 	}
 
 	void DescriptorHeap::Impl_NextFrame()
@@ -1912,12 +1912,12 @@ namespace ig
 			window.hwnd, &swapChainDesc, nullptr, nullptr, &swapChain1);
 		if (FAILED(hr))
 		{
-			return DetailedResult::MakeFail(CreateD3D12ErrorMsg("ID3D12Device::CreateSwapChainForHwnd", hr));
+			return DetailedResult::Fail(CreateD3D12ErrorMsg("ID3D12Device::CreateSwapChainForHwnd", hr));
 		}
 		hr = swapChain1.As(&graphics.swapChain);
 		if (FAILED(hr))
 		{
-			return DetailedResult::MakeFail(CreateD3D12ErrorMsg("ComPtr::As(IDXGISwapChain3)", hr));
+			return DetailedResult::Fail(CreateD3D12ErrorMsg("ComPtr::As(IDXGISwapChain3)", hr));
 		}
 		hr = graphics.swapChain->SetMaximumFrameLatency(numFramesInFlight);
 		if (FAILED(hr))
@@ -1941,7 +1941,7 @@ namespace ig
 			{
 				swapChain.wrapped.clear();
 				swapChain.wrapped_sRGB_opposite.clear();
-				return DetailedResult::MakeFail(CreateD3D12ErrorMsg("IDXGISwapChain3::GetBuffer", hr));
+				return DetailedResult::Fail(CreateD3D12ErrorMsg("IDXGISwapChain3::GetBuffer", hr));
 			}
 
 			WrappedTextureDesc desc;
@@ -1966,7 +1966,7 @@ namespace ig
 			}
 		}
 
-		return DetailedResult::MakeSuccess();
+		return DetailedResult::Success();
 	}
 
 	bool IGLOContext::ResizeD3D12SwapChain(Extent2D extent)
@@ -2077,7 +2077,7 @@ namespace ig
 		hr = CreateDXGIFactory2(factoryFlags, IID_PPV_ARGS(&graphics.factory));
 		if (FAILED(hr))
 		{
-			return DetailedResult::MakeFail(CreateD3D12ErrorMsg("CreateDXGIFactory2", hr));
+			return DetailedResult::Fail(CreateD3D12ErrorMsg("CreateDXGIFactory2", hr));
 		}
 
 		// Find a suitable adapter
@@ -2127,7 +2127,7 @@ namespace ig
 			// Couldn't find a suitable adapter
 			if (!foundSuitableAdapter)
 			{
-				return DetailedResult::MakeFail(ToString(
+				return DetailedResult::Fail(ToString(
 					"No adaptor found capable of feature level ", ConvertFeatureLevelToString(d3d12FeatureLevel), ". ",
 					strLatestDrivers));
 			}
@@ -2139,12 +2139,12 @@ namespace ig
 			hr = D3D12CreateDevice(adapter.Get(), d3d12FeatureLevel, IID_PPV_ARGS(&deviceVer0));
 			if (FAILED(hr))
 			{
-				return DetailedResult::MakeFail(CreateD3D12ErrorMsg("D3D12CreateDevice", hr));
+				return DetailedResult::Fail(CreateD3D12ErrorMsg("D3D12CreateDevice", hr));
 			}
 			hr = deviceVer0.As(&graphics.device);
 			if (FAILED(hr))
 			{
-				return DetailedResult::MakeFail(CreateD3D12ErrorMsg("ComPtr::As", hr));
+				return DetailedResult::Fail(CreateD3D12ErrorMsg("ComPtr::As", hr));
 			}
 		}
 
@@ -2162,7 +2162,7 @@ namespace ig
 			}
 			if (!supportsSM_6_6)
 			{
-				return DetailedResult::MakeFail(ToString(
+				return DetailedResult::Fail(ToString(
 					"Shader Model 6.6 is not supported on this device. ",
 					"Bindless rendering requires Shader Model 6.6 or later. ",
 					strLatestDrivers));
@@ -2179,7 +2179,7 @@ namespace ig
 			}
 			if (!supportsEnhancedBarriers)
 			{
-				return DetailedResult::MakeFail(ToString(
+				return DetailedResult::Fail(ToString(
 					"Enhanced Barriers are not supported on this device. ",
 					strLatestDrivers));
 			}
@@ -2198,7 +2198,7 @@ namespace ig
 			}
 			if (!supportBindless)
 			{
-				return DetailedResult::MakeFail(ToString(
+				return DetailedResult::Fail(ToString(
 					"Resource Binding Tier 3 is not supported on this device. "
 					"Bindless rendering requires Resource Binding Tier 3. ",
 					strLatestDrivers));
@@ -2212,13 +2212,13 @@ namespace ig
 
 			if (FAILED(graphics.device->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &features, sizeof(features))))
 			{
-				return DetailedResult::MakeFail(ToString(
+				return DetailedResult::Fail(ToString(
 					"Root signature version 1.1 is not supported on this device. ",
 					strLatestDrivers));
 			}
 		}
 
-		return DetailedResult::MakeSuccess();
+		return DetailedResult::Success();
 	}
 
 	void IGLOContext::Impl_UnloadGraphicsDevice()

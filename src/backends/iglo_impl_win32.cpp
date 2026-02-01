@@ -63,6 +63,149 @@ namespace ig
 		MessageBoxW(hwnd, (wchar_t*)utf16_message.c_str(), (wchar_t*)utf16_caption.c_str(), 0);
 	}
 
+	void Cursor::Impl_Unload()
+	{
+		if (impl.handle)
+		{
+			if (!context || !context->IsLoaded()) throw std::runtime_error("This should be impossible.");
+			if (context->GetCursor() == this) context->ResetCursor();
+		}
+		if (impl.handle && impl.ownsHandle)
+		{
+			DestroyCursor(impl.handle);
+		}
+
+		impl = Impl_Cursor();
+	}
+
+	DetailedResult Cursor::Impl_LoadFromSystem(const IGLOContext& context, SystemCursor systemCursor)
+	{
+		HCURSOR hCursor = nullptr;
+
+		switch (systemCursor)
+		{
+		case SystemCursor::Arrow:      hCursor = LoadCursor(nullptr, IDC_ARROW); break;
+		case SystemCursor::IBeam:      hCursor = LoadCursor(nullptr, IDC_IBEAM); break;
+		case SystemCursor::Wait:       hCursor = LoadCursor(nullptr, IDC_WAIT); break;
+		case SystemCursor::Crosshair:  hCursor = LoadCursor(nullptr, IDC_CROSS); break;
+		case SystemCursor::Size_NWSE:  hCursor = LoadCursor(nullptr, IDC_SIZENWSE); break;
+		case SystemCursor::Size_NESW:  hCursor = LoadCursor(nullptr, IDC_SIZENESW); break;
+		case SystemCursor::Size_WE:    hCursor = LoadCursor(nullptr, IDC_SIZEWE); break;
+		case SystemCursor::Size_NS:    hCursor = LoadCursor(nullptr, IDC_SIZENS); break;
+		case SystemCursor::Size_All:   hCursor = LoadCursor(nullptr, IDC_SIZEALL); break;
+		case SystemCursor::No:         hCursor = LoadCursor(nullptr, IDC_NO); break;
+		case SystemCursor::Hand:       hCursor = LoadCursor(nullptr, IDC_HAND); break;
+
+		default:
+			return DetailedResult::Fail("Unknown system cursor.");
+		}
+
+		if (!hCursor) return DetailedResult::Fail("LoadCursor failed.");
+
+		impl.handle = hCursor;
+		impl.ownsHandle = false;
+
+		return DetailedResult::Success();
+	}
+
+	DetailedResult Cursor::Impl_LoadFromMemory_BGRA(const IGLOContext& context, Extent2D extent, const uint32_t* pixels, IntPoint hotspot)
+	{
+		if (extent.width > LONG_MAX ||
+			extent.height > LONG_MAX)
+		{
+			return DetailedResult::Fail("Cursor image too large.");
+		}
+
+		// Create color bitmap (32-bit BGRA)
+		BITMAPV5HEADER bi{};
+		bi.bV5Size = sizeof(bi);
+		bi.bV5Width = LONG(extent.width);
+		bi.bV5Height = -LONG(extent.height); // top-down
+		bi.bV5Planes = 1;
+		bi.bV5BitCount = 32;
+		bi.bV5Compression = BI_BITFIELDS;
+		bi.bV5RedMask = 0x00FF0000;
+		bi.bV5GreenMask = 0x0000FF00;
+		bi.bV5BlueMask = 0x000000FF;
+		bi.bV5AlphaMask = 0xFF000000;
+
+		void* bits = nullptr;
+		HDC hdc = GetDC(nullptr);
+
+		HBITMAP hColorBitmap = CreateDIBSection(hdc, reinterpret_cast<BITMAPINFO*>(&bi), DIB_RGB_COLORS, &bits, nullptr, 0);
+		if (!hColorBitmap)
+		{
+			ReleaseDC(nullptr, hdc);
+			return DetailedResult::Fail("CreateDIBSection for color bitmap failed.");
+		}
+
+		// Premultiply alpha
+		const size_t pixelCount = (size_t)extent.width * extent.height;
+		uint32_t* dest = (uint32_t*)bits;
+		for (size_t i = 0; i < pixelCount; i++)
+		{
+			uint32_t p = pixels[i];
+
+			byte a = (p >> 24) & 0xFF;
+			byte r = (p >> 16) & 0xFF;
+			byte g = (p >> 8) & 0xFF;
+			byte b = (p >> 0) & 0xFF;
+
+			if (a == 255)
+			{
+				dest[i] = p;
+			}
+			else if (a == 0)
+			{
+				dest[i] = 0;
+			}
+			else
+			{
+				r = (r * a + 127) / 255;
+				g = (g * a + 127) / 255;
+				b = (b * a + 127) / 255;
+
+				dest[i] = (uint32_t(a) << 24) | (uint32_t(r) << 16) | (uint32_t(g) << 8) | uint32_t(b);
+			}
+		}
+		
+		// Create mask bitmap (monochrome, 1-bit)
+        // For BGRA cursors, mask should be all 0s (transparent)
+        // Create a monochrome bitmap with the same dimensions
+		HBITMAP hMaskBitmap = CreateBitmap(extent.width, extent.height, 1, 1, nullptr);
+		if (!hMaskBitmap)
+		{
+			DeleteObject(hColorBitmap);
+			ReleaseDC(nullptr, hdc);
+			return DetailedResult::Fail("CreateBitmap for mask failed.");
+		}
+
+		// Set mask bits to all 0s (transparent)
+		std::vector<byte> maskBits((((size_t)extent.width + 7) / 8) * extent.height, 0);
+		SetBitmapBits(hMaskBitmap, (DWORD)maskBits.size(), maskBits.data());
+
+		ReleaseDC(nullptr, hdc);
+
+		ICONINFO iconInfo{};
+		iconInfo.fIcon = FALSE;
+		iconInfo.xHotspot = hotspot.x;
+		iconInfo.yHotspot = hotspot.y;
+		iconInfo.hbmColor = hColorBitmap;
+		iconInfo.hbmMask = hMaskBitmap;
+
+		HCURSOR hCursor = CreateIconIndirect(&iconInfo);
+
+		DeleteObject(hColorBitmap);
+		DeleteObject(hMaskBitmap);
+
+		if (!hCursor) return DetailedResult::Fail("CreateIconIndirect failed.");
+
+		impl.handle = hCursor;
+		impl.ownsHandle = true;
+
+		return DetailedResult::Success();
+	}
+
 	Extent2D IGLOContext::GetActiveMonitorScreenResolution()
 	{
 		Extent2D out = {};
@@ -157,7 +300,7 @@ namespace ig
 		}
 	}
 
-	void IGLOContext::Impl_SetWindowIconFromImage_BGRA(uint32_t width, uint32_t height, const uint32_t* iconPixels)
+	void IGLOContext::Impl_SetWindowIconFromImage_BGRA(Extent2D extent, const uint32_t* pixels)
 	{
 		HINSTANCE hInstance = (HINSTANCE)GetModuleHandleW(0);
 		if (window.iconOwned)
@@ -165,9 +308,51 @@ namespace ig
 			DestroyIcon(window.iconOwned);
 			window.iconOwned = 0;
 		}
-		window.iconOwned = CreateIcon(hInstance, width, height, 1, 32, nullptr, (byte*)iconPixels);
+		window.iconOwned = CreateIcon(hInstance, extent.width, extent.height, 1, 32, nullptr, (byte*)pixels);
 		SendMessage(window.hwnd, WM_SETICON, ICON_SMALL, (LPARAM)window.iconOwned);
 		SendMessage(window.hwnd, WM_SETICON, ICON_BIG, (LPARAM)window.iconOwned);
+	}
+
+	bool IsMouseInsideWindow_Win32(HWND windowHWND)
+	{
+		POINT mousePos;
+		if (GetCursorPos(&mousePos))
+		{
+			RECT rc;
+			if (GetWindowRect(windowHWND, &rc))
+			{
+				if (mousePos.x >= rc.left && mousePos.x < rc.right &&
+					mousePos.y >= rc.top && mousePos.y < rc.bottom)
+				{
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
+	void IGLOContext::SetCursor(const Cursor& cursor) const
+	{
+		if (!cursor.IsLoaded())
+		{
+			Log(LogType::Error, "Failed to set cursor. Reason: Invalid cursor.");
+			return;
+		}
+
+		currentCursor = &cursor;
+		if (IsMouseInsideWindow_Win32(window.hwnd))
+		{
+			::SetCursor(cursor.GetWin32CursorHandle());
+		}
+	}
+
+	void IGLOContext::ResetCursor() const
+	{
+		currentCursor = nullptr;
+		if (IsMouseInsideWindow_Win32(window.hwnd))
+		{
+			::SetCursor(window.defaultCursor);
+		}
 	}
 
 	void IGLOContext::SetWindowIconFromResource(int icon)
@@ -396,7 +581,7 @@ namespace ig
 	DetailedResult IGLOContext::Impl_LoadWindow(const WindowSettings& windowSettings)
 	{
 		HINSTANCE hInstance = (HINSTANCE)GetModuleHandleW(0);
-		HCURSOR ArrowCursor = LoadCursorW(0, IDC_ARROW);
+		window.defaultCursor = LoadCursorW(0, IDC_ARROW);
 
 		// Create window class
 		WNDCLASSEXW wc = {};
@@ -406,7 +591,7 @@ namespace ig
 		wc.lpfnWndProc = WndProc;
 		wc.style = windowClassStyle;
 		wc.hbrBackground = 0; // Assigning a brush to hbrBackground causes the window to flicker when being dragged, so leave this at 0.
-		wc.hCursor = ArrowCursor;
+		wc.hCursor = window.defaultCursor;
 
 		// Only register the window class if it isn't already registered.
 		// Registering an already registered class will result in an error.
@@ -418,7 +603,7 @@ namespace ig
 			}
 			else
 			{
-				return DetailedResult::MakeFail("RegisterClassExW() failed.");
+				return DetailedResult::Fail("RegisterClassExW() failed.");
 			}
 		}
 
@@ -432,7 +617,7 @@ namespace ig
 		}
 		else
 		{
-			return DetailedResult::MakeFail("CreateWindowExW() failed.");
+			return DetailedResult::Fail("CreateWindowExW() failed.");
 		}
 
 		// Get window location
@@ -444,15 +629,15 @@ namespace ig
 		temp.visible = false;
 		SetWindowState_Win32(window, temp, false, false);
 
-		SetCursor(ArrowCursor);
 		window.iconOwned = 0;
+		ResetCursor();
 
 		if (windowSettings.centered)
 		{
 			CenterWindow();
 		}
 
-		return DetailedResult::MakeSuccess();
+		return DetailedResult::Success();
 	}
 
 	void IGLOContext::PrepareWindowPostGraphics(const WindowSettings& windowSettings)
@@ -594,13 +779,12 @@ namespace ig
 			return 0;
 
 		case WM_SETCURSOR:
-			// the HIWORD(lParam) tells what the cursor is doing.
-			// the LOWORD(lParam) tells where the cursor is. 1 = inside the window
-			// If the cursor is inside the window, then use custom cursor
-			if (LOWORD(lParam) == 1 && window.cursor != NULL)
+			// LOWORD(lParam) == 1 means mouse is inside client area
+			if (LOWORD(lParam) == HTCLIENT)
 			{
-				//TODO: Implement support for custom cursors at some point
-				SetCursor(window.cursor);
+				if (currentCursor && !currentCursor->IsLoaded()) throw std::runtime_error("This should be impossible.");
+				HCURSOR hCursor = currentCursor ? currentCursor->GetWin32CursorHandle() : window.defaultCursor;
+				::SetCursor(hCursor);
 				return true;
 			}
 			break;

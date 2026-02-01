@@ -1,11 +1,16 @@
 
 #pragma once
 
-#define Font Font_ // Conflicts with ig::Font
-#define Cursor Cursor_
-
 #include <X11/Xutil.h>
 #include <X11/Xlib.h>
+
+using X11Font = ::Font; // Conflicts with ig::Font
+using X11Cursor = ::Cursor; // Conflicts with ig::Cursor
+
+#ifdef Success
+#undef Success  // Conflicts with ig::DetailedResult::Success
+#define Success_ 0
+#endif
 
 #ifdef Always
 #undef Always // Conflicts with iglo.h enum elements
@@ -43,6 +48,7 @@ namespace ig
 		int x11fileDescriptor = 0;
 		XIC xic = 0;
 		XIM xim = 0;
+		X11Cursor defaultCursor = 0;
 		CallbackX11EventHook callbackX11EventHook = nullptr;
 
 		// Clipboard handling
@@ -51,6 +57,12 @@ namespace ig
 		Atom atom_TARGETS;
 		Atom atom_SELECTION;
 		mutable std::string clipboardText;
+	};
+
+	struct Impl_Cursor
+	{
+		Display* display = nullptr;
+		X11Cursor xcursor = 0;
 	};
 
 	void SetXDecorationsVisible(Display* display, Window window, bool enable);

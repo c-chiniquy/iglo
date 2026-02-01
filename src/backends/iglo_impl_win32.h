@@ -34,13 +34,20 @@ namespace ig
 		bool activeMenuLoop = false; // If true, user created a context menu on this window.
 		bool ignoreSizeMsg = false; // To ignore all WM_SIZE messages sent by SetWindowLongPtr().
 
-		HWND hwnd = 0; // Window handle
-		HICON iconOwned = 0; // This icon should be released with DestroyIcon() when it stops being used.
-		HCURSOR cursor = 0; //TODO: Implement cursor stuff
+		HWND hwnd = nullptr; // Window handle
+		HICON iconOwned = nullptr; // This icon should be released with DestroyIcon() when it stops being used.
+		HCURSOR defaultCursor = nullptr;
 		uint16_t pendingHighSurrogate = 0; // Used in WM_CHAR
 		CallbackWndProcHook callbackWndProcHook = nullptr;
 	};
 
+	struct Impl_Cursor
+	{
+		HCURSOR handle = nullptr;
+		bool ownsHandle = false;
+	};
+
+	bool IsMouseInsideWindow_Win32(HWND windowHWND);
 	void SetWindowState_Win32(Impl_WindowData& window, const WindowState& state, bool topMost, bool gainFocus);
 	void CaptureMouse_Win32(Impl_WindowData& window, bool captured);
 
