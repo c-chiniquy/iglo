@@ -168,10 +168,10 @@ namespace ig
 				dest[i] = (uint32_t(a) << 24) | (uint32_t(r) << 16) | (uint32_t(g) << 8) | uint32_t(b);
 			}
 		}
-		
+
 		// Create mask bitmap (monochrome, 1-bit)
-        // For BGRA cursors, mask should be all 0s (transparent)
-        // Create a monochrome bitmap with the same dimensions
+		// For BGRA cursors, mask should be all 0s (transparent)
+		// Create a monochrome bitmap with the same dimensions
 		HBITMAP hMaskBitmap = CreateBitmap(extent.width, extent.height, 1, 1, nullptr);
 		if (!hMaskBitmap)
 		{
@@ -204,6 +204,20 @@ namespace ig
 		impl.ownsHandle = true;
 
 		return DetailedResult::Success();
+	}
+
+	SystemMemoryInfo IGLOContext::QuerySystemMemoryInfo()
+	{
+		MEMORYSTATUSEX mem = {};
+		mem.dwLength = sizeof(mem);
+		GlobalMemoryStatusEx(&mem);
+
+		SystemMemoryInfo out;
+		out.totalRAM = mem.ullTotalPhys;
+		out.availableRAM = mem.ullAvailPhys;
+		out.usedRAM = out.totalRAM - out.availableRAM;
+		
+		return out;
 	}
 
 	Extent2D IGLOContext::GetActiveMonitorScreenResolution()

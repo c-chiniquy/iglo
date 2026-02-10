@@ -692,6 +692,7 @@ namespace ig
 		persSamplerIndices.Clear();
 		tempResourceIndices.clear();
 		tempResourceIndices.shrink_to_fit();
+		lastFrameStats = Stats();
 	}
 
 	bool DescriptorHeap::LogErrorIfNotLoaded() const
@@ -743,6 +744,8 @@ namespace ig
 	{
 		if (LogErrorIfNotLoaded()) return;
 
+		lastFrameStats = GetCurrentStats();
+
 		frameIndex = (frameIndex + 1) % numFrames;
 
 		assert(frameIndex < tempResourceIndices.size());
@@ -763,7 +766,7 @@ namespace ig
 		Impl_FreeAllTempResources();
 	}
 
-	DescriptorHeap::Stats DescriptorHeap::GetStats() const
+	DescriptorHeap::Stats DescriptorHeap::GetCurrentStats() const
 	{
 		if (LogErrorIfNotLoaded()) return Stats();
 
@@ -777,11 +780,6 @@ namespace ig
 		out.liveTempResources = tempResourceIndices[frameIndex].GetAllocationCount();
 		out.liveSamplers = persSamplerIndices.GetAllocationCount();
 		return out;
-	}
-
-	std::string DescriptorHeap::GetStatsString() const
-	{
-		return GetStats().ToString();
 	}
 
 	Descriptor DescriptorHeap::AllocatePersistent(DescriptorType descriptorType)
@@ -1318,6 +1316,7 @@ namespace ig
 		Impl_Free(context);
 
 		mapped = nullptr;
+		sizeInBytes = 0;
 	}
 
 	void TempBufferAllocator::Unload()
@@ -1347,6 +1346,7 @@ namespace ig
 		frameIndex = 0;
 		numFrames = 0;
 		linearPageSize = 0;
+		lastFrameStats = Stats();
 	}
 
 	DetailedResult TempBufferAllocator::Load(const IGLOContext& context, uint64_t linearPageSize, uint32_t numFramesInFlight)
@@ -1401,6 +1401,8 @@ namespace ig
 	void TempBufferAllocator::NextFrame()
 	{
 		if (LogErrorIfNotLoaded()) return;
+
+		lastFrameStats = GetCurrentStats();
 
 		frameIndex = (frameIndex + 1) % numFrames;
 
@@ -1504,12 +1506,49 @@ namespace ig
 		}
 	}
 
-	size_t TempBufferAllocator::GetNumLivePages() const
+	TempBufferAllocator::Stats TempBufferAllocator::GetCurrentStats() const
 	{
-		if (!isLoaded) return 0;
+		if (!isLoaded) return Stats();
+
+		static_assert(numPersistentPages > 0);
 		assert(frameIndex < perFrame.size());
-		const PerFrame& current = perFrame[frameIndex];
-		return current.largePages.size() + current.linearPages.size();
+		if (perFrame[frameIndex].linearPages.size() == 0) throw std::runtime_error("This should be impossible.");
+
+		Stats out;
+
+		// Num overflow pages
+		{
+			const PerFrame& current = perFrame[frameIndex];
+			out.overflowAllocations = current.largePages.size() + current.linearPages.size() - numPersistentPages;
+		}
+
+		for (const PerFrame& frame : perFrame)
+		{
+			// Page count
+			out.totalPageCount += frame.largePages.size();
+			out.totalPageCount += frame.linearPages.size();
+
+			// Total size
+			for (const Page& page : frame.largePages)
+			{
+				out.totalAllocatedBytes += page.sizeInBytes;
+			}
+			for (const Page& page : frame.linearPages)
+			{
+				out.totalAllocatedBytes += page.sizeInBytes;
+			}
+		}
+
+		// Capacity
+		{
+			const PerFrame& current = perFrame[frameIndex];
+			const Page& page = current.linearPages.back();
+			uint64_t memMax = page.sizeInBytes;
+			uint64_t memUsed = current.linearNextByte;
+			out.capacity = (float)memUsed / (float)memMax;
+		}
+
+		return out;
 	}
 
 	void Cursor::Unload()
@@ -1819,7 +1858,7 @@ namespace ig
 		// Window and graphics device has loaded successfully
 		isLoaded = true;
 		return true;
-	}
+		}
 
 	void IGLOContext::Unload()
 	{
@@ -2829,7 +2868,7 @@ namespace ig
 		}
 
 		if (colorA == colorB) return true; // nothing needs to be done
-		
+
 		uint32_t findValue = colorA.rgba;
 		uint32_t replaceValue = colorB.rgba;
 
@@ -2952,8 +2991,8 @@ namespace ig
 				}
 				Log(LogType::Error, "Device removal detected! Reason: " + reasonStr);
 				if (callbackOnDeviceRemoved) callbackOnDeviceRemoved(reasonStr);
+				}
 			}
-		}
 
 		// Wait until the swap chain is ready to present the next frame.
 		// This ensures that the value passed to SetMaximumFrameLatency() is respected.
@@ -2969,13 +3008,13 @@ namespace ig
 		{
 			VkResult result = commandQueue.Present(graphics.swapChain);
 			HandleVulkanSwapChainResult(result, "presentation");
-	}
+		}
 #endif
 
 		endOfFrame[frameIndex].graphicsReceipt = commandQueue.SubmitSignal(CommandListType::Graphics);
 
 		MoveToNextFrame();
-}
+		}
 
 	Receipt IGLOContext::Submit(const CommandList& commandList)
 	{
@@ -3074,7 +3113,7 @@ namespace ig
 			if (!dr)
 			{
 				Log(LogType::Error, "Failed to replace swapchain. Reason: " + dr.errorMessage);
-	}
+			}
 			WaitForIdleDevice();
 		}
 #endif
@@ -3210,7 +3249,7 @@ namespace ig
 		{
 			Log(LogType::Error, ToString(errStr, "Failed to allocate temporary buffer."));
 			return Descriptor();
-		}
+	}
 
 		memcpy(tempBuffer.data, data, numBytes);
 
@@ -3632,7 +3671,7 @@ namespace ig
 		this->isWrapped = true;
 		this->impl = desc.impl;
 		return true;
-	}
+}
 
 	bool Texture::LoadFromFile(const IGLOContext& context, CommandList& cmd, const std::string& filename, bool generateMipmaps, bool sRGB)
 	{
@@ -3854,7 +3893,7 @@ namespace ig
 			srcViewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
 			srcViewInfo.image = GetVulkanImage();
 			srcViewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-			srcViewInfo.format = ConvertToVulkanFormat(image.GetFormat());
+			srcViewInfo.format = ToVulkanFormat(image.GetFormat());
 			srcViewInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
 			srcViewInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
 			srcViewInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
@@ -3874,12 +3913,12 @@ namespace ig
 			// UAV
 			VkImageViewCreateInfo destViewInfo = srcViewInfo;
 			destViewInfo.image = unordered->GetVulkanImage();
-			destViewInfo.format = ConvertToVulkanFormat(format_non_sRGB);
+			destViewInfo.format = ToVulkanFormat(format_non_sRGB);
 			VkImageView destImageView = VK_NULL_HANDLE;
 			if (heap.CreateTempVulkanImageView(device, &destViewInfo, nullptr, &destImageView) != VK_SUCCESS)
 			{
 				return DetailedResult::Fail("Failed to create destination image view for mipmap generation.");
-		}
+			}
 			heap.WriteImageDescriptor(uav, destImageView, VK_IMAGE_LAYOUT_GENERAL);
 
 #endif
@@ -3901,7 +3940,7 @@ namespace ig
 			cmd.FlushBarriers();
 
 			cmd.CopyTextureSubresource(*unordered, 0, i, *this, 0, i + 1);
-	}
+		}
 
 		cmd.AddTextureBarrierAtSubresource(*this, SimpleBarrier::CopyDest, SimpleBarrier::PixelShaderResource, 0, desc.mipLevels - 1);
 		cmd.FlushBarriers();
@@ -4056,7 +4095,7 @@ namespace ig
 		}
 
 		cmd.CopyTempBufferToTextureSubresource(tempBuffer, *this, destFaceIndex, destMipIndex);
-		}
+	}
 
 	void Texture::SetPixelsAtSubresource(CommandList& cmd, const void* pixelData, uint32_t destFaceIndex, uint32_t destMipIndex)
 	{

@@ -22,6 +22,7 @@ namespace ig
 		VkSwapchainKHR swapChain = VK_NULL_HANDLE;
 		bool swapChainUsesMinImageCount = false;
 		bool validSwapChain = false;
+		bool usesMemoryBudgetExt = false;
 #ifdef _DEBUG
 		VkDebugUtilsMessengerEXT debugMessenger = VK_NULL_HANDLE;
 #endif
@@ -148,14 +149,14 @@ namespace ig
 	};
 	VulkanSwapChainInfo GetVulkanSwapChainInfo(VkPhysicalDevice, VkSurfaceKHR);
 
-	VkFormat ConvertToVulkanFormat(Format);
+	VkFormat ToVulkanFormat(Format);
 
 	struct VulkanVertexLayout
 	{
 		std::vector<VkVertexInputBindingDescription> bindings;
 		std::vector<VkVertexInputAttributeDescription> attributes;
 	};
-	VulkanVertexLayout ConvertToVulkanVertexLayout(const std::vector<VertexElement>& elems);
+	VulkanVertexLayout ToVulkanVertexLayout(const std::vector<VertexElement>& elems);
 
 	struct VulkanTextureFilter
 	{
@@ -166,7 +167,7 @@ namespace ig
 		float maxAnisotropy = 1.0f;
 		VkBool32 compareEnable = VK_FALSE;
 	};
-	VulkanTextureFilter ConvertToVulkanTextureFilter(TextureFilter);
+	VulkanTextureFilter ToVulkanTextureFilter(TextureFilter);
 
 
 	std::optional<uint32_t> FindVulkanMemoryType(VkPhysicalDevice, uint32_t typeFilter, VkMemoryPropertyFlags properties);

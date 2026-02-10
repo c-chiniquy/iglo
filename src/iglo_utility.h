@@ -569,7 +569,7 @@ namespace ig
 	// Sleeps using a combination of many high resolution sleeps and CPU spinning. Highly accurate and low CPU usage.
 	void PreciseSleep(double seconds);
 
-	/////////////////////////// Strings /////////////////////////////
+	/////////////////////////// UTF8 /////////////////////////////
 
 	// Converts a utf8 string to a utf32 string.
 	// Given an invalid utf8 string it may produce incorrect codepoints,
@@ -712,7 +712,7 @@ namespace ig
 	bool AppendToFile(const std::string& filename, const std::vector<byte>& fileContent);
 	bool AppendToFile(const std::string& filename, const std::string& fileContent);
 
-	//////////////////////// Debug/Output printing ////////////////////////
+	//////////////////////// Strings and formatting ////////////////////////
 
 	template<typename T>
 	std::string ToString(const T& t)
@@ -740,6 +740,9 @@ namespace ig
 		((s += ToString(std::forward<Args>(args))), ...);
 		return s;
 	}
+
+	std::string FormatPercentage(float value, int decimals = 0);
+	std::string FormatByteSize(uint64_t byteSize, int decimals = 2);
 
 	// Prints text to console
 	void Print(const std::string& text);

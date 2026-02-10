@@ -12,7 +12,7 @@ constexpr uint32_t vulkanVersion = VK_API_VERSION_1_3;
 
 namespace ig
 {
-	std::string CreateVulkanErrorMsg(const char* functionName, VkResult result)
+	std::string VulkanErrorMsg(const char* functionName, VkResult result)
 	{
 		return ToString(functionName, " returned result: ", vk::to_string(vk::Result(result)), ".");
 	}
@@ -62,6 +62,24 @@ namespace ig
 		}
 
 		return std::nullopt;
+	}
+
+	bool IsMemoryBudgetSupported(VkPhysicalDevice physicalDevice)
+	{
+		uint32_t extensionCount = 0;
+		vkEnumerateDeviceExtensionProperties(physicalDevice, nullptr, &extensionCount, nullptr);
+
+		std::vector<VkExtensionProperties> extensions(extensionCount);
+		vkEnumerateDeviceExtensionProperties(physicalDevice, nullptr, &extensionCount, extensions.data());
+
+		for (const auto& ext : extensions)
+		{
+			if (std::strcmp(ext.extensionName, VK_EXT_MEMORY_BUDGET_EXTENSION_NAME) == 0)
+			{
+				return true;
+			}
+		}
+		return false;
 	}
 
 	DetailedResult IsVulkanPhysicalDeviceSuitable(VkPhysicalDevice physicalDevice, VkSurfaceKHR surface,
@@ -281,7 +299,7 @@ namespace ig
 		return out;
 	}
 
-	VkFormat ConvertToVulkanFormat(Format format)
+	VkFormat ToVulkanFormat(Format format)
 	{
 		switch (format)
 		{
@@ -356,7 +374,7 @@ namespace ig
 
 	}
 
-	VulkanVertexLayout ConvertToVulkanVertexLayout(const std::vector<VertexElement>& elems)
+	VulkanVertexLayout ToVulkanVertexLayout(const std::vector<VertexElement>& elems)
 	{
 		VulkanVertexLayout layout;
 		layout.attributes.reserve(elems.size());
@@ -375,7 +393,7 @@ namespace ig
 			VkVertexInputAttributeDescription attr = {};
 			attr.binding = slot;
 			attr.location = (uint32_t)i;
-			attr.format = ConvertToVulkanFormat(element.format);
+			attr.format = ToVulkanFormat(element.format);
 			attr.offset = offsetTracker[slot];
 			layout.attributes.push_back(attr);
 
@@ -403,7 +421,7 @@ namespace ig
 		return layout;
 	}
 
-	VulkanTextureFilter ConvertToVulkanTextureFilter(TextureFilter filter)
+	VulkanTextureFilter ToVulkanTextureFilter(TextureFilter filter)
 	{
 		VulkanTextureFilter out;
 
@@ -666,7 +684,7 @@ namespace ig
 			VkResult result = vkCreateDescriptorSetLayout(device, &layoutInfo, nullptr, &impl.descriptorSetLayout);
 			if (result != VK_SUCCESS)
 			{
-				return DetailedResult::Fail(CreateVulkanErrorMsg("vkCreateDescriptorSetLayout", result));
+				return DetailedResult::Fail(VulkanErrorMsg("vkCreateDescriptorSetLayout", result));
 			}
 		}
 
@@ -686,7 +704,7 @@ namespace ig
 			VkResult result = vkCreateDescriptorPool(device, &poolInfo, nullptr, &impl.descriptorPool);
 			if (result != VK_SUCCESS)
 			{
-				return DetailedResult::Fail(CreateVulkanErrorMsg("vkCreateDescriptorPool", result));
+				return DetailedResult::Fail(VulkanErrorMsg("vkCreateDescriptorPool", result));
 			}
 		}
 
@@ -701,7 +719,7 @@ namespace ig
 			VkResult result = vkAllocateDescriptorSets(device, &allocInfo, &impl.descriptorSet);
 			if (result != VK_SUCCESS)
 			{
-				return DetailedResult::Fail(CreateVulkanErrorMsg("vkAllocateDescriptorSets", result));
+				return DetailedResult::Fail(VulkanErrorMsg("vkAllocateDescriptorSets", result));
 			}
 		}
 
@@ -722,7 +740,7 @@ namespace ig
 			VkResult result = vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &impl.bindlessPipelineLayout);
 			if (result != VK_SUCCESS)
 			{
-				return DetailedResult::Fail(CreateVulkanErrorMsg("vkCreatePipelineLayout", result));
+				return DetailedResult::Fail(VulkanErrorMsg("vkCreatePipelineLayout", result));
 			}
 		}
 
@@ -906,7 +924,7 @@ namespace ig
 		};
 
 		// Vertex layout
-		VulkanVertexLayout vertexLayout = ConvertToVulkanVertexLayout(desc.vertexLayout);
+		VulkanVertexLayout vertexLayout = ToVulkanVertexLayout(desc.vertexLayout);
 
 		VkPipelineVertexInputStateCreateInfo vertexInput = {};
 		vertexInput.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
@@ -1046,15 +1064,15 @@ namespace ig
 		std::array<VkFormat, MAX_SIMULTANEOUS_RENDER_TARGETS> vkColorFormats = {};
 		for (size_t i = 0; i < desc.renderTargetDesc.colorFormats.size(); i++)
 		{
-			vkColorFormats[i] = ConvertToVulkanFormat(desc.renderTargetDesc.colorFormats[i]);
+			vkColorFormats[i] = ToVulkanFormat(desc.renderTargetDesc.colorFormats[i]);
 		}
 		VkPipelineRenderingCreateInfo renderingInfo = {};
 		renderingInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
 		renderingInfo.colorAttachmentCount = (uint32_t)desc.renderTargetDesc.colorFormats.size();
 		renderingInfo.pColorAttachmentFormats = vkColorFormats.data();
-		renderingInfo.depthAttachmentFormat = ConvertToVulkanFormat(desc.renderTargetDesc.depthFormat);
+		renderingInfo.depthAttachmentFormat = ToVulkanFormat(desc.renderTargetDesc.depthFormat);
 		renderingInfo.stencilAttachmentFormat = GetFormatInfo(desc.renderTargetDesc.depthFormat).hasStencilComponent
-			? ConvertToVulkanFormat(desc.renderTargetDesc.depthFormat)
+			? ToVulkanFormat(desc.renderTargetDesc.depthFormat)
 			: VK_FORMAT_UNDEFINED;
 
 
@@ -1088,7 +1106,7 @@ namespace ig
 		VkResult result = vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &impl.pipeline);
 		if (result != VK_SUCCESS)
 		{
-			return DetailedResult::Fail(CreateVulkanErrorMsg("vkCreateGraphicsPipelines", result));
+			return DetailedResult::Fail(VulkanErrorMsg("vkCreateGraphicsPipelines", result));
 		}
 
 		return DetailedResult::Success();
@@ -1120,7 +1138,7 @@ namespace ig
 		VkResult result = vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &impl.pipeline);
 		if (result != VK_SUCCESS)
 		{
-			return DetailedResult::Fail(CreateVulkanErrorMsg("vkCreateComputePipelines", result));
+			return DetailedResult::Fail(VulkanErrorMsg("vkCreateComputePipelines", result));
 		}
 		return DetailedResult::Success();
 	}
@@ -1219,7 +1237,7 @@ namespace ig
 				VkResult result = vkCreateSemaphore(device, &createInfo, nullptr, &impl.timelineSemaphores[i]);
 				if (result != VK_SUCCESS)
 				{
-					return DetailedResult::Fail(CreateVulkanErrorMsg("vkCreateSemaphore", result));
+					return DetailedResult::Fail(VulkanErrorMsg("vkCreateSemaphore", result));
 				}
 			}
 		}
@@ -1492,7 +1510,7 @@ namespace ig
 			VkResult result = vkCreateCommandPool(device, &poolInfo, nullptr, &impl.commandPool[i]);
 			if (result != VK_SUCCESS)
 			{
-				return DetailedResult::Fail(CreateVulkanErrorMsg("vkCreateCommandPool", result));
+				return DetailedResult::Fail(VulkanErrorMsg("vkCreateCommandPool", result));
 			}
 
 			VkCommandBufferAllocateInfo allocInfo = {};
@@ -1504,7 +1522,7 @@ namespace ig
 			result = vkAllocateCommandBuffers(device, &allocInfo, &impl.commandBuffer[i]);
 			if (result != VK_SUCCESS)
 			{
-				return DetailedResult::Fail(CreateVulkanErrorMsg("vkAllocateCommandBuffers", result));
+				return DetailedResult::Fail(VulkanErrorMsg("vkAllocateCommandBuffers", result));
 			}
 		}
 
@@ -2382,6 +2400,7 @@ namespace ig
 			return Page();
 		}
 
+		out.sizeInBytes = sizeInBytes;
 		return out;
 	}
 
@@ -2425,7 +2444,7 @@ namespace ig
 		VkPhysicalDevice physicalDevice = context.GetVulkanPhysicalDevice();
 		DescriptorHeap& heap = context.GetDescriptorHeap();
 
-		VkFormat vkFormat = ConvertToVulkanFormat(desc.format);
+		VkFormat vkFormat = ToVulkanFormat(desc.format);
 		if (vkFormat == VK_FORMAT_UNDEFINED)
 		{
 			return DetailedResult::Fail(ToString("This iglo format is not supported in Vulkan: ", (uint32_t)desc.format, "."));
@@ -2509,7 +2528,7 @@ namespace ig
 			VkResult result = vkCreateImage(device, &imageInfo, nullptr, &impl.image[i]);
 			if (result != VK_SUCCESS)
 			{
-				return DetailedResult::Fail(CreateVulkanErrorMsg("vkCreateImage", result));
+				return DetailedResult::Fail(VulkanErrorMsg("vkCreateImage", result));
 			}
 
 			VkMemoryRequirements memRequirements;
@@ -2527,7 +2546,7 @@ namespace ig
 			result = vkAllocateMemory(device, &allocInfo, nullptr, &impl.memory[i]);
 			if (result != VK_SUCCESS)
 			{
-				return DetailedResult::Fail(CreateVulkanErrorMsg("vkAllocateMemory", result));
+				return DetailedResult::Fail(VulkanErrorMsg("vkAllocateMemory", result));
 			}
 
 			vkBindImageMemory(device, impl.image[i], impl.memory[i], 0);
@@ -2540,7 +2559,7 @@ namespace ig
 				result = vkMapMemory(device, impl.memory[i], 0, memRequirements.size, 0, &mappedPtr);
 				if (result != VK_SUCCESS)
 				{
-					return DetailedResult::Fail(CreateVulkanErrorMsg("vkMapMemory", result));
+					return DetailedResult::Fail(VulkanErrorMsg("vkMapMemory", result));
 				}
 
 				readMapped.push_back(mappedPtr);
@@ -2603,7 +2622,7 @@ namespace ig
 
 			if (desc.overrideSRVFormat != Format::None)
 			{
-				srvFormat = ConvertToVulkanFormat(desc.overrideSRVFormat);
+				srvFormat = ToVulkanFormat(desc.overrideSRVFormat);
 				srvAspect = GetFormatInfo(desc.overrideSRVFormat).isDepthFormat ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT;
 			}
 
@@ -2798,7 +2817,7 @@ namespace ig
 			VkResult result = vkCreateBuffer(device, &bufferInfo, nullptr, &impl.buffer[i]);
 			if (result != VK_SUCCESS)
 			{
-				return DetailedResult::Fail(CreateVulkanErrorMsg("vkCreateBuffer", result));
+				return DetailedResult::Fail(VulkanErrorMsg("vkCreateBuffer", result));
 			}
 
 			VkMemoryRequirements memRequirements;
@@ -2818,7 +2837,7 @@ namespace ig
 			result = vkAllocateMemory(device, &allocInfo, nullptr, &impl.memory[i]);
 			if (result != VK_SUCCESS)
 			{
-				return DetailedResult::Fail(CreateVulkanErrorMsg("vkAllocateMemory", result));
+				return DetailedResult::Fail(VulkanErrorMsg("vkAllocateMemory", result));
 			}
 
 			vkBindBufferMemory(device, impl.buffer[i], impl.memory[i], 0);
@@ -2831,7 +2850,7 @@ namespace ig
 				result = vkMapMemory(device, impl.memory[i], 0, bufferSize, 0, &mappedPtr);
 				if (result != VK_SUCCESS)
 				{
-					return DetailedResult::Fail(CreateVulkanErrorMsg("vkMapMemory", result));
+					return DetailedResult::Fail(VulkanErrorMsg("vkMapMemory", result));
 				}
 
 				mapped.push_back(mappedPtr);
@@ -2931,7 +2950,7 @@ namespace ig
 		customBorderColorInfo.customBorderColor = borderColor;
 		customBorderColorInfo.format = VK_FORMAT_UNDEFINED;
 
-		VulkanTextureFilter convertedFilter = ConvertToVulkanTextureFilter(desc.filter);
+		VulkanTextureFilter convertedFilter = ToVulkanTextureFilter(desc.filter);
 
 		VkSamplerCreateInfo samplerInfo = {};
 		samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
@@ -2954,7 +2973,7 @@ namespace ig
 		VkResult result = vkCreateSampler(device, &samplerInfo, nullptr, &vkSampler);
 		if (result != VK_SUCCESS)
 		{
-			return DetailedResult::Fail(CreateVulkanErrorMsg("vkCreateSampler", result));
+			return DetailedResult::Fail(VulkanErrorMsg("vkCreateSampler", result));
 		}
 
 		heap.WriteSamplerDescriptor(descriptor, vkSampler);
@@ -2962,10 +2981,60 @@ namespace ig
 		return DetailedResult::Success();
 	}
 
+	VideoMemoryInfo IGLOContext::QueryVideoMemoryInfo()
+	{
+		if (!isLoaded) return VideoMemoryInfo();
+
+		VideoMemoryInfo out;
+
+		if (graphics.usesMemoryBudgetExt)
+		{
+			VkPhysicalDeviceMemoryBudgetPropertiesEXT budget = {};
+			budget.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_BUDGET_PROPERTIES_EXT;
+
+			VkPhysicalDeviceMemoryProperties2 props = {};
+			props.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_PROPERTIES_2;
+			props.pNext = &budget;
+
+			vkGetPhysicalDeviceMemoryProperties2(graphics.physicalDevice, &props);
+
+			// Iterate heaps to find the first device-local heap
+			for (uint32_t i = 0; i < props.memoryProperties.memoryHeapCount; i++)
+			{
+				if (props.memoryProperties.memoryHeaps[i].flags & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT)
+				{
+					out.totalVRAM = props.memoryProperties.memoryHeaps[i].size;
+					out.usedVRAM = budget.heapUsage[i];
+					out.availableVRAM = budget.heapBudget[i];
+					break;
+				}
+			}
+		}
+		else
+		{
+			// No memory budget extension
+			VkPhysicalDeviceMemoryProperties memProps;
+			vkGetPhysicalDeviceMemoryProperties(graphics.physicalDevice, &memProps);
+
+			for (uint32_t i = 0; i < memProps.memoryHeapCount; i++)
+			{
+				if (memProps.memoryHeaps[i].flags & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT)
+				{
+					out.totalVRAM = memProps.memoryHeaps[i].size;
+					out.usedVRAM = std::nullopt; // unknown
+					out.availableVRAM = std::nullopt; // unknown
+					break;
+				}
+			}
+		}
+
+		return out;
+	}
+
 	uint32_t IGLOContext::Impl_GetMaxMultiSampleCount(Format textureFormat) const
 	{
 		VkPhysicalDevice physicalDevice = GetVulkanPhysicalDevice();
-		VkFormat vkFormat = ConvertToVulkanFormat(textureFormat);
+		VkFormat vkFormat = ToVulkanFormat(textureFormat);
 		FormatInfo formatInfo = GetFormatInfo(textureFormat);
 
 		VkImageUsageFlags usage = formatInfo.isDepthFormat
@@ -3067,7 +3136,7 @@ namespace ig
 		createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
 		createInfo.surface = graphics.surface;
 		createInfo.minImageCount = numBackBuffers;
-		createInfo.imageFormat = ConvertToVulkanFormat(format);
+		createInfo.imageFormat = ToVulkanFormat(format);
 		createInfo.imageColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
 		createInfo.imageExtent = { cappedExtent.width, cappedExtent.height };
 		createInfo.imageArrayLayers = 1;
@@ -3083,7 +3152,7 @@ namespace ig
 
 		if (formatInfo.sRGB_opposite != Format::None)
 		{
-			VkFormat formats[2] = {createInfo.imageFormat, ConvertToVulkanFormat(formatInfo.sRGB_opposite)};
+			VkFormat formats[2] = {createInfo.imageFormat, ToVulkanFormat(formatInfo.sRGB_opposite)};
 			formatListInfo.viewFormatCount = 2;
 			formatListInfo.pViewFormats = formats;
 
@@ -3095,7 +3164,7 @@ namespace ig
 		VkResult result = vkCreateSwapchainKHR(graphics.device, &createInfo, nullptr, &newSwapchain);
 		if (result != VK_SUCCESS)
 		{
-			return DetailedResult::Fail(CreateVulkanErrorMsg("vkCreateSwapchainKHR", result));
+			return DetailedResult::Fail(VulkanErrorMsg("vkCreateSwapchainKHR", result));
 		}
 
 		DestroySwapChainResources();
@@ -3131,7 +3200,7 @@ namespace ig
 		result = vkGetSwapchainImagesKHR(graphics.device, graphics.swapChain, &imageCount, swapchainImages.data());
 		if (result != VK_SUCCESS)
 		{
-			return DetailedResult::Fail(CreateVulkanErrorMsg("vkGetSwapchainImagesKHR", result));
+			return DetailedResult::Fail(VulkanErrorMsg("vkGetSwapchainImagesKHR", result));
 		}
 
 		// Wrap backbuffers
@@ -3157,7 +3226,7 @@ namespace ig
 			{
 				VkImageView imageView_sRGB_opposite = VK_NULL_HANDLE;
 				CreateVulkanImageViewForSwapChain(graphics.device, swapchainImages[i],
-					ConvertToVulkanFormat(formatInfo.sRGB_opposite), &imageView_sRGB_opposite);
+					ToVulkanFormat(formatInfo.sRGB_opposite), &imageView_sRGB_opposite);
 				desc.impl.imageView_RTV_DSV = imageView_sRGB_opposite;
 
 				std::unique_ptr<Texture> backBuffer_sRGB_opposite = std::make_unique<Texture>();
@@ -3248,7 +3317,7 @@ namespace ig
 #endif
 		};
 
-		const std::vector<const char*> deviceExtensions =
+		std::vector<const char*> deviceExtensions =
 		{
 			VK_KHR_SWAPCHAIN_EXTENSION_NAME,
 			VK_KHR_SWAPCHAIN_MUTABLE_FORMAT_EXTENSION_NAME,
@@ -3361,7 +3430,7 @@ namespace ig
 		VkResult result = vkCreateInstance(&instanceInfo, nullptr, &graphics.instance);
 		if (result != VK_SUCCESS)
 		{
-			return DetailedResult::Fail(CreateVulkanErrorMsg("vkCreateInstance", result));
+			return DetailedResult::Fail(VulkanErrorMsg("vkCreateInstance", result));
 		}
 
 #ifdef _DEBUG
@@ -3369,7 +3438,7 @@ namespace ig
 		result = CreateDebugUtilsMessengerEXT(graphics.instance, &debugInfo, nullptr, &graphics.debugMessenger);
 		if (result != VK_SUCCESS)
 		{
-			return DetailedResult::Fail(CreateVulkanErrorMsg("CreateDebugUtilsMessengerEXT", result));
+			return DetailedResult::Fail(VulkanErrorMsg("CreateDebugUtilsMessengerEXT", result));
 		}
 #endif
 
@@ -3383,7 +3452,7 @@ namespace ig
 			result = vkCreateWin32SurfaceKHR(graphics.instance, &win32SurfaceInfo, nullptr, &graphics.surface);
 			if (result != VK_SUCCESS)
 			{
-				return DetailedResult::Fail(CreateVulkanErrorMsg("vkCreateWin32SurfaceKHR", result));
+				return DetailedResult::Fail(VulkanErrorMsg("vkCreateWin32SurfaceKHR", result));
 			}
 		}
 #endif
@@ -3397,7 +3466,7 @@ namespace ig
 			VkResult result = vkCreateXlibSurfaceKHR(graphics.instance, &xlibSurfaceInfo, nullptr, &graphics.surface);
 			if (result != VK_SUCCESS)
 			{
-				return DetailedResult::Fail(CreateVulkanErrorMsg("vkCreateXlibSurfaceKHR", result));
+				return DetailedResult::Fail(VulkanErrorMsg("vkCreateXlibSurfaceKHR", result));
 			}
 		}
 #endif
@@ -3621,6 +3690,13 @@ namespace ig
 		feats2.features.independentBlend = VK_TRUE;
 		feats2.features.samplerAnisotropy = VK_TRUE;
 
+		// Add optional extensions
+		if (IsMemoryBudgetSupported(graphics.physicalDevice))
+		{
+			graphics.usesMemoryBudgetExt = true;
+			deviceExtensions.push_back(VK_EXT_MEMORY_BUDGET_EXTENSION_NAME);
+		}
+
 		VkDeviceCreateInfo deviceInfo = {};
 		deviceInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
 		deviceInfo.queueCreateInfoCount = (uint32_t)queueInfo.size();
@@ -3629,10 +3705,11 @@ namespace ig
 		deviceInfo.ppEnabledExtensionNames = deviceExtensions.data();
 		deviceInfo.pNext = &feats2;
 
+
 		result = vkCreateDevice(graphics.physicalDevice, &deviceInfo, nullptr, &graphics.device);
 		if (result != VK_SUCCESS)
 		{
-			return DetailedResult::Fail(CreateVulkanErrorMsg("vkCreateDevice", result));
+			return DetailedResult::Fail(VulkanErrorMsg("vkCreateDevice", result));
 		}
 
 		return DetailedResult::Success();

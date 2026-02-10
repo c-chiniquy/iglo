@@ -4,6 +4,7 @@
 
 #include "iglo.h"
 
+#include <sys/sysinfo.h>
 #include <X11/Xatom.h>
 #include <X11/XKBlib.h>
 #include <X11/XF86keysym.h>
@@ -516,6 +517,21 @@ namespace ig
 
 		XDefineCursor(window.display, window.handle, window.defaultCursor);
 		XFlush(window.display);
+	}
+
+	SystemMemoryInfo IGLOContext::QuerySystemMemoryInfo()
+	{
+		struct sysinfo info;
+		if (sysinfo(&info) != 0) return SystemMemoryInfo();
+		
+		const uint64_t unit = (uint64_t)info.mem_unit;
+
+		SystemMemoryInfo out;
+		out.totalRAM = (uint64_t)info.totalram * unit;
+		out.availableRAM = (uint64_t)info.freeram * unit;
+		out.usedRAM = out.totalRAM - out.availableRAM; // Used RAM is an estimation
+
+		return out;
 	}
 
 	std::string IGLOContext::PasteTextFromClipboard() const

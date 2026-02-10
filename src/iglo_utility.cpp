@@ -5,6 +5,7 @@
 #include <sstream>
 #include <iostream>
 #include <thread>
+#include <array>
 
 #ifdef _WIN32
 #ifndef WIN32_LEAN_AND_MEAN
@@ -2246,6 +2247,30 @@ namespace ig
 	bool AppendToFile(const std::string& filename, const std::string& fileContent)
 	{
 		return AppendToFile(filename, (byte*)fileContent.data(), fileContent.size());
+	}
+
+	std::string FormatPercentage(float value, int decimals)
+	{
+		return std::format("{:.{}f}%", value * 100.0f, decimals);
+	}
+
+	std::string FormatByteSize(uint64_t byteSize, int decimals)
+	{
+		static constexpr std::array<const char*, 5> units =
+		{
+			"B", "KB", "MB", "GB", "TB"
+		};
+
+		double value = (double)byteSize;
+		size_t unitIndex = 0;
+
+		while (value >= 1024.0 && unitIndex < units.size() - 1)
+		{
+			value /= 1024.0;
+			unitIndex++;
+		}
+
+		return std::format("{:.{}f} {}", value, decimals, units[unitIndex]);
 	}
 
 	void Print(const std::string& text)

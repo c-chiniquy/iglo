@@ -16,6 +16,7 @@ namespace ig
 		ComPtr<ID3D12Device10> device;
 		ComPtr<IDXGISwapChain3> swapChain;
 		ComPtr<IDXGIFactory4> factory;
+		ComPtr<IDXGIAdapter1> adapter;
 	};
 
 	struct Impl_CommandQueue
@@ -121,7 +122,7 @@ namespace ig
 		D3D12_FILTER filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
 		unsigned int maxAnisotropy = 0;
 	};
-	D3D12TextureFilter ConvertToD3D12TextureFilter(TextureFilter filter);
+	D3D12TextureFilter ToD3D12TextureFilter(TextureFilter filter);
 
 	struct FormatInfoDXGI
 	{
@@ -131,6 +132,6 @@ namespace ig
 	// Returns DXGI_FORMAT_UNKNOWN if format is not supported in D3D12 or if format is unknown.
 	FormatInfoDXGI GetFormatInfoDXGI(Format format);
 
-	std::vector<D3D12_INPUT_ELEMENT_DESC> ConvertToD3D12InputElements(const std::vector<VertexElement>& elems);
+	std::vector<D3D12_INPUT_ELEMENT_DESC> ToD3D12InputElements(const std::vector<VertexElement>& elems);
 
 }

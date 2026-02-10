@@ -9,7 +9,7 @@ namespace ig
 	constexpr DXGI_SWAP_EFFECT d3d12SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
 	constexpr UINT d3d12SwapChainFlags = DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT | DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
 
-	std::string ConvertFeatureLevelToString(D3D_FEATURE_LEVEL featureLevel)
+	std::string FeatureLevelToString(D3D_FEATURE_LEVEL featureLevel)
 	{
 		uint32_t value = (uint32_t)featureLevel;
 		uint32_t major = (value >> 12) & 0xF;
@@ -17,12 +17,12 @@ namespace ig
 		return ToString(major, "_", minor);
 	}
 
-	std::string CreateD3D12ErrorMsg(const char* functionName, HRESULT hr)
+	std::string D3D12ErrorMsg(const char* functionName, HRESULT hr)
 	{
 		return ToString(functionName, " returned error code: ", (uint32_t)hr, ".");
 	}
 
-	D3D12TextureFilter ConvertToD3D12TextureFilter(TextureFilter filter)
+	D3D12TextureFilter ToD3D12TextureFilter(TextureFilter filter)
 	{
 		D3D12TextureFilter out;
 		out.filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
@@ -145,7 +145,7 @@ namespace ig
 		return out;
 	}
 
-	std::vector<D3D12_INPUT_ELEMENT_DESC> ConvertToD3D12InputElements(const std::vector<VertexElement>& elems)
+	std::vector<D3D12_INPUT_ELEMENT_DESC> ToD3D12InputElements(const std::vector<VertexElement>& elems)
 	{
 		std::vector<D3D12_INPUT_ELEMENT_DESC> out(elems.size());
 		for (size_t i = 0; i < elems.size(); i++)
@@ -261,7 +261,7 @@ namespace ig
 		pipe.DepthStencilState.BackFace.StencilFunc = (D3D12_COMPARISON_FUNC)desc.depthState.backFaceStencilFunc;
 
 		// Vertex layout
-		std::vector<D3D12_INPUT_ELEMENT_DESC> inputLayout = ConvertToD3D12InputElements(desc.vertexLayout);
+		std::vector<D3D12_INPUT_ELEMENT_DESC> inputLayout = ToD3D12InputElements(desc.vertexLayout);
 		pipe.InputLayout.NumElements = (UINT)inputLayout.size();
 		pipe.InputLayout.pInputElementDescs = inputLayout.data();
 
@@ -342,7 +342,7 @@ namespace ig
 		HRESULT hr = context.GetD3D12Device()->CreateGraphicsPipelineState(&pipe, IID_PPV_ARGS(&impl.pipeline));
 		if (FAILED(hr))
 		{
-			return DetailedResult::Fail(CreateD3D12ErrorMsg("ID3D12Device::CreateGraphicsPipelineState", hr));
+			return DetailedResult::Fail(D3D12ErrorMsg("ID3D12Device::CreateGraphicsPipelineState", hr));
 		}
 		return DetailedResult::Success();
 	}
@@ -356,7 +356,7 @@ namespace ig
 		HRESULT hr = context.GetD3D12Device()->CreateComputePipelineState(&computeDesc, IID_PPV_ARGS(&impl.pipeline));
 		if (FAILED(hr))
 		{
-			return DetailedResult::Fail(CreateD3D12ErrorMsg("ID3D12Device::CreateComputePipelineState", hr));
+			return DetailedResult::Fail(D3D12ErrorMsg("ID3D12Device::CreateComputePipelineState", hr));
 		}
 
 		return DetailedResult::Success();
@@ -395,13 +395,13 @@ namespace ig
 			HRESULT hr = context.GetD3D12Device()->CreateCommandQueue(&queueDesc[i], IID_PPV_ARGS(&impl.commandQueues[i]));
 			if (FAILED(hr))
 			{
-				return DetailedResult::Fail(CreateD3D12ErrorMsg("ID3D12Device10::CreateCommandQueue", hr));
+				return DetailedResult::Fail(D3D12ErrorMsg("ID3D12Device10::CreateCommandQueue", hr));
 			}
 
 			hr = context.GetD3D12Device()->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&impl.fences[i]));
 			if (FAILED(hr))
 			{
-				return DetailedResult::Fail(CreateD3D12ErrorMsg("ID3D12Device10::CreateCommandQueue", hr));
+				return DetailedResult::Fail(D3D12ErrorMsg("ID3D12Device10::CreateCommandQueue", hr));
 			}
 
 			impl.fenceValues[i] = 0;
@@ -500,7 +500,7 @@ namespace ig
 			HRESULT hr = device->CreateCommandAllocator(d3d12CmdType, IID_PPV_ARGS(&impl.commandAllocator[i]));
 			if (FAILED(hr))
 			{
-				return DetailedResult::Fail(CreateD3D12ErrorMsg("ID3D12Device::CreateCommandAllocator", hr));
+				return DetailedResult::Fail(D3D12ErrorMsg("ID3D12Device::CreateCommandAllocator", hr));
 			}
 		}
 
@@ -511,12 +511,12 @@ namespace ig
 				nullptr, IID_PPV_ARGS(&cmdList0));
 			if (FAILED(hr))
 			{
-				return DetailedResult::Fail(CreateD3D12ErrorMsg("ID3D12Device::CreateCommandList", hr));
+				return DetailedResult::Fail(D3D12ErrorMsg("ID3D12Device::CreateCommandList", hr));
 			}
 			hr = cmdList0.As(&impl.graphicsCommandList);
 			if (FAILED(hr))
 			{
-				return DetailedResult::Fail(CreateD3D12ErrorMsg("ComPtr::As", hr));
+				return DetailedResult::Fail(D3D12ErrorMsg("ComPtr::As", hr));
 			}
 		}
 		impl.graphicsCommandList->Close();
@@ -1075,7 +1075,7 @@ namespace ig
 				initLayout, ptrClearValue, nullptr, 0, nullptr, IID_PPV_ARGS(&impl.resource[i]));
 			if (FAILED(hr))
 			{
-				return DetailedResult::Fail(CreateD3D12ErrorMsg("ID3D12Device10::CreateCommittedResource3", hr));
+				return DetailedResult::Fail(D3D12ErrorMsg("ID3D12Device10::CreateCommittedResource3", hr));
 			}
 
 			// Map resources
@@ -1085,7 +1085,7 @@ namespace ig
 				hr = impl.resource[i]->Map(0, nullptr, &mappedPtr);
 				if (FAILED(hr))
 				{
-					return DetailedResult::Fail(CreateD3D12ErrorMsg("ID3D12Resource::Map", hr));
+					return DetailedResult::Fail(D3D12ErrorMsg("ID3D12Resource::Map", hr));
 				}
 
 				readMapped.push_back(mappedPtr);
@@ -1436,7 +1436,7 @@ namespace ig
 				nullptr, nullptr, 0, nullptr, IID_PPV_ARGS(&impl.resource[i]));
 			if (FAILED(hr))
 			{
-				return DetailedResult::Fail(CreateD3D12ErrorMsg("ID3D12Device10::CreateCommittedResource3", hr));
+				return DetailedResult::Fail(D3D12ErrorMsg("ID3D12Device10::CreateCommittedResource3", hr));
 			}
 
 			if (usage == BufferUsage::Dynamic ||
@@ -1447,7 +1447,7 @@ namespace ig
 				hr = impl.resource[i]->Map(0, (usage == BufferUsage::Readable) ? nullptr : &noRead, &mappedPtr);
 				if (FAILED(hr))
 				{
-					return DetailedResult::Fail(CreateD3D12ErrorMsg("ID3D12Resource::Map", hr));
+					return DetailedResult::Fail(D3D12ErrorMsg("ID3D12Resource::Map", hr));
 				}
 
 				mapped.push_back(mappedPtr);
@@ -1601,7 +1601,7 @@ namespace ig
 			return DetailedResult::Fail("Failed to allocate sampler descriptor.");
 		}
 
-		D3D12TextureFilter filterD3D = ConvertToD3D12TextureFilter(desc.filter);
+		D3D12TextureFilter filterD3D = ToD3D12TextureFilter(desc.filter);
 
 		D3D12_SAMPLER_DESC samplerDesc = {};
 		samplerDesc.Filter = filterD3D.filter;
@@ -1668,6 +1668,7 @@ namespace ig
 		hr = out.impl.resource->Map(0, &noRead, &out.mapped);
 		if (FAILED(hr)) return Page();
 
+		out.sizeInBytes = sizeInBytes;
 		return out;
 	}
 
@@ -1766,14 +1767,14 @@ namespace ig
 			HRESULT hr = D3D12SerializeVersionedRootSignature(&versionedRootSignatureDesc, &signature, &error);
 			if (FAILED(hr))
 			{
-				return DetailedResult::Fail(CreateD3D12ErrorMsg("D3D12SerializeRootSignature", hr));
+				return DetailedResult::Fail(D3D12ErrorMsg("D3D12SerializeRootSignature", hr));
 			}
 
 			hr = device->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(),
 				IID_PPV_ARGS(&impl.bindlessRootSignature));
 			if (FAILED(hr))
 			{
-				return DetailedResult::Fail(CreateD3D12ErrorMsg("CreateRootSignature", hr));
+				return DetailedResult::Fail(D3D12ErrorMsg("CreateRootSignature", hr));
 			}
 		}
 
@@ -1837,6 +1838,23 @@ namespace ig
 			handle.ptr += ((UINT64)impl.descriptorSize_CBV_SRV_UAV * (UINT64)descriptor.heapIndex);
 			return handle;
 		}
+	}
+
+	VideoMemoryInfo IGLOContext::QueryVideoMemoryInfo()
+	{
+		if (!isLoaded) return VideoMemoryInfo();
+		
+		ComPtr<IDXGIAdapter3> adapter3;
+		graphics.adapter.As(&adapter3);
+
+		DXGI_QUERY_VIDEO_MEMORY_INFO info = {};
+		adapter3->QueryVideoMemoryInfo(0, DXGI_MEMORY_SEGMENT_GROUP_LOCAL, &info);
+
+		VideoMemoryInfo out;
+		out.totalVRAM = info.Budget;
+		out.usedVRAM = info.CurrentUsage;
+		out.availableVRAM = info.Budget - info.CurrentUsage;
+		return out;
 	}
 
 	uint32_t IGLOContext::Impl_GetMaxMultiSampleCount(Format textureFormat) const
@@ -1912,12 +1930,12 @@ namespace ig
 			window.hwnd, &swapChainDesc, nullptr, nullptr, &swapChain1);
 		if (FAILED(hr))
 		{
-			return DetailedResult::Fail(CreateD3D12ErrorMsg("ID3D12Device::CreateSwapChainForHwnd", hr));
+			return DetailedResult::Fail(D3D12ErrorMsg("ID3D12Device::CreateSwapChainForHwnd", hr));
 		}
 		hr = swapChain1.As(&graphics.swapChain);
 		if (FAILED(hr))
 		{
-			return DetailedResult::Fail(CreateD3D12ErrorMsg("ComPtr::As(IDXGISwapChain3)", hr));
+			return DetailedResult::Fail(D3D12ErrorMsg("ComPtr::As(IDXGISwapChain3)", hr));
 		}
 		hr = graphics.swapChain->SetMaximumFrameLatency(numFramesInFlight);
 		if (FAILED(hr))
@@ -1941,7 +1959,7 @@ namespace ig
 			{
 				swapChain.wrapped.clear();
 				swapChain.wrapped_sRGB_opposite.clear();
-				return DetailedResult::Fail(CreateD3D12ErrorMsg("IDXGISwapChain3::GetBuffer", hr));
+				return DetailedResult::Fail(D3D12ErrorMsg("IDXGISwapChain3::GetBuffer", hr));
 			}
 
 			WrappedTextureDesc desc;
@@ -2001,7 +2019,7 @@ namespace ig
 		HRESULT hr = graphics.swapChain->ResizeBuffers(0, extent.width, extent.height, formatInfoD3D.dxgiFormat, d3d12SwapChainFlags);
 		if (FAILED(hr))
 		{
-			Log(LogType::Error, ToString(errStr, CreateD3D12ErrorMsg("IDXGISwapChain3::ResizeBuffers", hr)));
+			Log(LogType::Error, ToString(errStr, D3D12ErrorMsg("IDXGISwapChain3::ResizeBuffers", hr)));
 			return false;
 		}
 
@@ -2013,7 +2031,7 @@ namespace ig
 			hr = graphics.swapChain->GetBuffer(i, IID_PPV_ARGS(&res));
 			if (FAILED(hr))
 			{
-				Log(LogType::Error, ToString(errStr, CreateD3D12ErrorMsg("IDXGISwapChain3::GetBuffer", hr)));
+				Log(LogType::Error, ToString(errStr, D3D12ErrorMsg("IDXGISwapChain3::GetBuffer", hr)));
 				swapChain.wrapped.clear();
 				swapChain.wrapped_sRGB_opposite.clear();
 				return false;
@@ -2077,7 +2095,7 @@ namespace ig
 		hr = CreateDXGIFactory2(factoryFlags, IID_PPV_ARGS(&graphics.factory));
 		if (FAILED(hr))
 		{
-			return DetailedResult::Fail(CreateD3D12ErrorMsg("CreateDXGIFactory2", hr));
+			return DetailedResult::Fail(D3D12ErrorMsg("CreateDXGIFactory2", hr));
 		}
 
 		// Find a suitable adapter
@@ -2128,23 +2146,24 @@ namespace ig
 			if (!foundSuitableAdapter)
 			{
 				return DetailedResult::Fail(ToString(
-					"No adaptor found capable of feature level ", ConvertFeatureLevelToString(d3d12FeatureLevel), ". ",
+					"No adaptor found capable of feature level ", FeatureLevelToString(d3d12FeatureLevel), ". ",
 					strLatestDrivers));
 			}
 		}
 
 		// Create D3D12 Device
 		{
+			graphics.adapter = adapter;
 			ComPtr<ID3D12Device> deviceVer0;
 			hr = D3D12CreateDevice(adapter.Get(), d3d12FeatureLevel, IID_PPV_ARGS(&deviceVer0));
 			if (FAILED(hr))
 			{
-				return DetailedResult::Fail(CreateD3D12ErrorMsg("D3D12CreateDevice", hr));
+				return DetailedResult::Fail(D3D12ErrorMsg("D3D12CreateDevice", hr));
 			}
 			hr = deviceVer0.As(&graphics.device);
 			if (FAILED(hr))
 			{
-				return DetailedResult::Fail(CreateD3D12ErrorMsg("ComPtr::As", hr));
+				return DetailedResult::Fail(D3D12ErrorMsg("ComPtr::As", hr));
 			}
 		}
 
@@ -2223,9 +2242,10 @@ namespace ig
 
 	void IGLOContext::Impl_UnloadGraphicsDevice()
 	{
+		graphics.adapter = nullptr;
 		graphics.factory = nullptr;
 		graphics.swapChain = nullptr;
-		graphics.device = nullptr; // The device is shutdown last.
+		graphics.device = nullptr; // The device is freed last
 	}
 
 }

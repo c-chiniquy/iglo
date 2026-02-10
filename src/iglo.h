@@ -101,6 +101,8 @@ namespace ig
 	struct WindowResizeConstraints;
 	struct BufferPlacementAlignments;
 	struct GraphicsSpecs;
+	struct SystemMemoryInfo;
+	struct VideoMemoryInfo;
 	class IGLOContext;
 
 	// -------------------- Constants --------------------//
@@ -977,9 +979,9 @@ namespace ig
 
 	private:
 		ImageDesc desc;
-		
+
 		// Byte size of the entire image (including all faces and mipLevels).
-		size_t size = 0; 
+		size_t size = 0;
 
 		// A pointer to where the pixel data begins.
 		byte* pixelsPtr = nullptr;
@@ -1481,16 +1483,14 @@ namespace ig
 			{
 				return ig::ToString
 				(
-					"---- Descriptor stats (Live/Max) ----\n",
-					"Persistent Resources: ", livePersistentResources, "/", maxPersistentResources, "\n",
-					"Temp Resources: ", liveTempResources, "/", maxTempResources, "\n"
-					"Samplers: ", liveSamplers, "/", maxSamplers, "\n"
+					"Persistent Resource Descriptors: ", livePersistentResources, "/", maxPersistentResources, "\n",
+					"Temp Resource Descriptors: ", liveTempResources, "/", maxTempResources, "\n"
+					"Sampler Descriptors: ", liveSamplers, "/", maxSamplers
 				);
 			}
 		};
-
-		Stats GetStats() const;
-		std::string GetStatsString() const;
+		Stats GetCurrentStats() const;
+		Stats GetLastFrameStats() const { return lastFrameStats; }
 
 #ifdef IGLO_D3D12
 
@@ -1603,6 +1603,7 @@ namespace ig
 		PersistentIndexAllocator persResourceIndices;
 		PersistentIndexAllocator persSamplerIndices;
 		std::vector<TempIndexAllocator> tempResourceIndices; // Per-frame
+		Stats lastFrameStats;
 
 		Impl_DescriptorHeap impl;
 
@@ -2074,6 +2075,11 @@ namespace ig
 		Impl_TempBuffer impl;
 	};
 
+	// TempBufferAllocator manages upload heap buffers used for per-frame data.
+	// All data stored in these buffers is transient and discarded/reset each frame.
+	// Buffers are allocated in pages.
+	// Some pages are reused across frames for efficiency,
+	// these are called persistent pages, but the data on them is still always temporary.
 	class TempBufferAllocator
 	{
 	public:
@@ -2091,14 +2097,41 @@ namespace ig
 		void NextFrame();
 		void FreeAllTempPages();
 
-		// Sub‐allocate a temporary chunk inside an existing page, or from a new page if there's no room left.
+		// Sub‐allocate a chunk from an existing page, or from a new page if there's no room left.
 		TempBuffer AllocateTempBuffer(uint64_t sizeInBytes, uint32_t alignment);
-
-		// How many VkBuffers / D3D12Resources are currently allocated in this frame (persistent + temp)
-		size_t GetNumLivePages() const;
 
 		// Gets the byte size of a linear page.
 		uint64_t GetLinearPageSize() const { return linearPageSize; }
+
+		struct Stats
+		{
+			// Total number of pages allocated (persistent + temp overflow)
+			size_t totalPageCount = 0;
+
+			// Total bytes allocated across all pages
+			uint64_t totalAllocatedBytes = 0;
+
+			// Number of overflow pages allocated this frame.
+			// Overflow pages are only allocated when the persistent pages run out of space.
+			// It's normal for this number to exceed 0 when loading textures/buffers for scenes.
+			// You generally want this number to be 0 while rendering, as allocating new pages every frame is slow.
+			size_t overflowAllocations = 0;
+
+			float capacity = 0.0f;
+
+			std::string ToString()
+			{
+				std::string hint = (overflowAllocations == 0) ? "  (ok)" : "  (warning: per-frame page allocation)";
+				return ig::ToString
+				(
+					"Upload heap pages: ", totalPageCount, " (", FormatByteSize(totalAllocatedBytes), ")\n",
+					"Upload heap capacity: ", FormatPercentage(capacity), "\n",
+					"Upload heap overflow allocations: ", overflowAllocations, hint
+				);
+			}
+		};
+		Stats GetCurrentStats() const;
+		Stats GetLastFrameStats() const { return lastFrameStats; }
 
 	private:
 		struct Page
@@ -2111,6 +2144,7 @@ namespace ig
 			static Page Create(const IGLOContext&, uint64_t sizeInBytes);
 
 			void* mapped = nullptr;
+			uint64_t sizeInBytes = 0;
 
 			Impl_BufferAllocatorPage impl;
 
@@ -2120,8 +2154,8 @@ namespace ig
 
 		struct PerFrame
 		{
-			std::vector<Page> largePages; // Each page here is larger than pageSize and has a unique size. All temporary.
-			std::vector<Page> linearPages; // First pages are persistent, rest are temporary.
+			std::vector<Page> largePages; // Temporary allocations. Each page here is larger than pageSize and has a unique size.
+			std::vector<Page> linearPages; // Only first pages are persistent, the rest are temporary (overflow).
 			uint64_t linearNextByte = 0; // For the current linear page
 		};
 
@@ -2132,6 +2166,7 @@ namespace ig
 		uint32_t numFrames = 0;
 		uint64_t linearPageSize = 0;
 		std::vector<PerFrame> perFrame; // One for each frame
+		Stats lastFrameStats;
 
 		bool LogErrorIfNotLoaded();
 		static constexpr size_t numPersistentPages = 1;
@@ -2339,9 +2374,9 @@ namespace ig
 	struct RenderSettings
 	{
 		PresentMode presentMode = PresentMode::Vsync;
-		
+
 		// Default backbuffer format is BGRA for X11 compatibility
-		Format backBufferFormat = Format::BYTE_BYTE_BYTE_BYTE_BGRA; 
+		Format backBufferFormat = Format::BYTE_BYTE_BYTE_BYTE_BGRA;
 
 		uint32_t maxFramesInFlight = 2;
 		uint32_t numBackBuffers = 3;
@@ -2397,6 +2432,59 @@ namespace ig
 		// In D3D12, all present modes provided by iglo are guaranteed to be supported.
 		// In Vulkan, only the 'Vsync' present mode is guaranteed to be supported.
 		SupportedPresentModes supportedPresentModes;
+	};
+
+	struct SystemMemoryInfo
+	{
+		uint64_t totalRAM = 0;
+		uint64_t usedRAM = 0;
+		uint64_t availableRAM = 0;
+
+		std::string ToString(int decimals = 2) const
+		{
+			if (totalRAM == 0) return "RAM: N/A";
+
+			const float usage = float(usedRAM) / float(totalRAM);
+
+			return std::format(
+				"RAM: {} / {} ({}) | Available: {}",
+				FormatByteSize(usedRAM, decimals),
+				FormatByteSize(totalRAM, decimals),
+				FormatPercentage(usage, decimals),
+				FormatByteSize(availableRAM, decimals));
+		}
+	};
+
+	struct VideoMemoryInfo
+	{
+		uint64_t totalVRAM = 0;
+
+		// These values may be unavailable on some platforms.
+		// (Vulkan requires the VK_EXT_memory_budget extension)
+		std::optional<uint64_t> usedVRAM;
+		std::optional<uint64_t> availableVRAM;
+
+		std::string ToString(int decimals = 2) const
+		{
+			std::string out = std::format("VRAM: {} / {}",
+				usedVRAM ? FormatByteSize(*usedVRAM, decimals) : "N/A",
+				FormatByteSize(totalVRAM, decimals));
+
+			if (usedVRAM && availableVRAM && totalVRAM != 0)
+			{
+				const float usage = float(*usedVRAM) / float(totalVRAM);
+
+				out += std::format(" ({}) | Available: {}",
+					FormatPercentage(usage, decimals),
+					FormatByteSize(*availableVRAM, decimals));
+			}
+			else
+			{
+				out += " (usage unknown | available: N/A)";
+			}
+
+			return out;
+		}
 	};
 
 	class IGLOContext
@@ -2626,6 +2714,10 @@ namespace ig
 
 		// The bilinear clamp sampler is needed for the mipmap generation pipeline.
 		const Descriptor* GetBilinearClampSamplerDescriptor() const { return bilinearClampSampler.GetDescriptor(); }
+
+		// All queried memory info (RAM/VRAM) are estimations and should only be used for debugging/warnings.
+		SystemMemoryInfo QuerySystemMemoryInfo();
+		VideoMemoryInfo QueryVideoMemoryInfo();
 
 #ifdef IGLO_D3D12
 		ID3D12Device10* GetD3D12Device() const { return graphics.device.Get(); }
