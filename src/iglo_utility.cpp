@@ -223,19 +223,19 @@ namespace ig
 	{
 		t1 = std::chrono::steady_clock::now();
 	}
-	double Timer::GetSeconds()
+	double Timer::GetSeconds() const
 	{
 		return std::chrono::duration<double>(std::chrono::steady_clock::now() - t1).count();
 	}
-	double Timer::GetMilliseconds()
+	double Timer::GetMilliseconds() const
 	{
 		return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t1).count();
 	}
-	double Timer::GetMicroseconds()
+	double Timer::GetMicroseconds() const
 	{
 		return std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - t1).count();
 	}
-	uint64_t Timer::GetNanoseconds()
+	uint64_t Timer::GetNanoseconds() const
 	{
 		return std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - t1).count();
 	}

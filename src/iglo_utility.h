@@ -102,13 +102,16 @@ namespace ig
 	{
 	public:
 		Timer() { Reset(); }
+
 		// Starts/Resets the timer.
 		void Reset();
-		// Gets the amount of time that have passed since Reset() was called.
-		double GetSeconds();
-		double GetMilliseconds();
-		double GetMicroseconds();
-		uint64_t GetNanoseconds();
+
+		// Gets amount of time passed since Reset() was last called.
+		double GetSeconds() const;
+		double GetMilliseconds() const;
+		double GetMicroseconds() const;
+		uint64_t GetNanoseconds() const;
+
 		// Retreives elapsed time and resets the timer simultaneously, using only a single call to chrono::steady_clock::now().
 		double GetSecondsAndReset();
 		double GetMillisecondsAndReset();
