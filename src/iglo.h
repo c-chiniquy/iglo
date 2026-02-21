@@ -2531,7 +2531,7 @@ namespace ig
 		// Sets windowed mode window resizability.
 		void SetWindowResizable(bool resizable);
 		// Gets windowed mode window resizability.
-		bool GetWindowResizable() { return windowedMode.resizable; }
+		bool GetWindowResizable() const { return windowedMode.resizable; }
 		// Sets windowed mode window border visibility.
 		void SetWindowBordersVisible(bool visible);
 		// Gets windowed mode window border visibility.
@@ -2545,7 +2545,7 @@ namespace ig
 		void CenterWindow();
 		// If enabled, files can be drag-and-dropped onto the window.
 		void EnableDragAndDrop(bool enable);
-		bool GetDragAndDropEnabled() { return window.enableDragAndDrop; }
+		bool GetDragAndDropEnabled() const { return window.enableDragAndDrop; }
 
 		void SetWindowIconFromImage(const Image& icon);
 		void SetCursor(const Cursor& cursor) const;

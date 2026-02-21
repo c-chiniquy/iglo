@@ -1175,7 +1175,7 @@ namespace ig
 			Log(LogType::Error, "Failed setting vertex buffer(s). Reason: No vertex buffers provided.");
 			return;
 		}
-		if (count + startSlot >= MAX_VERTEX_BUFFER_BIND_SLOTS)
+		if (count + startSlot > MAX_VERTEX_BUFFER_BIND_SLOTS)
 		{
 			Log(LogType::Error, "Failed setting vertex buffer(s). Reason: Vertex buffer slot out of bounds!");
 			return;
@@ -1502,7 +1502,7 @@ namespace ig
 		if (!result)
 		{
 			Log(LogType::Error, errStr + result.errorMessage);
-			return out;
+			return nullptr;
 		}
 
 		return out;
@@ -1794,7 +1794,7 @@ namespace ig
 
 		DestroySwapChainResources();
 		Impl_DestroyGraphicsDevice();
-		}
+	}
 
 	DetailedResult IGLOContext::InitWindow(const WindowSettings& windowSettings)
 	{
@@ -2105,7 +2105,7 @@ namespace ig
 	uint32_t Image::CalculateNumMips(Extent2D extent)
 	{
 		uint32_t numLevels = 1;
-		while (extent.width > 1 && extent.height > 1)
+		while (extent.width > 1 || extent.height > 1)
 		{
 			extent.width = std::max(extent.width / 2, (uint32_t)1);
 			extent.height = std::max(extent.height / 2, (uint32_t)1);
@@ -2821,8 +2821,8 @@ namespace ig
 				break;
 			default:
 				throw std::runtime_error("This should be impossible.");
-	}
-	}
+			}
+		}
 		return out;
 	}
 
@@ -2922,7 +2922,7 @@ namespace ig
 		{
 			Log(LogType::Error, ToString(errStr, "Failed to allocate temporary resource descriptor."));
 			return Descriptor();
-}
+		}
 
 		TempBuffer tempBuffer = tempBufferAllocator->AllocateTempBuffer(numBytes, GetGraphicsSpecs().bufferPlacementAlignments.constant);
 		if (!tempBuffer)
@@ -3059,7 +3059,7 @@ namespace ig
 #endif
 
 		return outDescriptor;
-		}
+	}
 
 	Buffer::~Buffer()
 	{
@@ -3687,7 +3687,7 @@ namespace ig
 		cmd.FlushBarriers();
 
 		return DetailedResult::Success();
-			}
+	}
 
 	void Texture::SetPixels(CommandList& cmd, const Image& srcImage)
 	{
@@ -3963,4 +3963,4 @@ namespace ig
 		return descriptor;
 	}
 
-		} //end of namespace ig
+} //end of namespace ig
