@@ -22,7 +22,7 @@
     - utf8_next_codepoint() now returns replacement characters for invalid byte sequences
     - The utf16 functions now use u16string instead of wstring
     - Improved utf8_is_next_sequence_valid()
-    - Improved Random::NextInt32()
+    - Improved ig::Random::NextInt32()
     - Made some timer functions const
     - Fixed bug in Vector4::GetNormalized()
   - iglo
@@ -31,7 +31,7 @@
     - Added GetFormatName()
     - Renamed ConvertKeyToString() to GetKeyName()
     - MouseEvent::scrollWheel is now a float
-    - Fixed a typo in ig::Key
+    - Fixed a typo in ig::Key enum
     - Fixed bug in Image::CalculateNumMips()
   - IGLOContext
     - Added GetMouseButtonState()
