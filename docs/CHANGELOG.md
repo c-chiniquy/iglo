@@ -23,9 +23,9 @@
     - Made some timer functions const
   - iglo
     - Added GetFormatName()
+    - Renamed ConvertKeyToString() to GetKeyName()
     - MouseEvent::scrollWheel is now a float
     - Now compatible with Agility SDK 1.717.1-preview
-    - Renamed ConvertKeyToString() to GetKeyName()
     - Fixed a typo in ig::Key
     - Fixed bug in Image::CalculateNumMips()
   - IGLOContext
