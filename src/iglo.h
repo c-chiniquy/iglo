@@ -161,7 +161,7 @@ namespace ig
 		Info = 0, // Example: Prints the name of the graphics API version being used.
 		Warning,
 		Error, // Example: Failed to load texture, copy texture etc...
-		FatalError, // Example: Failed to load IGLOContext, an error occured that forced IGLOContext to unload.
+		FatalError, // Example: Failed to create IGLOContext
 	};
 
 	// Logs a debug message.
@@ -688,36 +688,35 @@ namespace ig
 		bool IsNull() const { return (heapIndex == IGLO_UINT32_MAX); }
 		void SetToNull() { heapIndex = IGLO_UINT32_MAX; }
 
+		explicit operator bool() const { return !IsNull(); }
+
 		uint32_t heapIndex;
 		DescriptorType type;
 	};
 
 	class Sampler
 	{
+	private:
+		Sampler(const IGLOContext& context) :context(context) {}
+
+		Sampler& operator=(const Sampler&) = delete;
+		Sampler(const Sampler&) = delete;
+
 	public:
-		Sampler() = default;
-		~Sampler() { Unload(); }
+		~Sampler();
 
-		Sampler& operator=(Sampler&) = delete;
-		Sampler(Sampler&) = delete;
+		static std::unique_ptr<Sampler> Create(const IGLOContext&, const SamplerDesc& desc);
 
-		void Unload();
-		bool IsLoaded() const { return isLoaded; }
-
-		// Creates a sampler state. Returns true if success.
-		bool Load(const IGLOContext&, const SamplerDesc& desc);
-
-		const Descriptor* GetDescriptor() const;
+		Descriptor GetDescriptor() const;
 
 	private:
-		bool isLoaded = false;
-		const IGLOContext* context = nullptr;
+		const IGLOContext& context;
 		Descriptor descriptor;
 #ifdef IGLO_VULKAN
 		VkSampler vkSampler = VK_NULL_HANDLE;
 #endif
 
-		DetailedResult Impl_Load(const IGLOContext&, const SamplerDesc& desc);
+		DetailedResult Impl_Create(const SamplerDesc& desc);
 	};
 
 	enum class Format
@@ -865,6 +864,7 @@ namespace ig
 
 	};
 	FormatInfo GetFormatInfo(Format format);
+	const char* GetFormatName(Format format);
 
 	struct ImageDesc
 	{
@@ -879,15 +879,14 @@ namespace ig
 
 	class Image
 	{
+	private:
+		Image(const ImageDesc& desc) : desc(desc) {}
+
+		Image& operator=(const Image&) = delete;
+		Image(const Image&) = delete;
+
 	public:
-		Image() = default;
-		~Image() { Unload(); }
-
-		Image& operator=(Image&) = delete;
-		Image(Image&) = delete;
-
-		Image& operator=(Image&&) noexcept; // Move assignment operator
-		Image(Image&&) noexcept; // Move constructor
+		~Image();
 
 		// Calculates the total byte size of an image, including all miplevels and faces.
 		static size_t CalculateTotalSize(Extent2D extent, Format format, uint32_t mipLevels, uint32_t numFaces);
@@ -896,17 +895,14 @@ namespace ig
 		static Extent2D CalculateMipExtent(Extent2D extent, uint32_t mipIndex);
 		static uint32_t CalculateNumMips(Extent2D extent);
 
-		void Unload();
-		bool IsLoaded() const { return pixelsPtr != nullptr; }
+		// Create an image. All pixels are filled with an initial value of 0.
+		static std::unique_ptr<Image> Create(uint32_t width, uint32_t height, Format format);
 
-		// Creates an image. All pixels are filled with an initial value of 0.
-		bool Load(uint32_t width, uint32_t height, Format format);
+		// Create an image with advanced parameters.
+		static std::unique_ptr<Image> Create(const ImageDesc& desc);
 
-		// Creates an image using more advanced parameters. All pixels are filled with an initial value of 0.
-		bool Load(const ImageDesc& desc);
-
-		// Loads an image from a file.
-		bool LoadFromFile(const std::string& filename);
+		// Load an image from file.
+		static std::unique_ptr<Image> LoadFromFile(const std::string& filename);
 
 		// Loads an image from a file in memory (PNG, JPEG, GIF, BMP, DDS, etc...).
 		// 
@@ -917,22 +913,22 @@ namespace ig
 		// When 'guaranteeOwnership' is false:
 		// - May directly reference 'fileData' without copying for better performance for DDS filetypes.
 		// - WARNING: You must keep 'fileData' valid for the lifetime of this image.
-		bool LoadFromMemory(const byte* fileData, size_t numBytes, bool guaranteeOwnership = true);
+		static std::unique_ptr<Image> LoadFromMemory(const byte* fileData, size_t numBytes, bool guaranteeOwnership = true);
 
 		// Creates a non-owning view of existing pixel memory.
 		// 
 		// OWNERSHIP AND LIFETIME:
-		// - This image does NOT take ownership of the pixel data
-		// - The provided 'pixels' memory MUST remain valid as long as this image exists
-		// - No data is copied - the image operates directly on your memory
-		// - You are responsible for freeing 'pixels' yourself
+		// - This image does NOT take ownership of the pixel data.
+		// - The provided 'pixels' memory MUST remain valid as long as this image exists.
+		// - No data is copied. The image operates directly on your memory.
+		// - You are responsible for freeing 'pixels' yourself.
 		// 
 		// USAGE:
 		// - Useful for zero-copy interaction with existing pixel buffers
 		// - Allows reading/writing to your memory through image interface
-		bool LoadAsPointer(const void* pixels, const ImageDesc& desc);
+		static std::unique_ptr<Image> CreateWrapped(const void* pixels, const ImageDesc& desc);
 
-		// Saves image to file. Supported file extensions: PNG, BMP, TGA, JPG/JPEG, HDR.
+		// Save image to file. Supported file extensions: PNG, BMP, TGA, JPG/JPEG, HDR.
 		bool SaveToFile(const std::string& filename) const;
 
 		const ImageDesc& GetDesc() const { return desc; }
@@ -949,7 +945,8 @@ namespace ig
 		bool IsSRGB() const;
 
 		// Sets the format to an sRGB or non-sRGB equivalent to current format.
-		// Not all formats support being sRGB. If the requested sRGB or non-sRGB format does not exist, no changes will be made.
+		// Not all formats support being sRGB.
+		// If the requested sRGB or non-sRGB format does not exist, no changes will be made.
 		void SetSRGB(bool sRGB);
 
 		// Replaces all pixel values that are colorA with colorB.
@@ -977,24 +974,24 @@ namespace ig
 		// faceIndex=0, mipIndex=0 will get the pixels located at the first mip at the first face.
 		void* GetMipPixels(uint32_t faceIndex, uint32_t mipIndex) const;
 
+		bool IsWrapped() const { return ownership == PixelOwnership::Wrapped; }
+
 	private:
+		enum class PixelOwnership
+		{
+			OwnedBuffer, // Pixel data is stored in 'ownedBuffer' vector
+			OwnedSTBI, // 'pixelsPtr' points to memory allocated by stb_image, and must be freed by stb_image.
+			Wrapped, // Doesn't own any pixel data
+		};
+
 		ImageDesc desc;
-
-		// Byte size of the entire image (including all faces and mipLevels).
-		size_t size = 0;
-
-		// A pointer to where the pixel data begins.
-		byte* pixelsPtr = nullptr;
-
-		// If true, 'pixelsPtr' points to memory allocated by stb_image which must be freed using stb_image at some point.
-		bool mustFreeSTBI = false;
-
-		// A byte array containing the source of the pixel data (just pixel data or an entire DDS file).
-		// Only used if this image owns the pixel data itself.
-		std::vector<byte> ownedBuffer;
+		size_t size = 0; // Byte size of the entire image (including all faces and mipLevels).
+		PixelOwnership ownership = PixelOwnership::Wrapped;
+		std::vector<byte> ownedBuffer; // just pixel data or an entire DDS file.
+		byte* pixelsPtr = nullptr; // A pointer to where the pixel data begins.
 
 		static bool FileIsOfTypeDDS(const byte* fileData, size_t numBytes);
-		bool LoadFromDDS(const byte* fileData, size_t numBytes, bool guaranteeOwnership);
+		static std::unique_ptr<Image> LoadFromDDS(const byte* fileData, size_t numBytes, bool guaranteeOwnership);
 	};
 
 	enum class TextureUsage
@@ -1040,6 +1037,7 @@ namespace ig
 		// Only relevant for render texture and depth buffer usage.
 		ClearValue optimizedClearValue = ClearValue();
 
+		// The format to use for the shader resourve view (SRV).
 		// Optional. If set to Format::None, the texture's main format is used for the SRV.
 		// It can be useful to use different formats for the SRV and RTV of a render texture,
 		// like for example to avoid automatic sRGB conversions by using a non-sRGB RTV and an sRGB SRV.
@@ -1067,47 +1065,35 @@ namespace ig
 
 	class Texture
 	{
+	private:
+		Texture(const IGLOContext& context, const TextureDesc& desc, bool isWrapped)
+			: context(context), desc(desc), isWrapped(isWrapped) {}
+
+		Texture& operator=(const Texture&) = delete;
+		Texture(const Texture&) = delete;
+
 	public:
-		Texture() = default;
-		~Texture() { Unload(); }
+		~Texture();
 
-		Texture& operator=(Texture&) = delete;
-		Texture(Texture&) = delete;
-
-		Texture& operator=(Texture&&) noexcept; // Move assignment operator
-		Texture(Texture&&) noexcept; // Move constructor
-
-		// Destroys the texture.
-		// It's OK to unload textures that are already unloaded (in that case nothing happens).
-		void Unload();
-
-		// If true, this texture has been created and can be used for things.
-		bool IsLoaded() const { return isLoaded; }
-
-		// Creates a texture. Replaces existing texture if already loaded.
-		bool Load(const IGLOContext&, uint32_t width, uint32_t height, Format, TextureUsage,
+		static std::unique_ptr<Texture> Create(const IGLOContext&, uint32_t width, uint32_t height, Format, TextureUsage,
 			MSAA msaa = MSAA::Disabled, ClearValue optimizedClearValue = ClearValue());
 
-		// Creates a texture using more advanced parameters.
-		bool Load(const IGLOContext&, const TextureDesc&);
+		static std::unique_ptr<Texture> Create(const IGLOContext&, const TextureDesc&);
 
-		// Loads a texture from file. Returns true if success.
-		// If 'generateMipmaps' is true, mipmaps will be generated if the image does not already have them.
-		bool LoadFromFile(const IGLOContext&, CommandList&, const std::string& filename, bool generateMipmaps = true, bool sRGB = false);
+		static std::unique_ptr<Texture> LoadFromFile(const IGLOContext&, CommandList&,
+			const std::string& filename, bool generateMipmaps = true, bool sRGB = false);
 
-		// Loads a texture from a file in memory (DDS,PNG,JPG,GIF etc...). Returns true if success.
-		// If 'generateMipmaps' is true, mipmaps will be generated if the image does not already have them.
-		bool LoadFromMemory(const IGLOContext&, CommandList&, const byte* fileData, size_t numBytes, bool generateMipmaps = true, bool sRGB = false);
+		static std::unique_ptr<Texture> LoadFromMemory(const IGLOContext&, CommandList&,
+			const byte* fileData, size_t numBytes, bool generateMipmaps = true, bool sRGB = false);
 
-		// Loads a texture from image data in memory. Returns true if success.
-		// If 'generateMipmaps' is true, mipmaps will be generated if the image does not already have them.
-		bool LoadFromMemory(const IGLOContext&, CommandList&, const Image& image, bool generateMipmaps = true);
+		static std::unique_ptr<Texture> LoadFromMemory(const IGLOContext&, CommandList&,
+			const Image& image, bool generateMipmaps = true);
 
 		// Creates a non-owning wrapper for existing graphics API resources and descriptors.
-		// NOTE: This texture has no ownership over its resources/descriptors, and will not free them when unloading.
+		// NOTE: This texture has no ownership over its resources/descriptors, and will not free them when destroyed.
 		// You must ensure the given resources/descriptors are valid during the lifetime of this texture.
 		// You are responsible for freeing the given resources/descriptors yourself.
-		bool LoadAsWrapped(const IGLOContext&, const WrappedTextureDesc&);
+		static std::unique_ptr<Texture> CreateWrapped(const IGLOContext&, const WrappedTextureDesc&);
 
 		// Updates the contents of this texture.
 		// Usage must not be Readable.
@@ -1117,10 +1103,10 @@ namespace ig
 		void SetPixelsAtSubresource(CommandList& cmd, const void* pixelData, uint32_t destFaceIndex, uint32_t destMipIndex);
 
 		// Reads the contents of this texture and writes it to the given image.
-		// The given image must be loaded and must match the format and dimensions of this texture.
+		// The given image must match the format and dimensions of this texture.
 		// Usage must be Readable.
 		void ReadPixels(Image& destImage);
-		Image ReadPixels();
+		std::unique_ptr<Image> ReadPixels();
 
 		const TextureDesc& GetDesc() const { return desc; }
 		Extent2D GetExtent() const { return desc.extent; }
@@ -1132,15 +1118,15 @@ namespace ig
 		uint32_t GetNumFaces() const { return desc.numFaces; }
 		uint32_t GetMipLevels() const { return desc.mipLevels; }
 		bool IsCubemap() const { return desc.isCubemap; }
-		ClearValue GetOptimiziedClearValue() const { return desc.optimizedClearValue; }
+		ClearValue GetOptimizedClearValue() const { return desc.optimizedClearValue; }
 
-		// Gets the SRV descriptor for this texture, if it has one.
-		// NOTE: These GetDescriptor() functions will return nullptr if no such descriptor exists. This is to
-		// protect you from accidentally passing an invalid heap index to the shader and crashing the GPU.
-		const Descriptor* GetDescriptor() const;
+		// Gets the SRV descriptor for this texture.
+		// Throws an exception if this texture doesn't have an SRV descriptor.
+		Descriptor GetDescriptor() const;
 
-		// Gets the UAV descriptor for this texture, if it has one.
-		const Descriptor* GetUnorderedAccessDescriptor() const;
+		// Gets the UAV descriptor for this texture.
+		// Throws an exception if this texture doesn't have a UAV descriptor.
+		Descriptor GetUnorderedAccessDescriptor() const;
 
 #ifdef IGLO_D3D12
 		ID3D12Resource* GetD3D12Resource() const;
@@ -1161,18 +1147,17 @@ namespace ig
 #endif
 
 	private:
-		bool isLoaded = false;
-		const IGLOContext* context = nullptr;
-		TextureDesc desc;
+		const IGLOContext& context;
+		const TextureDesc desc;
+		const bool isWrapped = false;
 		Descriptor srvDescriptor;
 		Descriptor uavDescriptor;
 		std::vector<void*> readMapped; // Per-frame if Readable; otherwise not used.
-		bool isWrapped = false;
 
 		Impl_Texture impl;
 
-		void Impl_Unload();
-		DetailedResult Impl_Load(const IGLOContext&, const TextureDesc&);
+		void Impl_Destroy();
+		DetailedResult Impl_Create();
 		DetailedResult GenerateMips(CommandList& cmd, const Image& image);
 		static DetailedResult ValidateMipGeneration(CommandListType, const Image& image);
 	};
@@ -1216,26 +1201,31 @@ namespace ig
 		ShaderConstant,
 	};
 
+	struct BufferDesc
+	{
+		BufferType type = BufferType::VertexBuffer;
+		BufferUsage usage = BufferUsage::Default;
+		uint64_t size = 0; // Total byte size of buffer. No alignment, just the actual data.
+		uint32_t stride = 0; // Stride in bytes.
+		uint32_t numElements = 0;
+	};
+
 	class Buffer
 	{
+	private:
+		Buffer(const IGLOContext& context, const BufferDesc& desc) :context(context), desc(desc) {}
+
+		Buffer& operator=(const Buffer&) = delete;
+		Buffer(const Buffer&) = delete;
+
 	public:
-		Buffer() = default;
-		~Buffer() { Unload(); }
+		~Buffer();
 
-		Buffer& operator=(Buffer&) = delete;
-		Buffer(Buffer&) = delete;
-
-		Buffer& operator=(Buffer&&) noexcept; // Move assignment operator
-		Buffer(Buffer&&) noexcept; // Move constructor
-
-		void Unload();
-		bool IsLoaded() const { return isLoaded; }
-
-		bool LoadAsVertexBuffer(const IGLOContext&, uint32_t vertexStride, uint32_t numVertices, BufferUsage usage);
-		bool LoadAsIndexBuffer(const IGLOContext&, IndexFormat format, uint32_t numIndices, BufferUsage usage);
-		bool LoadAsStructuredBuffer(const IGLOContext&, uint32_t elementStride, uint32_t numElements, BufferUsage usage);
-		bool LoadAsRawBuffer(const IGLOContext&, uint64_t numBytes, BufferUsage usage);
-		bool LoadAsShaderConstant(const IGLOContext&, uint64_t numBytes, BufferUsage usage);
+		static std::unique_ptr<Buffer> CreateVertexBuffer(const IGLOContext&, uint32_t vertexStride, uint32_t numVertices, BufferUsage usage);
+		static std::unique_ptr<Buffer> CreateIndexBuffer(const IGLOContext&, IndexFormat format, uint32_t numIndices, BufferUsage usage);
+		static std::unique_ptr<Buffer> CreateStructuredBuffer(const IGLOContext&, uint32_t elementStride, uint32_t numElements, BufferUsage usage);
+		static std::unique_ptr<Buffer> CreateRawBuffer(const IGLOContext&, uint64_t numBytes, BufferUsage usage);
+		static std::unique_ptr<Buffer> CreateShaderConstant(const IGLOContext&, uint64_t numBytes, BufferUsage usage);
 
 		// Updates the contents of this buffer.
 		// Default or UnorderedAccess buffer usage is required.
@@ -1252,22 +1242,20 @@ namespace ig
 		// The number of bytes that is written to 'destData' is equal to the size of this buffer.
 		void ReadData(void* destData);
 
-		// Total byte size of this buffer. No alignment, just the actual data.
-		uint64_t GetSize() const { return size; }
+		const BufferDesc& GetDesc() const { return desc; }
+		uint64_t GetSize() const { return desc.size; }
+		uint32_t GetStride() const { return desc.stride; }
+		BufferType GetType() const { return desc.type; }
+		BufferUsage GetUsage() const { return desc.usage; }
+		uint32_t GetNumElements() const { return desc.numElements; }
 
-		// Stride is in bytes.
-		uint32_t GetStride() const { return stride; }
+		// Gets the SRV or CBV descriptor for this buffer (determined by buffer usage).
+		// Throws an exception if this buffer doesn't have an SRV or CBV descriptor.
+		Descriptor GetDescriptor() const;
 
-		BufferType GetType() const { return type; }
-		BufferUsage GetUsage() const { return usage; }
-		uint32_t GetNumElements() const { return numElements; }
-
-		// Gets the SRV or CBV descriptor for this buffer, if it has one (determined by buffer usage).
-		// Will return nullptr if buffer doesn't have an SRV or CBV descriptor.
-		const Descriptor* GetDescriptor() const;
-
-		// Gets the UAV descriptor for this buffer, if it has one.
-		const Descriptor* GetUnorderedAccessDescriptor() const;
+		// Gets the UAV descriptor for this buffer.
+		// Throws an exception if this buffer doesn't have a UAV descriptor.
+		Descriptor GetUnorderedAccessDescriptor() const;
 
 #ifdef IGLO_D3D12
 		ID3D12Resource* GetD3D12Resource() const;
@@ -1281,13 +1269,9 @@ namespace ig
 #endif
 
 	private:
-		bool isLoaded = false;
-		const IGLOContext* context = nullptr;
-		BufferType type = BufferType::VertexBuffer;
-		BufferUsage usage = BufferUsage::Default;
-		uint64_t size = 0; // total size in bytes
-		uint32_t stride = 0; // stride in bytes
-		uint32_t numElements = 0;
+		const IGLOContext& context;
+		const BufferDesc desc;
+
 		std::vector<Descriptor> descriptor_SRV_or_CBV; // Per-frame if Dynamic.
 		Descriptor descriptor_UAV;
 		uint32_t dynamicSetCounter = 0; // Increases by 1 when setting dynamic data. Capped at number of frames in flight.
@@ -1295,9 +1279,9 @@ namespace ig
 
 		Impl_Buffer impl;
 
-		void Impl_Unload();
-		bool InternalLoad(const IGLOContext&, uint64_t size, uint32_t stride, uint32_t numElements, BufferUsage, BufferType);
-		DetailedResult Impl_InternalLoad(const IGLOContext&, uint64_t size, uint32_t stride, uint32_t numElements, BufferUsage, BufferType);
+		static std::unique_ptr<Buffer> InternalCreate(const IGLOContext& context, const BufferDesc& desc);
+		void Impl_Destroy();
+		DetailedResult Impl_Create();
 	};
 
 	enum class InputClass
@@ -1390,40 +1374,39 @@ namespace ig
 
 	class Pipeline
 	{
+	private:
+		Pipeline(const IGLOContext& context, PrimitiveTopology primitiveTopology, bool isComputePipeline)
+			: context(context), primitiveTopology(primitiveTopology), isComputePipeline(isComputePipeline) {}
+
+		Pipeline& operator=(const Pipeline&) = delete;
+		Pipeline(const Pipeline&) = delete;
+
 	public:
-		Pipeline() = default;
-		~Pipeline() { Unload(); }
-
-		Pipeline& operator=(Pipeline&) = delete;
-		Pipeline(Pipeline&) = delete;
-
-		void Unload();
-		bool IsLoaded() const { return isLoaded; }
+		~Pipeline();
 
 		// Creates a graphics pipeline state object.
-		// Returns true if success.
-		bool Load(const IGLOContext&, const PipelineDesc&);
+		static std::unique_ptr<Pipeline> CreateGraphics(const IGLOContext&, const PipelineDesc&);
+
+		// A helper function that creates a graphics pipeline state object in a single line of code.
+		// You must provide one blend state (BlendDesc) for each expected render texture.
+		static std::unique_ptr<Pipeline> CreateGraphics(const IGLOContext&,
+			const Shader& VS, const Shader& PS, const RenderTargetDesc&, const std::vector<VertexElement>&,
+			PrimitiveTopology, DepthDesc, RasterizerDesc, const std::vector<BlendDesc>&);
 
 		// A helper function that creates a graphics pipeline state object in a single line of code.
 		// Vertex shader bytecode and pixel shader bytecode is loaded from file.
 		// You must provide one blend state (BlendDesc) for each expected render texture.
-		// Returns true if success.
-		bool LoadFromFile(const IGLOContext&, const std::string& filepathVS, const std::string& entryPointNameVS,
-			const std::string filepathPS, const std::string& entryPointNamePS, const RenderTargetDesc&,
-			const std::vector<VertexElement>&, PrimitiveTopology, DepthDesc, RasterizerDesc, const std::vector<BlendDesc>&);
-
-		// A helper function that creates a graphics pipeline state object in a single line of code.
-		// You must provide one blend state (BlendDesc) for each expected render texture.
-		// Returns true if success.
-		bool Load(const IGLOContext&, const Shader& VS, const Shader& PS, const RenderTargetDesc&,
-			const std::vector<VertexElement>&, PrimitiveTopology, DepthDesc, RasterizerDesc, const std::vector<BlendDesc>&);
+		static std::unique_ptr<Pipeline> LoadFromFile(const IGLOContext&,
+			const std::string& filepathVS, const std::string& entryPointNameVS,
+			const std::string filepathPS, const std::string& entryPointNamePS,
+			const RenderTargetDesc&, const std::vector<VertexElement>&,
+			PrimitiveTopology, DepthDesc, RasterizerDesc, const std::vector<BlendDesc>&);
 
 		// Creates a compute pipeline state object.
-		bool LoadAsCompute(const IGLOContext&, const Shader& CS);
-
-		bool IsComputePipeline() const { return isComputePipeline; }
+		static std::unique_ptr<Pipeline> CreateCompute(const IGLOContext&, const Shader& CS);
 
 		PrimitiveTopology GetPrimitiveTopology() const { return primitiveTopology; }
+		bool IsComputePipeline() const { return isComputePipeline; }
 
 #ifdef IGLO_D3D12
 		ID3D12PipelineState* GetD3D12PipelineState() const { return impl.pipeline.Get(); }
@@ -1433,33 +1416,32 @@ namespace ig
 #endif
 
 	private:
-		bool isLoaded = false;
-		const IGLOContext* context = nullptr;
-		bool isComputePipeline = false;
-		PrimitiveTopology primitiveTopology = PrimitiveTopology::Undefined;
+		const IGLOContext& context;
+		const PrimitiveTopology primitiveTopology = PrimitiveTopology::Undefined;
+		const bool isComputePipeline = false;
 
 		Impl_Pipeline impl;
 
-		void Impl_Unload();
-		DetailedResult Impl_Load(const IGLOContext&, const PipelineDesc&);
-		DetailedResult Impl_LoadAsCompute(const IGLOContext& context, const Shader& CS);
+		void Impl_Destroy();
+		DetailedResult Impl_CreateGraphics(const PipelineDesc&);
+		DetailedResult Impl_CreateCompute(const Shader& CS);
 	};
 
 	// Manages the allocation of descriptors
 	class DescriptorHeap
 	{
+	private:
+		DescriptorHeap(const IGLOContext& context, uint32_t maxFramesInFlight)
+			: context(context), maxFramesInFlight(maxFramesInFlight) {};
+
+		DescriptorHeap& operator=(const DescriptorHeap&) = delete;
+		DescriptorHeap(const DescriptorHeap&) = delete;
+
 	public:
-		DescriptorHeap() = default;
-		~DescriptorHeap() { Unload(); }
+		~DescriptorHeap();
 
-		DescriptorHeap& operator=(DescriptorHeap&) = delete;
-		DescriptorHeap(DescriptorHeap&) = delete;
-
-		void Unload();
-		bool IsLoaded() const { return isLoaded; }
-
-		DetailedResult Load(const IGLOContext&, uint32_t maxPersistentResources, uint32_t maxTempResourcesPerFrame,
-			uint32_t maxSamplers, uint32_t numFramesInFlight);
+		static std::pair<std::unique_ptr<DescriptorHeap>, DetailedResult> Create(const IGLOContext&,
+			uint32_t maxPersistentResources, uint32_t maxTempResourcesPerFrame, uint32_t maxSamplers, uint32_t maxFramesInFlight);
 
 		void NextFrame();
 
@@ -1596,10 +1578,9 @@ namespace ig
 		};
 
 	private:
-		bool isLoaded = false;
-		const IGLOContext* context = nullptr;
+		const IGLOContext& context;
+		const uint32_t maxFramesInFlight = 0;
 		uint32_t frameIndex = 0;
-		uint32_t numFrames = 0;
 		PersistentIndexAllocator persResourceIndices;
 		PersistentIndexAllocator persSamplerIndices;
 		std::vector<TempIndexAllocator> tempResourceIndices; // Per-frame
@@ -1607,13 +1588,11 @@ namespace ig
 
 		Impl_DescriptorHeap impl;
 
-		bool LogErrorIfNotLoaded() const;
-		void Impl_Unload();
-		DetailedResult Impl_Load(const IGLOContext&, uint32_t maxPersistentResources, uint32_t maxTempResourcesPerFrame,
-			uint32_t maxSamplers, uint32_t numFramesInFlight);
+		void Impl_Destroy();
+		DetailedResult Impl_Create(uint32_t maxPersistentResources, uint32_t maxTempResourcesPerFrame, uint32_t maxSamplers);
 		void Impl_NextFrame();
 		void Impl_FreeAllTempResources();
-		static uint32_t CalcTotalResDescriptors(uint32_t maxPersistent, uint32_t maxTempPerFrame, uint32_t numFramesInFlight);
+		static uint32_t CalcTotalResDescriptors(uint32_t maxPersistent, uint32_t maxTempPerFrame, uint32_t maxFramesInFlight);
 	};
 
 	enum class CommandListType
@@ -1640,17 +1619,18 @@ namespace ig
 	// Manages the command queues
 	class CommandQueue
 	{
+	private:
+		CommandQueue(const IGLOContext& context, uint32_t maxFramesInFlight, uint32_t numBackBuffers)
+			:context(context), maxFramesInFlight(maxFramesInFlight), numBackBuffers(numBackBuffers) {}
+
+		CommandQueue& operator=(const CommandQueue&) = delete;
+		CommandQueue(const CommandQueue&) = delete;
+
 	public:
-		CommandQueue() = default;
-		~CommandQueue() { Unload(); }
+		~CommandQueue();
 
-		CommandQueue& operator=(CommandQueue&) = delete;
-		CommandQueue(CommandQueue&) = delete;
-
-		void Unload();
-		bool IsLoaded() const { return isLoaded; }
-
-		DetailedResult Load(const IGLOContext&, uint32_t numFramesInFlight, uint32_t numBackBuffers);
+		static std::pair<std::unique_ptr<CommandQueue>, DetailedResult> Create(const IGLOContext&,
+			uint32_t maxFramesInFlight, uint32_t numBackBuffers);
 
 		Receipt SubmitCommands(const CommandList& commandList);
 		Receipt SubmitCommands(const CommandList* const* commandLists, uint32_t numCommandLists);
@@ -1676,13 +1656,14 @@ namespace ig
 		uint32_t GetVulkanQueueFamilyIndex(CommandListType type) const { return impl.queueFamIndices[(uint32_t)type]; }
 #endif
 	private:
-		bool isLoaded = false;
-		const IGLOContext* context = nullptr;
+		const IGLOContext& context;
+		const uint32_t maxFramesInFlight = 0;
+		const uint32_t numBackBuffers = 0;
 
 		Impl_CommandQueue impl;
 
-		void Impl_Unload();
-		DetailedResult Impl_Load(const IGLOContext&, uint32_t numFramesInFlight, uint32_t numBackBuffers);
+		void Impl_Destroy();
+		DetailedResult Impl_Create();
 		Receipt Impl_SubmitCommands(const CommandList* const* commandLists, uint32_t numCommandLists, CommandListType cmdType);
 		bool Impl_IsComplete(Receipt receipt) const;
 		void Impl_WaitForCompletion(Receipt receipt);
@@ -1849,8 +1830,6 @@ namespace ig
 		_ComputeQueue_CopySource = D3D12_BARRIER_LAYOUT_COMPUTE_QUEUE_COPY_SOURCE,
 		_ComputeQueue_CopyDest = D3D12_BARRIER_LAYOUT_COMPUTE_QUEUE_COPY_DEST,
 
-		// Video queue
-		_VideoQueue_Common = D3D12_BARRIER_LAYOUT_VIDEO_QUEUE_COMMON,
 #endif
 #ifdef IGLO_VULKAN
 		Undefined = VK_IMAGE_LAYOUT_UNDEFINED,
@@ -1891,9 +1870,6 @@ namespace ig
 		_ComputeQueue_ShaderResource = ShaderResource,
 		_ComputeQueue_CopySource = CopySource,
 		_ComputeQueue_CopyDest = CopyDest,
-
-		// Video queue
-		_VideoQueue_Common = VK_IMAGE_LAYOUT_GENERAL,
 #endif
 	};
 
@@ -1928,17 +1904,17 @@ namespace ig
 
 	class CommandList
 	{
+	private:
+		CommandList(const IGLOContext& context, CommandListType commandListType, uint32_t maxFrames)
+			:context(context), commandListType(commandListType), maxFrames(maxFrames) {}
+
+		CommandList& operator=(const CommandList&) = delete;
+		CommandList(const CommandList&) = delete;
+
 	public:
-		CommandList() = default;
-		~CommandList() { Unload(); }
+		~CommandList();
 
-		CommandList& operator=(CommandList&) = delete;
-		CommandList(CommandList&) = delete;
-
-		void Unload();
-		bool IsLoaded() const { return isLoaded; }
-
-		bool Load(const IGLOContext&, CommandListType);
+		static std::unique_ptr<CommandList> Create(const IGLOContext&, CommandListType);
 
 		// Clears the command list and begins recording commands. 
 		// NOTE: A CommandList can begin recording commands max once per frame, unless you manually wait
@@ -2027,11 +2003,10 @@ namespace ig
 #endif
 
 	private:
-		bool isLoaded = false;
-		const IGLOContext* context = nullptr;
-		uint32_t numFrames = 0;
+		const IGLOContext& context;
+		const CommandListType commandListType = CommandListType::Graphics;
+		const uint32_t maxFrames = 0;
 		uint32_t frameIndex = 0;
-		CommandListType commandListType = CommandListType::Graphics;
 
 		Impl_CommandList impl;
 
@@ -2041,8 +2016,8 @@ namespace ig
 		void SafeResumeRendering(); // MUST be called shortly after SafePauseRendering() in the same function.
 #endif
 
-		void Impl_Unload();
-		DetailedResult Impl_Load(const IGLOContext&, CommandListType);
+		void Impl_Destroy();
+		DetailedResult Impl_Create();
 		void Impl_Begin();
 		void Impl_End();
 		void Impl_SetRenderTargets(const Texture* const* renderTextures, uint32_t numRenderTextures,
@@ -2069,6 +2044,8 @@ namespace ig
 	{
 		bool IsNull() const { return (data == nullptr); }
 
+		explicit operator bool() const { return !IsNull(); }
+
 		uint64_t offset = 0;
 		void* data = nullptr;
 
@@ -2082,16 +2059,18 @@ namespace ig
 	// these are called persistent pages, but the data on them is still always temporary.
 	class TempBufferAllocator
 	{
+	private:
+		TempBufferAllocator(const IGLOContext& context, uint64_t linearPageSize, uint32_t numFramesInFlight)
+			:context(context), linearPageSize(linearPageSize), numFramesInFlight(numFramesInFlight) {};
+
+		TempBufferAllocator& operator=(const TempBufferAllocator&) = delete;
+		TempBufferAllocator(const TempBufferAllocator&) = delete;
+
 	public:
-		TempBufferAllocator() = default;
-		~TempBufferAllocator() { Unload(); }
+		~TempBufferAllocator();
 
-		TempBufferAllocator& operator=(TempBufferAllocator&) = delete;
-		TempBufferAllocator(TempBufferAllocator&) = delete;
-
-		void Unload();
-		bool IsLoaded() const { return isLoaded; }
-		DetailedResult Load(const IGLOContext&, uint64_t linearPageSize, uint32_t numFramesInFlight);
+		static std::pair<std::unique_ptr<TempBufferAllocator>, DetailedResult> Create(const IGLOContext&,
+			uint64_t linearPageSize, uint32_t numFramesInFlight);
 
 		// Must be called once per frame. Rolls to next frameIndex, frees that frame's temp pages.
 		void NextFrame();
@@ -2160,15 +2139,13 @@ namespace ig
 		};
 
 	private:
-		bool isLoaded = false;
-		const IGLOContext* context = nullptr;
+		const IGLOContext& context;
+		const uint64_t linearPageSize = 0;
+		const uint32_t numFramesInFlight = 0;
 		uint32_t frameIndex = 0;
-		uint32_t numFrames = 0;
-		uint64_t linearPageSize = 0;
 		std::vector<PerFrame> perFrame; // One for each frame
 		Stats lastFrameStats;
 
-		bool LogErrorIfNotLoaded();
 		static constexpr size_t numPersistentPages = 1;
 		static void FreeTempPagesAtFrame(const IGLOContext&, PerFrame& perFrame);
 	};
@@ -2214,31 +2191,27 @@ namespace ig
 
 	class Cursor
 	{
+	private:
+		Cursor(const IGLOContext& context) :context(context) {}
+
+		Cursor& operator=(const Cursor&) = delete;
+		Cursor(const Cursor&) = delete;
+
 	public:
-		Cursor() = default;
-		~Cursor() { Unload(); }
-
-		Cursor& operator=(Cursor&) = delete;
-		Cursor(Cursor&) = delete;
-
-		Cursor& operator=(Cursor&&) noexcept; // Move assignment operator
-		Cursor(Cursor&&) noexcept; // Move constructor
-
-		// It's safe to unload a cursor even if it's currently set as the active cursor.
+		// It's safe to destroy a cursor even if it's currently set as the active cursor.
 		// In that case, the active cursor will be reset to the default cursor automatically.
-		void Unload();
-		bool IsLoaded() const { return isLoaded; }
+		~Cursor();
 
 		// Load a standard system cursor
-		bool LoadFromSystem(const IGLOContext&, SystemCursor);
+		static std::unique_ptr<Cursor> LoadFromSystem(const IGLOContext&, SystemCursor);
 
 		// Load a cursor from an image file.
 		// The image must be 32 bits per pixel with 4 color channels (RGBA or BGRA).
-		bool LoadFromFile(const IGLOContext&, const std::string& filename, IntPoint hotspot);
+		static std::unique_ptr<Cursor> LoadFromFile(const IGLOContext&, const std::string& filename, IntPoint hotspot);
 
 		// Load a cursor from an image in memory.
 		// The image must be 32 bits per pixel with 4 color channels (RGBA or BGRA).
-		bool LoadFromMemory(const IGLOContext&, const Image& cursorImage, IntPoint hotspot);
+		static std::unique_ptr<Cursor> LoadFromMemory(const IGLOContext&, const Image& cursorImage, IntPoint hotspot);
 
 #ifdef _WIN32
 		HCURSOR GetWin32CursorHandle() const { return impl.handle; }
@@ -2248,14 +2221,13 @@ namespace ig
 #endif
 
 	private:
-		bool isLoaded = false;
-		const IGLOContext* context = nullptr;
+		const IGLOContext& context;
 
 		Impl_Cursor impl;
 
-		void Impl_Unload();
-		DetailedResult Impl_LoadFromSystem(const IGLOContext&, SystemCursor);
-		DetailedResult Impl_LoadFromMemory_BGRA(const IGLOContext&, Extent2D extent, const uint32_t* pixels, IntPoint hotspot);
+		void Impl_Destroy();
+		DetailedResult Impl_LoadFromSystem(SystemCursor);
+		DetailedResult Impl_LoadFromMemory_BGRA(Extent2D extent, const uint32_t* pixels, IntPoint hotspot);
 	};
 
 	enum class MouseButton
@@ -2489,24 +2461,16 @@ namespace ig
 
 	class IGLOContext
 	{
+	private:
+		IGLOContext(uint32_t maxFramesInFlight) : maxFramesInFlight(maxFramesInFlight) {};
+
+		IGLOContext& operator=(const IGLOContext&) = delete;
+		IGLOContext(const IGLOContext&) = delete;
+
 	public:
-		IGLOContext() = default;
-		~IGLOContext() { Unload(); }
+		~IGLOContext();
 
-		IGLOContext& operator=(IGLOContext&) = delete;
-		IGLOContext(IGLOContext&) = delete;
-
-		//------------------ Core ------------------//
-
-		// Creates a graphics device context and a window. Returns true if success.
-		bool Load(WindowSettings, RenderSettings, bool showPopupIfFailed = true);
-
-		// Destroys the graphics device context and window.
-		// It's OK to call this function even when the IGLOContext is already unloaded.
-		void Unload();
-
-		// If true, graphics device context and window have been created and can be used.
-		bool IsLoaded() const { return isLoaded; }
+		static std::unique_ptr<IGLOContext> CreateContext(WindowSettings, RenderSettings, bool showPopupIfFailed = true);
 
 		//------------------ Window ------------------//
 
@@ -2522,13 +2486,15 @@ namespace ig
 		// set 'callbackModalLoop' to point to your draw/update/event/timing functions.
 		// NOTE: If the thread doesn't return from the modal loop callback function, the window will be unresponsive.
 		// Don't run a GetEvent() loop or MainLoop inside Update(),Draw(),OnEvent() if those were called from this callback function.
-		void SetModalLoopCallback(CallbackModalLoop callbackModalLoop);
-		CallbackModalLoop GetModalLoopCallback() { return callbackModalLoop; }
-		// Whether or not the main thread is currently inside the modal loop callback function call.
+		void SetModalLoopCallback(CallbackModalLoop callback) { callbackModalLoop = callback; }
+		CallbackModalLoop GetModalLoopCallback() const { return callbackModalLoop; }
+
+		// Whether the main thread is currently inside the modal loop callback function call.
 		// If this returns true, running a GetEvent() loop or MainLoop on the main thread will make the window unresponsive.
 		bool IsInsideModalLoopCallback() const { return insideModalLoopCallback; }
 
-		void SetOnDeviceRemovedCallback(CallbackOnDeviceRemoved callbackOnDeviceRemoved);
+		void SetOnDeviceRemovedCallback(CallbackOnDeviceRemoved callback) { callbackOnDeviceRemoved = callback; }
+		CallbackOnDeviceRemoved GetOnDeviceRemovedCallback() const { return callbackOnDeviceRemoved; }
 
 		// Gets the mouse position relative to the topleft corner of the window.
 		IntPoint GetMousePosition() const { return mousePosition; }
@@ -2666,23 +2632,13 @@ namespace ig
 		// Waits for the graphics device to finish executing all commands.
 		void WaitForIdleDevice();
 
-		// Manages delayed safe unloading of textures that might still be in use by the GPU.
-		// 
-		// Problem:
-		// - Unloading a texture mid-frame (e.g., replacing a font atlas texture that has outgrown its size)
-		//   can crash the GPU if the texture is still referenced in a previous frame's draw calls.
-		//   The GPU may not have finished processing commands that depend on the texture.
-		//
-		// Solution:
-		// - Instead of calling `texture.Unload()` directly, pass ownership to IGLOContext via this function
-		//   using a `shared_ptr<Texture>`. IGLOContext will retain the shared pointer until the GPU is guaranteed
-		//   to have finished all pending work referencing the texture.
-		// - When the last shared pointer to the texture is released, `Texture::Unload()` is automatically called
-		//   in the destructor, freeing GPU resources safely.
-		//
-		// Warning:
-		// - Don't call `texture->Unload()` manually for textures that you manage with this function.
-		void DelayedTextureUnload(std::shared_ptr<Texture> texture) const;
+		// Destroying a GPU resource while it's still in use by a previous frame
+		// results in undefined behavior and may cause device loss or driver crashes.
+		// If a resource needs to be replaced mid-frame, transfer ownership to
+		// IGLOContext using one of these functions. The context will defer destruction
+		// until the GPU has finished executing all commands that reference the resource.
+		void DelayedDestroyTexture(std::unique_ptr<Texture> texture) const;
+		void DelayedDestroyBuffer(std::unique_ptr<Buffer> buffer) const;
 
 		Descriptor CreateTempConstant(const void* data, uint64_t numBytes) const;
 		Descriptor CreateTempStructuredBuffer(const void* data, uint32_t elementStride, uint32_t numElements) const;
@@ -2703,17 +2659,17 @@ namespace ig
 
 		// Gets the current back buffer for this frame.
 		const Texture& GetBackBuffer(bool get_opposite_sRGB_view = false) const;
-		DescriptorHeap& GetDescriptorHeap() const { return descriptorHeap; }
-		TempBufferAllocator& GetTempBufferAllocator() const { return tempBufferAllocator; }
-		CommandQueue& GetCommandQueue() const { return commandQueue; }
+		DescriptorHeap& GetDescriptorHeap() const { return *descriptorHeap; }
+		TempBufferAllocator& GetTempBufferAllocator() const { return *tempBufferAllocator; }
+		CommandQueue& GetCommandQueue() const { return *commandQueue; }
 
 		// Gets the max allowed MSAA per texture format.
 		MSAA GetMaxMultiSampleCount(Format textureFormat) const;
 
-		const Pipeline& GetMipmapGenerationPipeline() const { return generateMipmapsPipeline; }
+		const Pipeline& GetMipmapGenerationPipeline() const { return *genMipsPipeline; }
 
 		// The bilinear clamp sampler is needed for the mipmap generation pipeline.
-		const Descriptor* GetBilinearClampSamplerDescriptor() const { return bilinearClampSampler.GetDescriptor(); }
+		Descriptor GetBilinearClampSamplerDescriptor() const { return bilinearClampSampler->GetDescriptor(); }
 
 		// All queried memory info (RAM/VRAM) are estimations and should only be used for debugging/warnings.
 		SystemMemoryInfo QuerySystemMemoryInfo();
@@ -2733,12 +2689,14 @@ namespace ig
 
 	private:
 		//------------------ Core ------------------//
-		bool isLoaded = false;
+		bool isWindowInitialized = false;
+		bool isGraphicsDeviceInitialized = false;
 
-		DetailedResult LoadWindow(const WindowSettings&);
-		DetailedResult LoadGraphicsDevice(const RenderSettings&, Extent2D backBufferSize);
-		void UnloadWindow();
-		void UnloadGraphicsDevice();
+		DetailedResult InitWindow(const WindowSettings&);
+		DetailedResult InitGraphicsDevice(const RenderSettings&, Extent2D backBufferSize);
+
+		void DestroyWindow();
+		void DestroyGraphicsDevice();
 
 		void OnFatalError(const std::string& message, bool popupMessage);
 
@@ -2757,9 +2715,9 @@ namespace ig
 		CallbackModalLoop callbackModalLoop = nullptr;
 		bool insideModalLoopCallback = false; // If true, the main thread is inside a callback function called from inside a modal operation.
 
-		DetailedResult Impl_LoadWindow(const WindowSettings&);
+		DetailedResult Impl_InitWindow(const WindowSettings&);
+		void Impl_DestroyWindow();
 		void PrepareWindowPostGraphics(const WindowSettings&);
-		void Impl_UnloadWindow();
 
 		void Impl_SetWindowVisible(bool visible);
 		void Impl_SetWindowSize(uint32_t width, uint32_t height);
@@ -2801,7 +2759,8 @@ namespace ig
 			Receipt graphicsReceipt;
 			Receipt computeReceipt;
 			Receipt copyReceipt;
-			mutable std::vector<std::shared_ptr<Texture>> delayedUnloadTextures;
+			mutable std::vector<std::unique_ptr<Texture>> delayedDestroyTextures;
+			mutable std::vector<std::unique_ptr<Buffer>> delayedDestroyBuffers;
 		};
 		std::vector<EndOfFrame> endOfFrame;
 
@@ -2809,17 +2768,16 @@ namespace ig
 
 		DisplayMode displayMode = DisplayMode::Windowed;
 
-		uint32_t maxFramesInFlight = 0; // Set at context creation. Can't be changed at runtime.
+		const uint32_t maxFramesInFlight = 0; // Set at context creation.
 		uint32_t numFramesInFlight = 0; // Can change at runtime. Can't be higher than maxFramesInFlight.
 		uint32_t frameIndex = 0; // always capped by numFramesInFlight
 
-		Pipeline generateMipmapsPipeline;
-		Sampler bilinearClampSampler; // For the mipmap generation compute shader
+		std::unique_ptr<Pipeline> genMipsPipeline;
+		std::unique_ptr<Sampler> bilinearClampSampler; // For the mipmap generation compute shader
 
-		mutable DescriptorHeap descriptorHeap;
-		mutable TempBufferAllocator tempBufferAllocator;
-		mutable CommandQueue commandQueue;
-
+		mutable std::unique_ptr<DescriptorHeap> descriptorHeap;
+		mutable std::unique_ptr<TempBufferAllocator> tempBufferAllocator;
+		mutable std::unique_ptr<CommandQueue> commandQueue;
 		mutable std::vector<uint32_t> maxMSAAPerFormat; // A cached list of max MSAA values for all iglo formats.
 
 		CallbackOnDeviceRemoved callbackOnDeviceRemoved = nullptr;
@@ -2840,8 +2798,8 @@ namespace ig
 
 		uint32_t Impl_GetMaxMultiSampleCount(Format textureFormat) const;
 
-		DetailedResult Impl_LoadGraphicsDevice();
-		void Impl_UnloadGraphicsDevice();
+		DetailedResult Impl_InitGraphicsDevice();
+		void Impl_DestroyGraphicsDevice();
 	};
 
 

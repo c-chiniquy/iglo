@@ -162,12 +162,12 @@ namespace ig
 		return out;
 	}
 
-	void Pipeline::Impl_Unload()
+	void Pipeline::Impl_Destroy()
 	{
 		impl.pipeline = nullptr;
 	}
 
-	DetailedResult Pipeline::Impl_Load(const IGLOContext& context, const PipelineDesc& desc)
+	DetailedResult Pipeline::Impl_CreateGraphics(const PipelineDesc& desc)
 	{
 		D3D12_GRAPHICS_PIPELINE_STATE_DESC pipe = {};
 
@@ -347,7 +347,7 @@ namespace ig
 		return DetailedResult::Success();
 	}
 
-	DetailedResult Pipeline::Impl_LoadAsCompute(const IGLOContext& context, const Shader& CS)
+	DetailedResult Pipeline::Impl_CreateCompute(const Shader& CS)
 	{
 		D3D12_COMPUTE_PIPELINE_STATE_DESC computeDesc = {};
 		computeDesc.pRootSignature = context.GetDescriptorHeap().GetD3D12BindlessRootSignature();
@@ -362,7 +362,7 @@ namespace ig
 		return DetailedResult::Success();
 	}
 
-	void CommandQueue::Impl_Unload()
+	void CommandQueue::Impl_Destroy()
 	{
 		for (size_t i = 0; i < impl.commandQueues.size(); i++)
 		{
@@ -370,11 +370,14 @@ namespace ig
 			impl.fences[i] = nullptr;
 			impl.fenceValues[i] = 0;
 		}
-		if (impl.fenceEvent) CloseHandle(impl.fenceEvent);
-		impl.fenceEvent = nullptr;
+		if (impl.fenceEvent)
+		{
+			CloseHandle(impl.fenceEvent);
+			impl.fenceEvent = nullptr;
+		}
 	}
 
-	DetailedResult CommandQueue::Impl_Load(const IGLOContext& context, uint32_t numFramesInFlight, uint32_t numBackBuffers)
+	DetailedResult CommandQueue::Impl_Create()
 	{
 		std::array<D3D12_COMMAND_QUEUE_DESC, 3> queueDesc = {};
 
@@ -467,19 +470,15 @@ namespace ig
 		}
 	}
 
-	void CommandList::Impl_Unload()
+	void CommandList::Impl_Destroy()
 	{
 		impl.commandAllocator.clear();
 		impl.commandAllocator.shrink_to_fit();
 
 		impl.graphicsCommandList = nullptr;
-
-		impl.numGlobalBarriers = 0;
-		impl.numTextureBarriers = 0;
-		impl.numBufferBarriers = 0;
 	}
 
-	DetailedResult CommandList::Impl_Load(const IGLOContext& context, CommandListType commandListType)
+	DetailedResult CommandList::Impl_Create()
 	{
 		auto device = context.GetD3D12Device();
 
@@ -494,8 +493,8 @@ namespace ig
 		}
 
 		// Create one commmand allocator for each frame
-		impl.commandAllocator.resize((size_t)numFrames, nullptr);
-		for (uint32_t i = 0; i < numFrames; i++)
+		impl.commandAllocator.resize((size_t)maxFrames, nullptr);
+		for (uint32_t i = 0; i < maxFrames; i++)
 		{
 			HRESULT hr = device->CreateCommandAllocator(d3d12CmdType, IID_PPV_ARGS(&impl.commandAllocator[i]));
 			if (FAILED(hr))
@@ -530,7 +529,7 @@ namespace ig
 
 	void CommandList::Impl_Begin()
 	{
-		DescriptorHeap& heap = context->GetDescriptorHeap();
+		DescriptorHeap& heap = context.GetDescriptorHeap();
 		if (FAILED(impl.commandAllocator[frameIndex]->Reset()))
 		{
 			Log(LogType::Error, "Failed to reset D3D12 command allocator.");
@@ -691,19 +690,22 @@ namespace ig
 	void CommandList::Impl_SetRenderTargets(const Texture* const* renderTextures, uint32_t numRenderTextures,
 		const Texture* depthBuffer, bool optimizedClear)
 	{
-		D3D12_CPU_DESCRIPTOR_HANDLE rtvStart = context->GetDescriptorHeap().GetD3D12CPUHandle_NonShaderVisible_RTV();
+		DescriptorHeap& heap = context.GetDescriptorHeap();
+		auto device = context.GetD3D12Device();
+
+		D3D12_CPU_DESCRIPTOR_HANDLE rtvStart = heap.GetD3D12CPUHandle_NonShaderVisible_RTV();
 		for (uint32_t i = 0; i < numRenderTextures; i++)
 		{
 			const D3D12_RENDER_TARGET_VIEW_DESC* rtvDesc = &renderTextures[i]->GetD3D12Desc_RTV();
-			const UINT rtvDescriptorSize = context->GetDescriptorHeap().GetD3D12DescriptorSize_RTV();
+			const UINT rtvDescriptorSize = heap.GetD3D12DescriptorSize_RTV();
 			D3D12_CPU_DESCRIPTOR_HANDLE rtvCurrent = { rtvStart.ptr + ((SIZE_T)rtvDescriptorSize * (SIZE_T)i) };
-			context->GetD3D12Device()->CreateRenderTargetView(renderTextures[i]->GetD3D12Resource(), rtvDesc, rtvCurrent);
+			device->CreateRenderTargetView(renderTextures[i]->GetD3D12Resource(), rtvDesc, rtvCurrent);
 		}
-		D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = context->GetDescriptorHeap().GetD3D12CPUHandle_NonShaderVisible_DSV();
+		D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = heap.GetD3D12CPUHandle_NonShaderVisible_DSV();
 		if (depthBuffer)
 		{
 			const D3D12_DEPTH_STENCIL_VIEW_DESC* dsvDesc = &depthBuffer->GetD3D12Desc_DSV();
-			context->GetD3D12Device()->CreateDepthStencilView(depthBuffer->GetD3D12Resource(), dsvDesc, dsvHandle);
+			device->CreateDepthStencilView(depthBuffer->GetD3D12Resource(), dsvDesc, dsvHandle);
 		}
 		impl.graphicsCommandList->OMSetRenderTargets(numRenderTextures, &rtvStart, TRUE, depthBuffer ? &dsvHandle : nullptr);
 
@@ -711,11 +713,11 @@ namespace ig
 		{
 			for (uint32_t i = 0; i < numRenderTextures; i++)
 			{
-				ClearColor(*renderTextures[i], renderTextures[i]->GetOptimiziedClearValue().color);
+				ClearColor(*renderTextures[i], renderTextures[i]->GetOptimizedClearValue().color);
 			}
 			if (depthBuffer)
 			{
-				ClearValue clearValue = depthBuffer->GetOptimiziedClearValue();
+				ClearValue clearValue = depthBuffer->GetOptimizedClearValue();
 				ClearDepth(*depthBuffer, clearValue.depth, clearValue.stencil, true, true);
 			}
 		}
@@ -724,8 +726,8 @@ namespace ig
 	void CommandList::Impl_ClearColor(const Texture& renderTexture, Color color, uint32_t numRects, const IntRect* rects)
 	{
 		const D3D12_RENDER_TARGET_VIEW_DESC* rtvDesc = &renderTexture.GetD3D12Desc_RTV();
-		D3D12_CPU_DESCRIPTOR_HANDLE rtvStart = context->GetDescriptorHeap().GetD3D12CPUHandle_NonShaderVisible_RTV();
-		context->GetD3D12Device()->CreateRenderTargetView(renderTexture.GetD3D12Resource(), rtvDesc, rtvStart);
+		D3D12_CPU_DESCRIPTOR_HANDLE rtvStart = context.GetDescriptorHeap().GetD3D12CPUHandle_NonShaderVisible_RTV();
+		context.GetD3D12Device()->CreateRenderTargetView(renderTexture.GetD3D12Resource(), rtvDesc, rtvStart);
 		impl.graphicsCommandList->ClearRenderTargetView(rtvStart, (FLOAT*)&color, numRects, (D3D12_RECT*)rects);
 	}
 
@@ -733,8 +735,8 @@ namespace ig
 		uint32_t numRects, const IntRect* rects)
 	{
 		const D3D12_DEPTH_STENCIL_VIEW_DESC* dsvDesc = &depthBuffer.GetD3D12Desc_DSV();
-		D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = context->GetDescriptorHeap().GetD3D12CPUHandle_NonShaderVisible_DSV();
-		context->GetD3D12Device()->CreateDepthStencilView(depthBuffer.GetD3D12Resource(), dsvDesc, dsvHandle);
+		D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = context.GetDescriptorHeap().GetD3D12CPUHandle_NonShaderVisible_DSV();
+		context.GetD3D12Device()->CreateDepthStencilView(depthBuffer.GetD3D12Resource(), dsvDesc, dsvHandle);
 		D3D12_CLEAR_FLAGS flags = (D3D12_CLEAR_FLAGS)0;
 		if (clearDepth) flags |= D3D12_CLEAR_FLAG_DEPTH;
 		if (clearStencil) flags |= D3D12_CLEAR_FLAG_STENCIL;
@@ -743,8 +745,8 @@ namespace ig
 
 	void CommandList::Impl_ClearUnorderedAccessBufferUInt32(const Buffer& buffer, const uint32_t value)
 	{
-		DescriptorHeap& heap = context->GetDescriptorHeap();
-		auto device = context->GetD3D12Device();
+		DescriptorHeap& heap = context.GetDescriptorHeap();
+		auto device = context.GetD3D12Device();
 
 		const D3D12_UNORDERED_ACCESS_VIEW_DESC* uavDesc = &buffer.GetD3D12Desc_UAV();
 		D3D12_CPU_DESCRIPTOR_HANDLE uavHandle = heap.GetD3D12CPUHandle_NonShaderVisible_UAV();
@@ -752,33 +754,33 @@ namespace ig
 
 		const UINT clearValues[4] = { value, value, value, value };
 
-		impl.graphicsCommandList->ClearUnorderedAccessViewUint(heap.GetD3D12GPUHandle(*buffer.GetUnorderedAccessDescriptor()),
+		impl.graphicsCommandList->ClearUnorderedAccessViewUint(heap.GetD3D12GPUHandle(buffer.GetUnorderedAccessDescriptor()),
 			uavHandle, buffer.GetD3D12Resource(), clearValues, 0, nullptr);
 	}
 
 	void CommandList::Impl_ClearUnorderedAccessTextureFloat(const Texture& texture, const float values[4])
 	{
-		DescriptorHeap& heap = context->GetDescriptorHeap();
-		auto device = context->GetD3D12Device();
+		DescriptorHeap& heap = context.GetDescriptorHeap();
+		auto device = context.GetD3D12Device();
 
 		const D3D12_UNORDERED_ACCESS_VIEW_DESC* uavDesc = &texture.GetD3D12Desc_UAV();
 		D3D12_CPU_DESCRIPTOR_HANDLE uavHandle = heap.GetD3D12CPUHandle_NonShaderVisible_UAV();
 		device->CreateUnorderedAccessView(texture.GetD3D12Resource(), nullptr, uavDesc, uavHandle);
 
-		impl.graphicsCommandList->ClearUnorderedAccessViewFloat(heap.GetD3D12GPUHandle(*texture.GetUnorderedAccessDescriptor()),
+		impl.graphicsCommandList->ClearUnorderedAccessViewFloat(heap.GetD3D12GPUHandle(texture.GetUnorderedAccessDescriptor()),
 			uavHandle, texture.GetD3D12Resource(), values, 0, nullptr);
 	}
 
 	void CommandList::Impl_ClearUnorderedAccessTextureUInt32(const Texture& texture, const uint32_t values[4])
 	{
-		DescriptorHeap& heap = context->GetDescriptorHeap();
-		auto device = context->GetD3D12Device();
+		DescriptorHeap& heap = context.GetDescriptorHeap();
+		auto device = context.GetD3D12Device();
 
 		const D3D12_UNORDERED_ACCESS_VIEW_DESC* uavDesc = &texture.GetD3D12Desc_UAV();
 		D3D12_CPU_DESCRIPTOR_HANDLE uavHandle = heap.GetD3D12CPUHandle_NonShaderVisible_UAV();
 		device->CreateUnorderedAccessView(texture.GetD3D12Resource(), nullptr, uavDesc, uavHandle);
 
-		impl.graphicsCommandList->ClearUnorderedAccessViewUint(heap.GetD3D12GPUHandle(*texture.GetUnorderedAccessDescriptor()),
+		impl.graphicsCommandList->ClearUnorderedAccessViewUint(heap.GetD3D12GPUHandle(texture.GetUnorderedAccessDescriptor()),
 			uavHandle, texture.GetD3D12Resource(), values, 0, nullptr);
 	}
 
@@ -883,14 +885,14 @@ namespace ig
 
 			D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint = {};
 			uint64_t totalBytes = 0;
-			context->GetD3D12Device()->GetCopyableFootprints(&desc, i, 1, 0, &footprint, nullptr, nullptr, &totalBytes);
+			context.GetD3D12Device()->GetCopyableFootprints(&desc, i, 1, 0, &footprint, nullptr, nullptr, &totalBytes);
 
 			D3D12_TEXTURE_COPY_LOCATION destLoc = {};
 			destLoc.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
 			destLoc.pResource = destination.GetD3D12Resource();
 			destLoc.PlacedFootprint = footprint;
 			destLoc.PlacedFootprint.Offset = currentOffset;
-			currentOffset += AlignUp(totalBytes, context->GetGraphicsSpecs().bufferPlacementAlignments.textureRowPitch);
+			currentOffset += AlignUp(totalBytes, context.GetGraphicsSpecs().bufferPlacementAlignments.textureRowPitch);
 
 			impl.graphicsCommandList->CopyTextureRegion(&destLoc, 0, 0, 0, &srcLoc, nullptr);
 		}
@@ -911,14 +913,14 @@ namespace ig
 		{
 			D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint = {};
 			uint64_t totalBytes = 0;
-			context->GetD3D12Device()->GetCopyableFootprints(&desc, i, 1, 0, &footprint, nullptr, nullptr, &totalBytes);
+			context.GetD3D12Device()->GetCopyableFootprints(&desc, i, 1, 0, &footprint, nullptr, nullptr, &totalBytes);
 
 			D3D12_TEXTURE_COPY_LOCATION srcLoc = {};
 			srcLoc.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
 			srcLoc.pResource = source.impl.resource;
 			srcLoc.PlacedFootprint = footprint;
 			srcLoc.PlacedFootprint.Offset = currentOffset;
-			currentOffset += AlignUp(totalBytes, context->GetGraphicsSpecs().bufferPlacementAlignments.textureRowPitch);
+			currentOffset += AlignUp(totalBytes, context.GetGraphicsSpecs().bufferPlacementAlignments.textureRowPitch);
 
 			D3D12_TEXTURE_COPY_LOCATION destLoc = {};
 			destLoc.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
@@ -936,7 +938,7 @@ namespace ig
 
 		D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint = {};
 		uint64_t totalBytes = 0;
-		context->GetD3D12Device()->GetCopyableFootprints(&desc, subResourceIndex, 1, 0, &footprint, nullptr, nullptr, &totalBytes);
+		context.GetD3D12Device()->GetCopyableFootprints(&desc, subResourceIndex, 1, 0, &footprint, nullptr, nullptr, &totalBytes);
 
 		D3D12_TEXTURE_COPY_LOCATION srcLoc = {};
 		srcLoc.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
@@ -965,21 +967,17 @@ namespace ig
 			GetFormatInfoDXGI(source.GetFormat()).dxgiFormat);
 	}
 
-	void Texture::Impl_Unload()
+	void Texture::Impl_Destroy()
 	{
-		if (!isWrapped)
+		for (size_t i = 0; i < readMapped.size(); i++)
 		{
-			for (size_t i = 0; i < readMapped.size(); i++)
-			{
-				D3D12_RANGE writeRange = { 0,0 };
-				impl.resource[i]->Unmap(0, &writeRange);
-			}
+			D3D12_RANGE writeRange = { 0, 0 };
+			impl.resource[i]->Unmap(0, &writeRange);
 		}
 		impl.resource.clear();
-		impl.resource.shrink_to_fit();
 	}
 
-	DetailedResult Texture::Impl_Load(const IGLOContext& context, const TextureDesc& desc)
+	DetailedResult Texture::Impl_Create()
 	{
 		FormatInfo formatInfo = GetFormatInfo(desc.format);
 		bool isMultisampledCubemap = (desc.isCubemap && desc.msaa != MSAA::Disabled);
@@ -990,7 +988,7 @@ namespace ig
 		FormatInfoDXGI formatInfoD3D = GetFormatInfoDXGI(desc.format);
 		if (formatInfoD3D.dxgiFormat == DXGI_FORMAT_UNKNOWN)
 		{
-			return DetailedResult::Fail(ToString("This iglo format is not supported in D3D12: ", (uint32_t)desc.format, "."));
+			return DetailedResult::Fail(ToString("This iglo format is not supported in D3D12: ", GetFormatName(desc.format)));
 		}
 
 		uint32_t numResources = (desc.usage == TextureUsage::Readable) ? context.GetMaxFramesInFlight() : 1;
@@ -1106,7 +1104,7 @@ namespace ig
 		{
 			// Allocate descriptor
 			srvDescriptor = heap.AllocatePersistent(DescriptorType::Texture_SRV);
-			if (srvDescriptor.IsNull())
+			if (!srvDescriptor)
 			{
 				return DetailedResult::Fail("Failed to allocate descriptor.");
 			}
@@ -1179,7 +1177,7 @@ namespace ig
 		{
 			// Allocate descriptor
 			uavDescriptor = heap.AllocatePersistent(DescriptorType::Texture_UAV);
-			if (uavDescriptor.IsNull())
+			if (!uavDescriptor)
 			{
 				return DetailedResult::Fail("Failed to allocate descriptor.");
 			}
@@ -1209,17 +1207,15 @@ namespace ig
 
 	ID3D12Resource* Texture::GetD3D12Resource() const
 	{
-		if (!isLoaded) return nullptr;
-		if (impl.resource.size() == 0) throw std::runtime_error("This should be impossible.");
 		switch (desc.usage)
 		{
 		case TextureUsage::Default:
 		case TextureUsage::UnorderedAccess:
 		case TextureUsage::RenderTexture:
 		case TextureUsage::DepthBuffer:
-			return impl.resource[0].Get();
+			return impl.resource.at(0).Get();
 		case TextureUsage::Readable:
-			return impl.resource[context->GetFrameIndex()].Get();
+			return impl.resource.at(context.GetFrameIndex()).Get();
 		default:
 			throw std::runtime_error("Invalid texture usage.");
 		}
@@ -1227,19 +1223,16 @@ namespace ig
 
 	const D3D12_RENDER_TARGET_VIEW_DESC& Texture::GetD3D12Desc_RTV() const
 	{
-		assert(isLoaded);
 		assert(desc.usage == TextureUsage::RenderTexture);
 		return impl.desc_cpu.rtv;
 	}
 	const D3D12_DEPTH_STENCIL_VIEW_DESC& Texture::GetD3D12Desc_DSV() const
 	{
-		assert(isLoaded);
 		assert(desc.usage == TextureUsage::DepthBuffer);
 		return impl.desc_cpu.dsv;
 	}
 	const D3D12_UNORDERED_ACCESS_VIEW_DESC& Texture::GetD3D12Desc_UAV() const
 	{
-		assert(isLoaded);
 		assert(desc.usage == TextureUsage::UnorderedAccess);
 		return impl.desc_cpu.uav;
 	}
@@ -1361,15 +1354,15 @@ namespace ig
 		return out;
 	}
 
-	void Buffer::Impl_Unload()
+	void Buffer::Impl_Destroy()
 	{
 		for (size_t i = 0; i < mapped.size(); i++)
 		{
-			if (usage == BufferUsage::Dynamic)
+			if (desc.usage == BufferUsage::Dynamic)
 			{
 				impl.resource[i]->Unmap(0, nullptr);
 			}
-			else if (usage == BufferUsage::Readable)
+			else if (desc.usage == BufferUsage::Readable)
 			{
 				D3D12_RANGE noWrite = { 0, 0 };
 				impl.resource[i]->Unmap(0, &noWrite);
@@ -1377,18 +1370,16 @@ namespace ig
 			else throw std::runtime_error("This should be impossible.");
 		}
 		impl.resource.clear();
-		impl.resource.shrink_to_fit();
 	}
 
-	DetailedResult Buffer::Impl_InternalLoad(const IGLOContext& context, uint64_t size, uint32_t stride,
-		uint32_t numElements, BufferUsage usage, BufferType type)
+	DetailedResult Buffer::Impl_Create()
 	{
 		auto device = context.GetD3D12Device();
 		DescriptorHeap& heap = context.GetDescriptorHeap();
 
 		uint32_t numBuffers = 1;
-		if (usage == BufferUsage::Readable ||
-			usage == BufferUsage::Dynamic)
+		if (desc.usage == BufferUsage::Readable ||
+			desc.usage == BufferUsage::Dynamic)
 		{
 			numBuffers = context.GetMaxFramesInFlight();
 		}
@@ -1397,27 +1388,27 @@ namespace ig
 
 		for (uint32_t i = 0; i < numBuffers; i++)
 		{
-			D3D12_RESOURCE_DESC1 desc = {};
-			desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-			desc.Alignment = 0;
-			desc.Height = 1;
-			desc.DepthOrArraySize = 1;
-			desc.MipLevels = 1;
-			desc.Format = DXGI_FORMAT_UNKNOWN;
-			desc.SampleDesc.Count = 1;
-			desc.SampleDesc.Quality = 0;
-			desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-			desc.SamplerFeedbackMipRegion.Width = 0;
-			desc.SamplerFeedbackMipRegion.Height = 0;
-			desc.SamplerFeedbackMipRegion.Depth = 0;
+			D3D12_RESOURCE_DESC1 resDesc = {};
+			resDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+			resDesc.Alignment = 0;
+			resDesc.Height = 1;
+			resDesc.DepthOrArraySize = 1;
+			resDesc.MipLevels = 1;
+			resDesc.Format = DXGI_FORMAT_UNKNOWN;
+			resDesc.SampleDesc.Count = 1;
+			resDesc.SampleDesc.Quality = 0;
+			resDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+			resDesc.SamplerFeedbackMipRegion.Width = 0;
+			resDesc.SamplerFeedbackMipRegion.Height = 0;
+			resDesc.SamplerFeedbackMipRegion.Depth = 0;
 
-			desc.Flags = D3D12_RESOURCE_FLAG_NONE;
-			if (usage == BufferUsage::UnorderedAccess) desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+			resDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
+			if (desc.usage == BufferUsage::UnorderedAccess) resDesc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
 
-			desc.Width = size;
-			if (type == BufferType::ShaderConstant)
+			resDesc.Width = desc.size;
+			if (desc.type == BufferType::ShaderConstant)
 			{
-				desc.Width = AlignUp(size, context.GetGraphicsSpecs().bufferPlacementAlignments.constant);
+				resDesc.Width = AlignUp(desc.size, context.GetGraphicsSpecs().bufferPlacementAlignments.constant);
 			}
 
 			D3D12_HEAP_PROPERTIES heapProp = {};
@@ -1427,24 +1418,24 @@ namespace ig
 			heapProp.VisibleNodeMask = 1;
 
 			heapProp.Type = D3D12_HEAP_TYPE_DEFAULT;
-			if (usage == BufferUsage::Dynamic) heapProp.Type = D3D12_HEAP_TYPE_UPLOAD;
-			else if (usage == BufferUsage::Readable) heapProp.Type = D3D12_HEAP_TYPE_READBACK;
+			if (desc.usage == BufferUsage::Dynamic) heapProp.Type = D3D12_HEAP_TYPE_UPLOAD;
+			else if (desc.usage == BufferUsage::Readable) heapProp.Type = D3D12_HEAP_TYPE_READBACK;
 
 			D3D12_BARRIER_LAYOUT barrierLayout = D3D12_BARRIER_LAYOUT_UNDEFINED;
 
-			HRESULT hr = device->CreateCommittedResource3(&heapProp, D3D12_HEAP_FLAG_NONE, &desc, barrierLayout,
+			HRESULT hr = device->CreateCommittedResource3(&heapProp, D3D12_HEAP_FLAG_NONE, &resDesc, barrierLayout,
 				nullptr, nullptr, 0, nullptr, IID_PPV_ARGS(&impl.resource[i]));
 			if (FAILED(hr))
 			{
 				return DetailedResult::Fail(D3D12ErrorMsg("ID3D12Device10::CreateCommittedResource3", hr));
 			}
 
-			if (usage == BufferUsage::Dynamic ||
-				usage == BufferUsage::Readable)
+			if (desc.usage == BufferUsage::Dynamic ||
+				desc.usage == BufferUsage::Readable)
 			{
 				D3D12_RANGE noRead = { 0, 0 };
 				void* mappedPtr = nullptr;
-				hr = impl.resource[i]->Map(0, (usage == BufferUsage::Readable) ? nullptr : &noRead, &mappedPtr);
+				hr = impl.resource[i]->Map(0, (desc.usage == BufferUsage::Readable) ? nullptr : &noRead, &mappedPtr);
 				if (FAILED(hr))
 				{
 					return DetailedResult::Fail(D3D12ErrorMsg("ID3D12Resource::Map", hr));
@@ -1455,31 +1446,31 @@ namespace ig
 		}
 
 		uint32_t numDescriptors = 0;
-		if (usage == BufferUsage::Default) numDescriptors = 1;
-		else if (usage == BufferUsage::UnorderedAccess) numDescriptors = 1;
-		else if (usage == BufferUsage::Dynamic) numDescriptors = context.GetMaxFramesInFlight();
+		if (desc.usage == BufferUsage::Default) numDescriptors = 1;
+		else if (desc.usage == BufferUsage::UnorderedAccess) numDescriptors = 1;
+		else if (desc.usage == BufferUsage::Dynamic) numDescriptors = context.GetMaxFramesInFlight();
 
 		for (uint32_t i = 0; i < numDescriptors; i++)
 		{
-			if (type == BufferType::StructuredBuffer ||
-				type == BufferType::RawBuffer ||
-				type == BufferType::ShaderConstant)
+			if (desc.type == BufferType::StructuredBuffer ||
+				desc.type == BufferType::RawBuffer ||
+				desc.type == BufferType::ShaderConstant)
 			{
-				DescriptorType descriptorType = (type == BufferType::ShaderConstant)
+				DescriptorType descriptorType = (desc.type == BufferType::ShaderConstant)
 					? DescriptorType::ConstantBuffer_CBV
 					: DescriptorType::RawOrStructuredBuffer_SRV_UAV;
 
 				Descriptor allocatedDescriptor = heap.AllocatePersistent(descriptorType);
-				if (allocatedDescriptor.IsNull())
+				if (!allocatedDescriptor)
 				{
 					return DetailedResult::Fail("Failed to allocate descriptor.");
 				}
 
-				if (type == BufferType::ShaderConstant)
+				if (desc.type == BufferType::ShaderConstant)
 				{
 					D3D12_CONSTANT_BUFFER_VIEW_DESC cbv = {};
 					cbv.BufferLocation = impl.resource[i]->GetGPUVirtualAddress();
-					cbv.SizeInBytes = (UINT)AlignUp(size, context.GetGraphicsSpecs().bufferPlacementAlignments.constant);
+					cbv.SizeInBytes = (UINT)AlignUp(desc.size, context.GetGraphicsSpecs().bufferPlacementAlignments.constant);
 
 					device->CreateConstantBufferView(&cbv, heap.GetD3D12CPUHandle(allocatedDescriptor));
 				}
@@ -1487,23 +1478,23 @@ namespace ig
 				{
 					D3D12_SHADER_RESOURCE_VIEW_DESC srv = {};
 
-					if (type == BufferType::StructuredBuffer)
+					if (desc.type == BufferType::StructuredBuffer)
 					{
 						srv.Format = DXGI_FORMAT_UNKNOWN;
 						srv.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
 						srv.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
 						srv.Buffer.FirstElement = 0;
-						srv.Buffer.NumElements = numElements;
-						srv.Buffer.StructureByteStride = stride;
+						srv.Buffer.NumElements = desc.numElements;
+						srv.Buffer.StructureByteStride = desc.stride;
 						srv.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
 					}
-					else if (type == BufferType::RawBuffer)
+					else if (desc.type == BufferType::RawBuffer)
 					{
 						srv.Format = DXGI_FORMAT_R32_TYPELESS;
 						srv.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
 						srv.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
 						srv.Buffer.FirstElement = 0;
-						srv.Buffer.NumElements = uint32_t(size) / sizeof(uint32_t);
+						srv.Buffer.NumElements = uint32_t(desc.size) / sizeof(uint32_t);
 						srv.Buffer.StructureByteStride = 0;
 						srv.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_RAW;
 					}
@@ -1515,21 +1506,21 @@ namespace ig
 		}
 
 		impl.desc_cpu_uav = {};
-		if (usage == BufferUsage::UnorderedAccess)
+		if (desc.usage == BufferUsage::UnorderedAccess)
 		{
 			descriptor_UAV = heap.AllocatePersistent(DescriptorType::RawOrStructuredBuffer_SRV_UAV);
-			if (descriptor_UAV.IsNull())
+			if (!descriptor_UAV)
 			{
 				return DetailedResult::Fail("Failed to allocate descriptor.");
 			}
 
-			if (type == BufferType::StructuredBuffer)
+			if (desc.type == BufferType::StructuredBuffer)
 			{
-				impl.desc_cpu_uav = GenerateD3D12Desc_UAV_Structured(numElements, stride);
+				impl.desc_cpu_uav = GenerateD3D12Desc_UAV_Structured(desc.numElements, desc.stride);
 			}
-			else if (type == BufferType::RawBuffer)
+			else if (desc.type == BufferType::RawBuffer)
 			{
-				impl.desc_cpu_uav = GenerateD3D12Desc_UAV_Raw(size);
+				impl.desc_cpu_uav = GenerateD3D12Desc_UAV_Raw(desc.size);
 			}
 			else throw std::runtime_error("This should be impossible.");
 
@@ -1541,16 +1532,15 @@ namespace ig
 
 	ID3D12Resource* Buffer::GetD3D12Resource() const
 	{
-		if (!isLoaded) return nullptr;
-		switch (usage)
+		switch (desc.usage)
 		{
 		case BufferUsage::Default:
 		case BufferUsage::UnorderedAccess:
-			return impl.resource[0].Get();
+			return impl.resource.at(0).Get();
 		case BufferUsage::Readable:
-			return impl.resource[context->GetFrameIndex()].Get();
+			return impl.resource.at(context.GetFrameIndex()).Get();
 		case BufferUsage::Dynamic:
-			return impl.resource[dynamicSetCounter].Get();
+			return impl.resource.at(dynamicSetCounter).Get();
 		default:
 			throw std::runtime_error("This should be impossible.");
 		}
@@ -1558,9 +1548,8 @@ namespace ig
 
 	const D3D12_UNORDERED_ACCESS_VIEW_DESC& Buffer::GetD3D12Desc_UAV() const
 	{
-		assert(isLoaded);
-		assert(usage == BufferUsage::UnorderedAccess);
-		assert(type == BufferType::StructuredBuffer || type == BufferType::RawBuffer);
+		assert(desc.usage == BufferUsage::UnorderedAccess);
+		assert(desc.type == BufferType::StructuredBuffer || desc.type == BufferType::RawBuffer);
 		return impl.desc_cpu_uav;
 	}
 
@@ -1590,13 +1579,13 @@ namespace ig
 		return out;
 	}
 
-	DetailedResult Sampler::Impl_Load(const IGLOContext& context, const SamplerDesc& desc)
+	DetailedResult Sampler::Impl_Create(const SamplerDesc& desc)
 	{
 		auto device = context.GetD3D12Device();
 		DescriptorHeap& heap = context.GetDescriptorHeap();
 
 		descriptor = heap.AllocatePersistent(DescriptorType::Sampler);
-		if (descriptor.IsNull())
+		if (!descriptor)
 		{
 			return DetailedResult::Fail("Failed to allocate sampler descriptor.");
 		}
@@ -1672,7 +1661,7 @@ namespace ig
 		return out;
 	}
 
-	void DescriptorHeap::Impl_Unload()
+	void DescriptorHeap::Impl_Destroy()
 	{
 		impl.descriptorHeap_NonShaderVisible_RTV = nullptr;
 		impl.descriptorHeap_NonShaderVisible_DSV = nullptr;
@@ -1682,15 +1671,9 @@ namespace ig
 		impl.descriptorHeap_Samplers = nullptr;
 
 		impl.bindlessRootSignature = nullptr;
-
-		impl.descriptorSize_RTV = 0;
-		impl.descriptorSize_DSV = 0;
-		impl.descriptorSize_Sampler = 0;
-		impl.descriptorSize_CBV_SRV_UAV = 0;
 	}
 
-	DetailedResult DescriptorHeap::Impl_Load(const IGLOContext& context, uint32_t maxPersistentResources,
-		uint32_t maxTempResourcesPerFrame, uint32_t maxSamplers, uint32_t numFramesInFlight)
+	DetailedResult DescriptorHeap::Impl_Create(uint32_t maxPersistentResources, uint32_t maxTempResourcesPerFrame, uint32_t maxSamplers)
 	{
 		auto device = context.GetD3D12Device();
 
@@ -1724,7 +1707,7 @@ namespace ig
 			D3D12_DESCRIPTOR_HEAP_DESC resHeap = {};
 			resHeap.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
 			resHeap.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-			resHeap.NumDescriptors = CalcTotalResDescriptors(maxPersistentResources, maxTempResourcesPerFrame, numFramesInFlight);
+			resHeap.NumDescriptors = CalcTotalResDescriptors(maxPersistentResources, maxTempResourcesPerFrame, maxFramesInFlight);
 			HRESULT hrRes = device->CreateDescriptorHeap(&resHeap, IID_PPV_ARGS(&impl.descriptorHeap_Resources));
 
 			// Samplers
@@ -1842,8 +1825,6 @@ namespace ig
 
 	VideoMemoryInfo IGLOContext::QueryVideoMemoryInfo()
 	{
-		if (!isLoaded) return VideoMemoryInfo();
-		
 		ComPtr<IDXGIAdapter3> adapter3;
 		graphics.adapter.As(&adapter3);
 
@@ -1910,7 +1891,7 @@ namespace ig
 		swapChain.format = format;
 		swapChain.presentMode = presentMode;
 		swapChain.numBackBuffers = numBackBuffers;
-		swapChain.renderTargetDesc = RenderTargetDesc( {format} );
+		swapChain.renderTargetDesc = RenderTargetDesc({ format });
 		swapChain.renderTargetDesc_sRGB_opposite = (formatInfo.sRGB_opposite != Format::None)
 			? RenderTargetDesc({ formatInfo.sRGB_opposite })
 			: RenderTargetDesc({});
@@ -1926,7 +1907,7 @@ namespace ig
 		swapChainDesc.SwapEffect = d3d12SwapEffect;
 		swapChainDesc.Flags = d3d12SwapChainFlags;
 		ComPtr<IDXGISwapChain1> swapChain1;
-		HRESULT hr = graphics.factory->CreateSwapChainForHwnd(commandQueue.GetD3D12CommandQueue(CommandListType::Graphics),
+		HRESULT hr = graphics.factory->CreateSwapChainForHwnd(commandQueue->GetD3D12CommandQueue(CommandListType::Graphics),
 			window.hwnd, &swapChainDesc, nullptr, nullptr, &swapChain1);
 		if (FAILED(hr))
 		{
@@ -1969,18 +1950,14 @@ namespace ig
 			desc.impl.resource = { res };
 			desc.impl.desc_cpu.rtv = Texture::GenerateD3D12Desc_RTV(format, MSAA::Disabled, 1);
 
-			std::unique_ptr<Texture> backBuffer = std::make_unique<Texture>();
-			backBuffer->LoadAsWrapped(*this, desc);
-			swapChain.wrapped.push_back(std::move(backBuffer));
+			swapChain.wrapped.push_back(std::move(Texture::CreateWrapped(*this, desc)));
 
 			// sRGB opposite views
 			if (formatInfo.sRGB_opposite != Format::None)
 			{
 				desc.impl.desc_cpu.rtv = Texture::GenerateD3D12Desc_RTV(formatInfo.sRGB_opposite, MSAA::Disabled, 1);
 
-				std::unique_ptr<Texture> backBuffer_sRGB_opposite = std::make_unique<Texture>();
-				backBuffer_sRGB_opposite->LoadAsWrapped(*this, desc);
-				swapChain.wrapped_sRGB_opposite.push_back(std::move(backBuffer_sRGB_opposite));
+				swapChain.wrapped_sRGB_opposite.push_back(std::move(Texture::CreateWrapped(*this, desc)));
 			}
 		}
 
@@ -1990,8 +1967,8 @@ namespace ig
 	bool IGLOContext::ResizeD3D12SwapChain(Extent2D extent)
 	{
 		// It's possible that the window related code will call this function
-		// before the graphics device has been loaded. Ignore those calls.
-		if (!isLoaded) return false;
+		// before the graphics device has been initialized. Ignore those calls.
+		if (!isGraphicsDeviceInitialized) return false;
 
 		const char* errStr = "Failed to resize swapchain. Reason: ";
 
@@ -2044,22 +2021,18 @@ namespace ig
 			desc.impl.resource = { res };
 			desc.impl.desc_cpu.rtv = Texture::GenerateD3D12Desc_RTV(swapChain.format, MSAA::Disabled, 1);
 
-			std::unique_ptr<Texture> backBuffer = std::make_unique<Texture>();
-			backBuffer->LoadAsWrapped(*this, desc);
-			swapChain.wrapped.push_back(std::move(backBuffer));
+			swapChain.wrapped.push_back(std::move(Texture::CreateWrapped(*this, desc)));
 
 			// sRGB opposite views
 			if (formatInfo.sRGB_opposite != Format::None)
 			{
 				desc.impl.desc_cpu.rtv = Texture::GenerateD3D12Desc_RTV(formatInfo.sRGB_opposite, MSAA::Disabled, 1);
 
-				std::unique_ptr<Texture> backBuffer_sRGB_opposite = std::make_unique<Texture>();
-				backBuffer_sRGB_opposite->LoadAsWrapped(*this, desc);
-				swapChain.wrapped_sRGB_opposite.push_back(std::move(backBuffer_sRGB_opposite));
+				swapChain.wrapped_sRGB_opposite.push_back(std::move(Texture::CreateWrapped(*this, desc)));
 			}
 		}
 
-		commandQueue.SubmitSignal(CommandListType::Graphics);
+		commandQueue->SubmitSignal(CommandListType::Graphics);
 		WaitForIdleDevice();
 
 		// If swapchain changed size
@@ -2074,7 +2047,7 @@ namespace ig
 		return true;
 	}
 
-	DetailedResult IGLOContext::Impl_LoadGraphicsDevice()
+	DetailedResult IGLOContext::Impl_InitGraphicsDevice()
 	{
 		const char* strLatestDrivers = "Ensure that you have the latest graphics drivers installed.";
 		HRESULT hr = 0;
@@ -2240,12 +2213,12 @@ namespace ig
 		return DetailedResult::Success();
 	}
 
-	void IGLOContext::Impl_UnloadGraphicsDevice()
+	void IGLOContext::Impl_DestroyGraphicsDevice()
 	{
 		graphics.adapter = nullptr;
 		graphics.factory = nullptr;
 		graphics.swapChain = nullptr;
-		graphics.device = nullptr; // The device is freed last
+		graphics.device = nullptr; // The device is destroyed last
 	}
 
 }

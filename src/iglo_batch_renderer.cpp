@@ -71,44 +71,28 @@ namespace ig
 
 		state.texture = &texture;
 
-		// Use null texture if given texture doesn't have a descriptor
-		const Texture* validTexture = &texture;
-		if (!texture.IsLoaded() || !texture.GetDescriptor())
-		{
-			static bool hasWarned = false;
-			if (!hasWarned)
-			{
-				hasWarned = true;
-				Log(LogType::Warning, "You are attempting to draw an invalid texture with BatchRenderer."
-					" A placeholder texture will be used instead.");
-			}
-			validTexture = &nullTexture;
-		}
-		if (validTexture->GetDescriptor()->IsNull()) throw std::runtime_error("This should be impossible.");
+		if (!texture.GetDescriptor()) throw std::runtime_error("No SRV.");
 
 		TextureConstants textureConstants = {};
-		textureConstants.textureSize = Vector2((float)validTexture->GetWidth(), (float)validTexture->GetHeight());
-		textureConstants.inverseTextureSize = Vector2(1.0f / (float)validTexture->GetWidth(), 1.0f / (float)validTexture->GetHeight());
-		textureConstants.msaa = (uint32_t)validTexture->GetMSAA();
+		textureConstants.textureSize = Vector2((float)texture.GetWidth(), (float)texture.GetHeight());
+		textureConstants.inverseTextureSize = Vector2(1.0f / (float)texture.GetWidth(), 1.0f / (float)texture.GetHeight());
+		textureConstants.msaa = (uint32_t)texture.GetMSAA();
 
-		Descriptor tempConstant = context->CreateTempConstant(&textureConstants, sizeof(textureConstants));
-		if (tempConstant.IsNull())
+		Descriptor tempConstant = context.CreateTempConstant(&textureConstants, sizeof(textureConstants));
+		if (!tempConstant)
 		{
-			// Better to throw an exception than crash the GPU with an invalid resource heap index.
-			throw std::runtime_error("Failed to create temp constant.");
+			const char* errorMsg = "Failed to set texture in BatchRenderer. Reason: Failed to create temp constant.";
+			Log(LogType::FatalError, ToString(errorMsg));
+			throw std::runtime_error(errorMsg);
 		}
 
 		state.pushConstants.textureConstantsIndex = tempConstant.heapIndex;
-		state.pushConstants.textureIndex = validTexture->GetDescriptor()->heapIndex;
+		state.pushConstants.textureIndex = texture.GetDescriptor().heapIndex;
 	}
 
-	void BatchRenderer::UsingRenderConstants(const Descriptor& descriptor)
+	void BatchRenderer::UsingRenderConstants(Descriptor descriptor)
 	{
-		if (descriptor.IsNull())
-		{
-			// Better to throw an exception than crash the GPU with an invalid resource heap index.
-			throw std::invalid_argument("Descriptor is null.");
-		}
+		assert(descriptor);
 
 		if (state.pushConstants.renderConstantsIndex == descriptor.heapIndex) return;
 
@@ -117,97 +101,39 @@ namespace ig
 		state.pushConstants.renderConstantsIndex = descriptor.heapIndex;
 	}
 
-	bool BatchRenderer::Load(IGLOContext& context, CommandList& cmd, RenderTargetDesc renderTargetDesc)
+	std::unique_ptr<BatchRenderer> BatchRenderer::Create(const IGLOContext& context, const RenderTargetDesc& renderTargetDesc)
 	{
-		Unload();
+		const char* errStr = "Failed to create batch renderer. Reason: ";
 
-		const char* errStr = "Failed to initialize batch renderer. Reason: ";
-
-		// Create null texture
-		{
-			Image image;
-			image.Load(8, 8, Format::BYTE_BYTE_BYTE_BYTE);
-			for (uint32_t i = 0; i < image.GetWidth() * image.GetHeight(); i++)
-			{
-				uint32_t step = i;
-				if (i >= (image.GetWidth() * image.GetHeight()) / 2) step += image.GetWidth() / 2;
-				uint32_t filled = (step / (image.GetWidth() / 2)) % 2;
-				((Color32*)image.GetPixels())[i] = filled ? Color32(Colors::Black) : Color32(Colors::Pink);
-			}
-			if (!this->nullTexture.LoadFromMemory(context, cmd, image))
-			{
-				Log(LogType::Error, ToString(errStr, "Failed to create null texture."));
-				Unload();
-				return false;
-			}
-		}
+		std::unique_ptr<BatchRenderer> out = std::unique_ptr<BatchRenderer>(new BatchRenderer(context));
 
 		// Create samplers
-		if (!this->samplerSmoothTextures.Load(context, SamplerDesc::SmoothRepeatSampler) ||
-			!this->samplerSmoothClampedTextures.Load(context, SamplerDesc::SmoothClampSampler) ||
-			!this->samplerPixelatedTextures.Load(context, SamplerDesc::PixelatedRepeatSampler))
+		out->samplerSmoothTextures = Sampler::Create(context, SamplerDesc::SmoothRepeatSampler);
+		out->samplerSmoothClampedTextures = Sampler::Create(context, SamplerDesc::SmoothClampSampler);
+		out->samplerPixelatedTextures = Sampler::Create(context, SamplerDesc::PixelatedRepeatSampler);
+		if (!out->samplerSmoothTextures ||
+			!out->samplerSmoothClampedTextures ||
+			!out->samplerPixelatedTextures)
 		{
-			Log(LogType::Error, ToString(errStr, "Sampler state creation failed."));
-			Unload();
-			return false;
+			Log(LogType::Error, ToString(errStr, "Sampler creation failed."));
+			return nullptr;
 		}
 
-		this->isLoaded = true;
-		this->context = &context;
-		this->renderTargetDesc = renderTargetDesc;
-
-		this->vertices.clear();
-		this->vertices.shrink_to_fit();
-		this->vertices.resize(MaxBatchSizeInBytes);
+		out->renderTargetDesc = renderTargetDesc;
+		out->vertices.resize(MaxBatchSizeInBytes);
 
 		// Create standard batch types
-		this->batchPipelines.clear();
-		this->batchPipelines.shrink_to_fit();
-		this->batchPipelines.push_back(BatchPipeline()); // Add the 'None' batch first, which is a batch type that draws nothing
-		for (uint32_t i = 1; i < (uint32_t)StandardBatchType::NumStandardBatchTypes; i++)
+		out->batchPipelines.push_back(BatchPipeline()); // Add the 'None' batch first
+		for (uint32_t i = 1; i < (uint32_t)StandardBatchType::COUNT; i++)
 		{
-			CreateBatchType(GetStandardBatchParams((StandardBatchType)i, renderTargetDesc));
+			out->CreateBatchType(GetStandardBatchParams((StandardBatchType)i, renderTargetDesc));
 		}
 
-		ResetRenderStates();
-		return true;
-	}
-
-	void BatchRenderer::Unload()
-	{
-		isLoaded = false;
-		context = nullptr;
-		cmd = nullptr;
-		renderTargetDesc = RenderTargetDesc();
-
-		nullTexture.Unload();
-		samplerSmoothTextures.Unload();
-		samplerSmoothClampedTextures.Unload();
-		samplerPixelatedTextures.Unload();
-
-		tempConstantDepthBufferDrawStyle.SetToNull();
-		tempConstantSDFEffect.SetToNull();
-
-		batchPipelines.clear();
-		batchPipelines.shrink_to_fit();
-
-		vertices.clear();
-
-		isActive = false;
-		nextPrimitive = 0;
-		drawCallCounter = 0;
-		prevDrawCallCounter = 0;
-
-		state = BatchState();
+		return out;
 	}
 
 	void BatchRenderer::Begin(CommandList& commandList)
 	{
-		if (!isLoaded)
-		{
-			Log(LogType::Error, "Failed to begin drawing with BatchRenderer. Reason: BatchRenderer isn't loaded!");
-			return;
-		}
 		if (isActive)
 		{
 			Log(LogType::Error, "You must call BatchRenderer::End() at some point after BatchRenderer::Begin().");
@@ -221,8 +147,6 @@ namespace ig
 
 	void BatchRenderer::End()
 	{
-		if (!isLoaded) return;
-
 		FlushPrimitives();
 
 		isActive = false;
@@ -234,51 +158,41 @@ namespace ig
 	{
 		FlushPrimitives();
 
-		state = BatchState(); // Reset states
+		state = BatchState();
 
-		// ----- These renderstates use redundancy checks ----- //
-		state.batchType = IGLO_UINT32_MAX; // To bypass redundancy checker for UsingBatch()
-		UsingBatch(0); // Use the 'None' batch type by default.
-		UsingTexture(nullTexture);
-		SetSampler(samplerSmoothTextures);
-
-		// ----- These renderstates don't use redundancy checks ----- //
-		SetDepthBufferDrawStyle(0.5f, 50.0f, false);
-		SetSDFEffect(SDFEffect());
-		SetViewAndProjection2D((float)context->GetWidth(), (float)context->GetHeight());
+		SetViewAndProjection2D((float)context.GetWidth(), (float)context.GetHeight());
 		RestoreWorldMatrix();
+
+		// These renderstates use redundancy checks.
+		UsingBatch((BatchType)StandardBatchType::None);
+		SetSampler(*samplerSmoothTextures);
 	}
 
 	void BatchRenderer::SetSampler(const Sampler& samplerState)
 	{
-		if (!samplerState.IsLoaded())
-		{
-			Log(LogType::Error, "Failed to set BatchRenderer sampler. Reason: Sampler isn't loaded.");
-			return;
-		}
+		assert(samplerState.GetDescriptor());
+
 		if (state.sampler == &samplerState) return;
 
 		FlushPrimitives();
 
 		state.sampler = &samplerState;
-		state.pushConstants.samplerIndex = samplerState.GetDescriptor()->heapIndex;
-
-		if (samplerState.GetDescriptor()->IsNull()) throw std::runtime_error("This should be impossible.");
+		state.pushConstants.samplerIndex = samplerState.GetDescriptor().heapIndex;
 	}
 
 	void BatchRenderer::SetSamplerToSmoothTextures()
 	{
-		SetSampler(samplerSmoothTextures);
+		SetSampler(*samplerSmoothTextures);
 	}
 
 	void BatchRenderer::SetSamplerToSmoothClampedTextures()
 	{
-		SetSampler(samplerSmoothClampedTextures);
+		SetSampler(*samplerSmoothClampedTextures);
 	}
 
 	void BatchRenderer::SetSamplerToPixelatedTextures()
 	{
-		SetSampler(samplerPixelatedTextures);
+		SetSampler(*samplerPixelatedTextures);
 	}
 
 	void BatchRenderer::SetViewAndProjection3D(Vector3 position, Vector3 lookToDirection, Vector3 up, float aspectRatio,
@@ -305,17 +219,24 @@ namespace ig
 
 	void BatchRenderer::SetViewAndProjection2D(float viewX, float viewY, float viewWidth, float viewHeight, float zNear, float zFar)
 	{
+		Matrix4x4 view;
+		Matrix4x4 proj;
+		GenerateViewProj2D(view, proj, viewX, viewY, viewWidth, viewHeight, zNear, zFar);
+		SetViewAndProjection(view, proj);
+	}
+
+	void BatchRenderer::GenerateViewProj2D(Matrix4x4& out_view, Matrix4x4& out_proj,
+		float viewX, float viewY, float viewWidth, float viewHeight, float zNear, float zFar)
+	{
 		Vector3 position = Vector3(viewX, viewY, 1);
 		Vector3 direction = Vector3(0, 0, -1);
 		Vector3 up = Vector3(0, -1, 0);
 
-		Matrix4x4 view = Matrix4x4::LookToLH(position, direction, up);
-		Matrix4x4 proj = Matrix4x4::OrthoLH(viewWidth, viewHeight, zNear, zFar);
-
-		SetViewAndProjection(view, proj);
+		out_view = Matrix4x4::LookToLH(position, direction, up);
+		out_proj = Matrix4x4::OrthoLH(viewWidth, viewHeight, zNear, zFar);
 	}
 
-	void BatchRenderer::SetViewAndProjection(Matrix4x4 view, Matrix4x4 projection)
+	void BatchRenderer::SetViewAndProjection(const Matrix4x4& view, const Matrix4x4& projection)
 	{
 		FlushPrimitives();
 
@@ -323,10 +244,8 @@ namespace ig
 		state.proj = projection;
 
 		Matrix4x4 viewProjConstant = (projection * view).GetTransposed();
-		Descriptor tempConstant = context->CreateTempConstant(&viewProjConstant, sizeof(viewProjConstant));
-
-		// Better to throw an exception than crash the GPU with an invalid resource heap index.
-		if (tempConstant.IsNull()) throw std::runtime_error("Failed to create temp constant.");
+		Descriptor tempConstant = context.CreateTempConstant(&viewProjConstant, sizeof(viewProjConstant));
+		if (!tempConstant) throw std::runtime_error("Failed to create temp constant.");
 
 		state.pushConstants.viewProjMatrixIndex = tempConstant.heapIndex;
 	}
@@ -343,22 +262,20 @@ namespace ig
 		SetWorldMatrix(Matrix4x4::Identity);
 	}
 
-	void BatchRenderer::SetWorldMatrix(Matrix4x4 world)
+	void BatchRenderer::SetWorldMatrix(const Matrix4x4& world)
 	{
 		FlushPrimitives();
 
 		state.world = world;
 
 		Matrix4x4 worldConstant = world.GetTransposed();
-		Descriptor tempConstant = context->CreateTempConstant(&worldConstant, sizeof(worldConstant));
-
-		// Better to throw an exception than crash the GPU with an invalid resource heap index.
-		if (tempConstant.IsNull()) throw std::runtime_error("Failed to create temp constant.");
+		Descriptor tempConstant = context.CreateTempConstant(&worldConstant, sizeof(worldConstant));
+		if (!tempConstant) throw std::runtime_error("Failed to create temp constant.");
 
 		state.pushConstants.worldMatrixIndex = tempConstant.heapIndex;
 	}
 
-	BatchParams GetStandardBatchParams(StandardBatchType type, RenderTargetDesc renderTargetDesc)
+	BatchParams GetStandardBatchParams(StandardBatchType type, const RenderTargetDesc& renderTargetDesc)
 	{
 		static const std::vector<VertexElement> layout_XYC =
 		{
@@ -563,12 +480,6 @@ namespace ig
 	{
 		const char* errStr = "Failed to create batch type. Reason: ";
 
-		if (!isLoaded)
-		{
-			Log(LogType::Error, ToString(errStr, "BatchRenderer isn't loaded."));
-			return 0;
-		}
-
 		if (batchParams.batchDesc.vertGenMethod == BatchDesc::VertexGenerationMethod::None)
 		{
 			if (batchParams.batchDesc.outputVerticesPerPrimitive > 0)
@@ -601,12 +512,9 @@ namespace ig
 			bool indexBufferIsValid = false;
 			if (batchParams.batchDesc.indexBuffer)
 			{
-				if (batchParams.batchDesc.indexBuffer->IsLoaded())
+				if (batchParams.batchDesc.indexBuffer->GetNumElements() % batchParams.batchDesc.outputVerticesPerPrimitive == 0)
 				{
-					if (batchParams.batchDesc.indexBuffer->GetNumElements() % batchParams.batchDesc.outputVerticesPerPrimitive == 0)
-					{
-						indexBufferIsValid = true;
-					}
+					indexBufferIsValid = true;
 				}
 			}
 			if (!indexBufferIsValid)
@@ -626,8 +534,8 @@ namespace ig
 
 		BatchPipeline batch;
 		batch.batchDesc = batchParams.batchDesc;
-		batch.pipeline = std::make_unique<Pipeline>();
-		if (!batch.pipeline->Load(*context, batchParams.pipelineDesc))
+		batch.pipeline = Pipeline::CreateGraphics(context, batchParams.pipelineDesc);
+		if (!batch.pipeline)
 		{
 			Log(LogType::Error, ToString(errStr, "Failed to create pipeline state."));
 			return 0;
@@ -638,19 +546,34 @@ namespace ig
 		return out;
 	}
 
-	void BatchRenderer::SetDepthBufferDrawStyle(float zNear, float zFar, bool drawStencilComponent)
-	{
-		FlushPrimitives();
-		DepthBufferDrawStyle style = {};
-		style.depthOrStencilComponent = drawStencilComponent ? 1 : 0;
-		style.zNear = zNear;
-		style.zFar = zFar;
-		tempConstantDepthBufferDrawStyle = context->CreateTempConstant(&style, sizeof(style));
-	}
 	void BatchRenderer::SetSDFEffect(const SDFEffect& sdf)
 	{
 		FlushPrimitives();
-		tempConstantSDFEffect = context->CreateTempConstant(&sdf, sizeof(sdf));
+		state.tempConstantSDFEffect = context.CreateTempConstant(&sdf, sizeof(sdf));
+		if (!state.tempConstantSDFEffect) throw std::runtime_error("Failed to create temp constant.");
+	}
+	void BatchRenderer::SetDepthBufferDrawStyle(float zNear, float zFar, bool drawStencilComponent)
+	{
+		FlushPrimitives();
+		DepthBufferDrawStyle style =
+		{
+			.depthOrStencilComponent = drawStencilComponent ? (uint32_t)1 : (uint32_t)0,
+			.zNear = zNear,
+			.zFar = zFar,
+		};
+		state.tempConstantDepthBufferDrawStyle = context.CreateTempConstant(&style, sizeof(style));
+		if (!state.tempConstantDepthBufferDrawStyle) throw std::runtime_error("Failed to create temp constant.");
+	}
+
+	Descriptor BatchRenderer::GetSDFEffectRenderConstant()
+	{
+		if (!state.tempConstantSDFEffect) SetSDFEffect(SDFEffect());
+		return state.tempConstantSDFEffect;
+	}
+	Descriptor BatchRenderer::GetDepthBufferDrawStyleRenderConstant()
+	{
+		if (!state.tempConstantDepthBufferDrawStyle) SetDepthBufferDrawStyle(0.5f, 50.0f, false);
+		return state.tempConstantDepthBufferDrawStyle;
 	}
 
 	void BatchRenderer::AddPrimitive(const void* vertexData)
@@ -698,20 +621,20 @@ namespace ig
 
 		UsingBatch(batchType);
 		if (texture) UsingTexture(*texture);
-		if (!renderConstants.IsNull()) UsingRenderConstants(renderConstants);
+		if (renderConstants) UsingRenderConstants(renderConstants);
 
 		InternalDraw(vertexData, numPrimitives);
 	}
 
 	void BatchRenderer::InternalDraw(const void* vertexData, uint32_t numPrimitives)
 	{
-		const char* errStr = "Failed to draw BatchRenderer primitives. Reason: ";
+		const char* errStr = "BatchRenderer failed to draw. Reason: ";
 		if (!isActive)
 		{
 			Log(LogType::Error, ToString(errStr, "Didn't properly use Begin() and End()."));
 			return;
 		}
-		if (batchPipelines[state.batchType].pipeline == nullptr)
+		if (state.batchType >= batchPipelines.size() || batchPipelines[state.batchType].pipeline == nullptr)
 		{
 			Log(LogType::Error, ToString(errStr, "Invalid batch type."));
 			return;
@@ -735,12 +658,12 @@ namespace ig
 
 		if (state.batchDesc.vertGenMethod == BatchDesc::VertexGenerationMethod::VertexPullingStructured)
 		{
-			state.pushConstants.rawOrStructuredBufferIndex = context->CreateTempStructuredBuffer(vertexData,
+			state.pushConstants.rawOrStructuredBufferIndex = context.CreateTempStructuredBuffer(vertexData,
 				state.batchDesc.bytesPerVertex, numVertices).heapIndex;
 		}
 		else if (state.batchDesc.vertGenMethod == BatchDesc::VertexGenerationMethod::VertexPullingRaw)
 		{
-			state.pushConstants.rawOrStructuredBufferIndex = context->CreateTempRawBuffer(vertexData,
+			state.pushConstants.rawOrStructuredBufferIndex = context.CreateTempRawBuffer(vertexData,
 				(uint64_t)state.batchDesc.bytesPerVertex * numVertices).heapIndex;
 		}
 
@@ -797,7 +720,6 @@ namespace ig
 
 	void BatchRenderer::DrawString(float x, float y, const std::string& utf8string, Font& font, Color32 color, size_t startIndex, size_t endIndex)
 	{
-		if (!font.IsLoaded()) return;
 		if (utf8string.length() == 0) return;
 
 		// Must select batch type atleast once
@@ -881,8 +803,6 @@ namespace ig
 	}
 	Vector2 BatchRenderer::MeasureString(const std::string& utf8string, Font& font, size_t startIndex, size_t endIndex)
 	{
-		if (!font.IsLoaded()) return Vector2(0, 0);
-
 		float charX = 0;
 		Vector2 boundingBox = Vector2(0, (float)font.GetFontDesc().lineHeight);
 		uint32_t codepoint;
@@ -1119,13 +1039,13 @@ namespace ig
 	{
 		CircleParams params
 		{
-			.position = ig::Vector2(x, y),
+			.position = Vector2(x, y),
 			.radius = radius,
 			.smoothing = smoothing,
 			.borderThickness = 0.0f,
 			.innerColor = color,
 			.outerColor = color,
-			.borderColor = ig::Colors::Transparent,
+			.borderColor = Colors::Transparent,
 		};
 		DrawCircle(params);
 	}
@@ -1428,7 +1348,7 @@ namespace ig
 	void BatchRenderer::DrawNineSliceSprite(const Texture& texture, ig::FloatRect quad, ig::FloatRect uv, Color32 color)
 	{
 		/*
-			      stretched                not stretched
+				  stretched                not stretched
 			 ___________________             _________
 			|A  |H1         |  B|           |A   |   B|
 			|___|___________|___|           |____|____|
@@ -1451,47 +1371,47 @@ namespace ig
 		const bool splitHorizontal = (width > uvWidth);
 		const bool splitVertical = (height > uvHeight);
 
-		ig::FloatRect A = ig::FloatRect(x, y, x + (width / 2), y + (height / 2));
+		FloatRect A = FloatRect(x, y, x + (width / 2), y + (height / 2));
 		if (splitHorizontal) A.right = x + (uvWidth * 0.5f);
 		if (splitVertical) A.bottom = y + (uvHeight * 0.5f);
 
-		ig::FloatRect B = ig::FloatRect(x + (width / 2), y, x + width, y + (height / 2));
+		FloatRect B = FloatRect(x + (width / 2), y, x + width, y + (height / 2));
 		if (splitHorizontal) B.left = x + width - (uvWidth * 0.5f);
 		if (splitVertical) B.bottom = y + (uvHeight * 0.5f);
 
-		ig::FloatRect C = ig::FloatRect(x, y + (height / 2), x + (width / 2), y + height);
+		FloatRect C = FloatRect(x, y + (height / 2), x + (width / 2), y + height);
 		if (splitHorizontal) C.right = x + (uvWidth * 0.5f);
 		if (splitVertical) C.top = y + height - (uvHeight * 0.5f);
 
-		ig::FloatRect D = ig::FloatRect(x + (width / 2), y + (height / 2), x + width, y + height);
+		FloatRect D = FloatRect(x + (width / 2), y + (height / 2), x + width, y + height);
 		if (splitHorizontal) D.left = x + width - (uvWidth * 0.5f);
 		if (splitVertical) D.top = y + height - (uvHeight * 0.5f);
 
-		ig::FloatRect	  V1 = ig::FloatRect(A.left, A.bottom, A.right, C.top);
-		ig::FloatRect	  V2 = ig::FloatRect(B.left, B.bottom, B.right, D.top);
-		ig::FloatRect	  H1 = ig::FloatRect(A.right, A.top, B.left, A.bottom);
-		ig::FloatRect	  H2 = ig::FloatRect(C.right, C.top, D.left, C.bottom);
-		ig::FloatRect Center = ig::FloatRect(V1.right, H1.bottom, V2.left, H2.top);
+		FloatRect	  V1 = FloatRect(A.left, A.bottom, A.right, C.top);
+		FloatRect	  V2 = FloatRect(B.left, B.bottom, B.right, D.top);
+		FloatRect	  H1 = FloatRect(A.right, A.top, B.left, A.bottom);
+		FloatRect	  H2 = FloatRect(C.right, C.top, D.left, C.bottom);
+		FloatRect Center = FloatRect(V1.right, H1.bottom, V2.left, H2.top);
 
 		// Texture UV coordinates of all quads
 		float W = (float)uvWidth;
 		float H = (float)uvHeight;
-		ig::FloatRect	   A_UV = ig::FloatRect(0.0f * W, 0.0f * H, 0.5f * W, 0.5f * H) + ig::Vector2(uv.left, uv.top);
-		ig::FloatRect	   B_UV = ig::FloatRect(0.5f * W, 0.0f * H, 1.0f * W, 0.5f * H) + ig::Vector2(uv.left, uv.top);
-		ig::FloatRect	   C_UV = ig::FloatRect(0.0f * W, 0.5f * H, 0.5f * W, 1.0f * H) + ig::Vector2(uv.left, uv.top);
-		ig::FloatRect	   D_UV = ig::FloatRect(0.5f * W, 0.5f * H, 1.0f * W, 1.0f * H) + ig::Vector2(uv.left, uv.top);
-		ig::FloatRect	  V1_UV = ig::FloatRect(0.0f * W, 0.5f * H, 0.5f * W, 0.5f * H) + ig::Vector2(uv.left, uv.top);
-		ig::FloatRect	  V2_UV = ig::FloatRect(0.5f * W, 0.5f * H, 1.0f * W, 0.5f * H) + ig::Vector2(uv.left, uv.top);
-		ig::FloatRect	  H1_UV = ig::FloatRect(0.5f * W, 0.0f * H, 0.5f * W, 0.5f * H) + ig::Vector2(uv.left, uv.top);
-		ig::FloatRect	  H2_UV = ig::FloatRect(0.5f * W, 0.5f * H, 0.5f * W, 1.0f * H) + ig::Vector2(uv.left, uv.top);
-		ig::FloatRect Center_UV = ig::FloatRect(0.5f * W, 0.5f * H, 0.5f * W, 0.5f * H) + ig::Vector2(uv.left, uv.top);
+		FloatRect	   A_UV = FloatRect(0.0f * W, 0.0f * H, 0.5f * W, 0.5f * H) + Vector2(uv.left, uv.top);
+		FloatRect	   B_UV = FloatRect(0.5f * W, 0.0f * H, 1.0f * W, 0.5f * H) + Vector2(uv.left, uv.top);
+		FloatRect	   C_UV = FloatRect(0.0f * W, 0.5f * H, 0.5f * W, 1.0f * H) + Vector2(uv.left, uv.top);
+		FloatRect	   D_UV = FloatRect(0.5f * W, 0.5f * H, 1.0f * W, 1.0f * H) + Vector2(uv.left, uv.top);
+		FloatRect	  V1_UV = FloatRect(0.0f * W, 0.5f * H, 0.5f * W, 0.5f * H) + Vector2(uv.left, uv.top);
+		FloatRect	  V2_UV = FloatRect(0.5f * W, 0.5f * H, 1.0f * W, 0.5f * H) + Vector2(uv.left, uv.top);
+		FloatRect	  H1_UV = FloatRect(0.5f * W, 0.0f * H, 0.5f * W, 0.5f * H) + Vector2(uv.left, uv.top);
+		FloatRect	  H2_UV = FloatRect(0.5f * W, 0.5f * H, 0.5f * W, 1.0f * H) + Vector2(uv.left, uv.top);
+		FloatRect Center_UV = FloatRect(0.5f * W, 0.5f * H, 0.5f * W, 0.5f * H) + Vector2(uv.left, uv.top);
 		{
 			Vertex_ScaledSprite V[] =
 			{
-				ig::Vector2(A.left, A.top), A.GetWidth(), A.GetHeight(), A_UV, color,
-				ig::Vector2(B.left, B.top), B.GetWidth(), B.GetHeight(), B_UV, color,
-				ig::Vector2(C.left, C.top), C.GetWidth(), C.GetHeight(), C_UV, color,
-				ig::Vector2(D.left, D.top), D.GetWidth(), D.GetHeight(), D_UV, color,
+				Vector2(A.left, A.top), A.GetWidth(), A.GetHeight(), A_UV, color,
+				Vector2(B.left, B.top), B.GetWidth(), B.GetHeight(), B_UV, color,
+				Vector2(C.left, C.top), C.GetWidth(), C.GetHeight(), C_UV, color,
+				Vector2(D.left, D.top), D.GetWidth(), D.GetHeight(), D_UV, color,
 			};
 			AddPrimitives(V, 4);
 		}
@@ -1500,8 +1420,8 @@ namespace ig
 		{
 			Vertex_ScaledSprite V[] =
 			{
-				ig::Vector2(V1.left, V1.top), V1.GetWidth(), V1.GetHeight(), V1_UV, color,
-				ig::Vector2(V2.left, V2.top), V2.GetWidth(), V2.GetHeight(), V2_UV, color,
+				Vector2(V1.left, V1.top), V1.GetWidth(), V1.GetHeight(), V1_UV, color,
+				Vector2(V2.left, V2.top), V2.GetWidth(), V2.GetHeight(), V2_UV, color,
 			};
 			AddPrimitives(V, 2);
 		}
@@ -1509,8 +1429,8 @@ namespace ig
 		{
 			Vertex_ScaledSprite V[] =
 			{
-				ig::Vector2(H1.left, H1.top), H1.GetWidth(), H1.GetHeight(), H1_UV, color,
-				ig::Vector2(H2.left, H2.top), H2.GetWidth(), H2.GetHeight(), H2_UV, color,
+				Vector2(H1.left, H1.top), H1.GetWidth(), H1.GetHeight(), H1_UV, color,
+				Vector2(H2.left, H2.top), H2.GetWidth(), H2.GetHeight(), H2_UV, color,
 			};
 			AddPrimitives(V, 2);
 		}
@@ -1518,7 +1438,7 @@ namespace ig
 		{
 			Vertex_ScaledSprite V[] =
 			{
-				ig::Vector2(Center.left, Center.top), Center.GetWidth(), Center.GetHeight(), Center_UV, color,
+				Vector2(Center.left, Center.top), Center.GetWidth(), Center.GetHeight(), Center_UV, color,
 			};
 			AddPrimitive(V);
 		}

@@ -1,9 +1,58 @@
 
 # Changelog
 
+## v0.4.0
+
+### Changes
+- Major changes:
+  - iglo resources and components are now managed with unique_ptr (stack allocation no longer supported)
+- New features:
+  - Added ability to query system and video memory info
+  - Added custom cursor support
+  - Added clipboard functionality
+  - Added SimpleBarrier::ClearInactiveRenderTarget
+- Bug fixes:
+  - Fixed segfault caused by NVIDIA drivers on Linux/Vulkan backend that would appear when closing the window
+- Minor improvements/changes:
+  - iglo utility
+    - Added FloatRect::GetExpanded()
+    - Added FloatRect::CroppedTo()
+    - Added Lerp()
+    - utf8_next_codepoint() now returns replacement characters for invalid byte sequences
+    - The utf16 functions now use u16string instead of wstring
+    - Made some timer functions const
+  - iglo
+    - Added GetFormatName()
+    - MouseEvent::scrollWheel is now a float
+  - IGLOContext
+    - Added GetMouseButtonState()
+    - Added GetKeyState()
+    - TextEntered event now ignores unprintable characters
+  - BatchRenderer
+    - Added DrawImmediate()
+    - Added GetCurrentBatchType()
+    - Added GetCurrentCommandList()
+    - Added IsActive()
+    - Renamed DrawCenterStretchedTexture() to DrawNineSliceSprite()
+    - Improved SDF pixel shader (better shadows)
+  - Font
+    - PrebakedFontData loading function is now more explicit (to remove compiler warnings)
+    - Added out_isErrorGlyph option to Font::GetGlyph()
+
+## v0.3.2
+
+### Changes
+- Fixed a padding issue with the Prebaked font file header struct.
+
+## v0.3.1
+
+### Changes
+- Added SimpleBarrier::ClearUnorderedAccess
+- Moved stb includes away from iglo.h
+
 ## v0.3.0
 
-### Added or changed
+### Changes
 - Platform support:
   - Added Vulkan support
   - Added Linux support (X11)
@@ -30,32 +79,30 @@
 
 ## v0.2.3
 
-### Added or changed
+### Changes
 - BatchRenderer now uses Instancing to draw quads.
 
 ## v0.2.2
 
-### Added or changed
+### Changes
 - BatchRenderer now uses the Vertex Pulling method to draw quads.
 
 ## v0.2.1
 
-### Added or changed
+### Changes
 - Fixed a bug where Dynamic usage raw/structured buffers would create all descriptors for the first resource only.
 - Clarified with comments that the order at which a Dynamic buffer is updated and bound to the pipeline matters due to how Dynamic buffers work internally.
 
 ## v0.2.0
 
-### Added or changed
+### Changes
 - Improved the frame-rate limiter. It now uses a more precise sleep function.
 - Renamed the Physics callback to FixedUpdate. It is now set in MainLoop.Run() along with the rest of the callbacks.
 
 ## v0.1.1
 
-### Added or changed
+### Changes
 - Improved the build system. CMake now downloads AgilitySDK directly from www.nuget.org without using nuget.exe.
-
-### Removed
 - AgilitySDK .pdb files are no longer copied over to the D3D12 .dll folder.
 
 ## v0.1.0

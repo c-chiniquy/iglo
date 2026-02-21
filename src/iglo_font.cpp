@@ -288,7 +288,7 @@ namespace ig
 		};
 
 		PrebakedFontData out;
-		out.image.LoadFromMemory(fileData, std::size(fileData));
+		out.image = Image::LoadFromMemory(fileData, std::size(fileData));
 		out.fontType = FontType::Bitmap;
 		out.errorGlyph = { 130, 31, 10, 13, -1, 2, 8, 0 };
 		out.fontDesc = { "Vegur15", 15, 14, 18, 0 };
@@ -356,15 +356,15 @@ namespace ig
 	{
 		const char* errStr = "Failed to save prebaked font to file. Reason: ";
 
-		if (!image.IsLoaded())
+		if (!image)
 		{
-			Log(LogType::Error, ToString(errStr, "The provided image isn't loaded with any data."));
+			Log(LogType::Error, ToString(errStr, "Invalid image."));
 			return false;
 		}
 
-		if (glyphs.size() > IGLO_UINT32_MAX ||
-			kerns.size() > IGLO_UINT32_MAX ||
-			fontDesc.fontName.size() > IGLO_UINT32_MAX)
+		if (glyphs.size() >= IGLO_UINT32_MAX ||
+			kerns.size() >= IGLO_UINT32_MAX ||
+			fontDesc.fontName.size() >= IGLO_UINT32_MAX)
 		{
 			Log(LogType::Error, ToString(errStr, "One of the following is too large: number of glyphs, number of kerns, or font name."));
 			return false;
@@ -383,11 +383,11 @@ namespace ig
 		header.lineGap = fontDesc.lineGap;
 		header.errorGlyph = errorGlyph;
 
-		header.imageWidth = image.GetWidth();
-		header.imageHeight = image.GetHeight();
-		header.imageFormat = (uint32_t)image.GetFormat();
-		header.imageMipLevels = image.GetMipLevels();
-		header.imageNumFaces = image.GetNumFaces();
+		header.imageWidth = image->GetWidth();
+		header.imageHeight = image->GetHeight();
+		header.imageFormat = (uint32_t)image->GetFormat();
+		header.imageMipLevels = image->GetMipLevels();
+		header.imageNumFaces = image->GetNumFaces();
 
 		std::ofstream outFile(utf8_to_path(filename), std::ios::out | std::ios::binary);
 		if (!outFile)
@@ -405,7 +405,7 @@ namespace ig
 			outFile.write((char*)&kerns[i].codepointNext, sizeof(uint32_t));
 			outFile.write((char*)&kerns[i].x, sizeof(int16_t));
 		}
-		outFile.write((char*)image.GetPixels(), image.GetSize());
+		outFile.write((char*)image->GetPixels(), image->GetSize());
 		return true;
 	}
 
@@ -507,158 +507,144 @@ namespace ig
 			.mipLevels = header->imageMipLevels,
 			.numFaces = header->imageNumFaces,
 		};
-		if (!this->image.Load(imageDesc))
+		this->image = Image::Create(imageDesc);
+		if (!this->image)
 		{
-			Log(LogType::Error, ToString(errStr, "Failed to load font image."));
+			Log(LogType::Error, ToString(errStr, "Failed to create font image."));
 			return false;
 		}
 
-		memcpy(this->image.GetPixels(), src, this->image.GetSize());
+		memcpy(this->image->GetPixels(), src, this->image->GetSize());
 
 		return true;
 	}
 
-	bool Font::LoadAsPrebakedFromFile(const IGLOContext& context, CommandList& cmd, const std::string& filename)
+	std::unique_ptr<Font> Font::LoadPrebakedFromFile(const IGLOContext& context, CommandList& cmd, const std::string& filename)
 	{
-		Unload();
 		PrebakedFontData prebaked;
-		if (!prebaked.LoadFromFile(filename)) return false;
-		return LoadAsPrebaked(context, cmd, prebaked);
+		if (!prebaked.LoadFromFile(filename)) return nullptr;
+		return CreatePrebaked(context, cmd, prebaked);
 	}
 
-	bool Font::LoadAsPrebakedFromMemory(const IGLOContext& context, CommandList& cmd, const byte* fileData, size_t numBytes)
+	std::unique_ptr<Font> Font::LoadPrebakedFromMemory(const IGLOContext& context, CommandList& cmd, const byte* fileData, size_t numBytes)
 	{
-		Unload();
 		PrebakedFontData prebaked;
-		if (!prebaked.LoadFromMemory(fileData, numBytes)) return false;
-		return LoadAsPrebaked(context, cmd, prebaked);
+		if (!prebaked.LoadFromMemory(fileData, numBytes)) return nullptr;
+		return CreatePrebaked(context, cmd, prebaked);
 	}
 
-	bool Font::LoadAsPrebaked(const IGLOContext& context, CommandList& cmd, const PrebakedFontData& data)
+	std::unique_ptr<Font> Font::CreatePrebaked(const IGLOContext& context, CommandList& cmd, const PrebakedFontData& data)
 	{
-		Unload();
+		const char* errStr = "Failed to create prebaked font. Reason: ";
+
+		if (!data.image)
+		{
+			Log(LogType::Error, ToString(errStr, "Invalid image."));
+			return nullptr;
+		}
 		if (data.fontDesc.fontSize < 1)
 		{
-			Log(LogType::Error, "Failed to load prebaked font '" + data.fontDesc.fontName +
-				"'. Reason: Font size smaller than 1 not allowed.");
-			Unload();
-			return false;
+			Log(LogType::Error, ToString(errStr, "Font size smaller than 1 not allowed."));
+			return nullptr;
 		}
 
-		this->isLoaded = true;
-		this->context = &context;
-		this->fontDesc = data.fontDesc;
-		this->fileDataReadOnly = nullptr;
-		this->isPrebaked = true;
+		FontSettings fontSettings = FontSettings();
+		fontSettings.fontType = data.fontType;
 
-		FontSettings temp = FontSettings();
-		temp.fontType = data.fontType;
-		this->fontSettings = temp;
+		std::unique_ptr<Font> out = std::unique_ptr<Font>(new Font(context, fontSettings, true));
 
-		SetPrebakedGlyphs(data.glyphs, data.errorGlyph);
-		SetKerning(data.kerns);
+		out->fontDesc = data.fontDesc;
+		out->fileDataReadOnly = nullptr;
 
-		this->page.texture = std::make_shared<Texture>();
-		if (!this->page.texture->LoadFromMemory(context, cmd, data.image, false))
+		out->SetPrebakedGlyphs(data.glyphs, data.errorGlyph);
+		out->SetKerning(data.kerns);
+
+		out->page.texture = Texture::LoadFromMemory(context, cmd, *data.image, false);
+		if (!out->page.texture)
 		{
-			Log(LogType::Error, "Failed to load prebaked font '" + data.fontDesc.fontName +
-				"'. Reason: Failed to create a texture from the provided image.");
-			Unload();
-			return false;
+			Log(LogType::Error, ToString(errStr, "Failed to create texture from image."));
+			return nullptr;
 		}
-		return true;
+		return out;
 	}
 
-	bool Font::LoadFromFile(const IGLOContext& context, const std::string& filename, float fontSize, FontSettings fontSettings)
+	std::unique_ptr<Font> Font::LoadFromFile(const IGLOContext& context, const std::string& filename, float fontSize, FontSettings fontSettings)
 	{
-		Unload();
 		ReadFileResult file = ReadFile(filename);
 		if (!file.success)
 		{
 			Log(LogType::Error, "Failed to load font from file. Reason: Couldn't open '" + filename + "'.");
-			return false;
+			return nullptr;
 		}
 		if (file.fileContent.size() == 0)
 		{
 			Log(LogType::Error, "Failed to load font from file. Reason: File '" + filename + "' is empty.");
-			return false;
+			return nullptr;
 		}
-		if (LoadFromMemory(context, file.fileContent.data(), file.fileContent.size(), filename, fontSize, fontSettings))
-		{
-			this->fileDataOwned.swap(file.fileContent); // This font owns the file data buffer.
-			return true; // Success
-		}
-		else
-		{
-			Unload();
-			return false;
-		}
+
+		std::unique_ptr<Font> out = LoadFromMemory(context, file.fileContent.data(), file.fileContent.size(), filename, fontSize, fontSettings);
+		if (!out) return nullptr;
+
+		out->fileDataOwned.swap(file.fileContent); // This font owns the file data buffer.
+		return out;
 	}
 
-	bool Font::LoadFromMemory(const IGLOContext& context, const byte* data, size_t numBytes, std::string fontName, float fontSize,
-		FontSettings fontSettings)
+	std::unique_ptr<Font> Font::LoadFromMemory(const IGLOContext& context, const byte* data, size_t numBytes,
+		std::string fontName, float fontSize, FontSettings fontSettings)
 	{
-		Unload();
 		if (data == nullptr || numBytes == 0)
 		{
 			Log(LogType::Error, "Failed to load font '" + fontName + "'. Reason: No file data provided.");
-			Unload();
-			return false;
+			return nullptr;
 		}
 		if (fontSize < 1)
 		{
 			Log(LogType::Error, "Failed to load font '" + fontName + "'. Reason: Font size smaller than 1 not allowed.");
-			Unload();
-			return false;
+			return nullptr;
 		}
 		if (fontSettings.fontType == FontType::SDF && (int16_t)fontSettings.sdfOutwardGradientSize < 0)
 		{
 			Log(LogType::Error, "Failed to load SDF font '" + fontName + "'. Reason: sdfOutwardGradientSize is too large.");
-			Unload();
-			return false;
+			return nullptr;
 		}
 
-		// Init font
-		if (!stbtt_InitFont(&this->stbttFontInfo, data, 0))
+		std::unique_ptr<Font> out = std::unique_ptr<Font>(new Font(context, fontSettings, false));
+
+		if (!stbtt_InitFont(&out->stbttFontInfo, data, 0))
 		{
 			Log(LogType::Error, "Failed to load font '" + fontName + "'. File might be corrupted or unsupported by stb_truetype.");
-			Unload();
-			return false;
+			return nullptr;
 		}
 
-		this->isLoaded = true;
-		this->context = &context;
-		this->isPrebaked = false;
-		this->fontDesc.fontName = fontName;
-		this->fontDesc.fontSize = fontSize;
-		this->fontSettings = fontSettings;
-		this->fileDataReadOnly = data;
+		out->fontDesc.fontName = fontName;
+		out->fontDesc.fontSize = fontSize;
+		out->fileDataReadOnly = data;
 
 		// Get font metrics
-		this->stbttScale = stbtt_ScaleForMappingEmToPixels(&this->stbttFontInfo, fontSize);
-		float scaleForPixelHeight = stbtt_ScaleForPixelHeight(&this->stbttFontInfo, fontSize);
-		this->fontDesc.lineHeight = int(ceilf(fontSize * (this->stbttScale / scaleForPixelHeight)));
+		out->stbttScale = stbtt_ScaleForMappingEmToPixels(&out->stbttFontInfo, fontSize);
+		float scaleForPixelHeight = stbtt_ScaleForPixelHeight(&out->stbttFontInfo, fontSize);
+		out->fontDesc.lineHeight = int(ceilf(fontSize * (out->stbttScale / scaleForPixelHeight)));
 		int descender = 0;
-		stbtt_GetFontVMetrics(&this->stbttFontInfo, &this->fontDesc.baseline, &descender, &this->fontDesc.lineGap);
-		this->fontDesc.baseline = int(ceilf(((float)this->fontDesc.baseline) * this->stbttScale));
-		this->fontDesc.lineGap = int(ceilf(((float)this->fontDesc.lineGap) * this->stbttScale));
+		stbtt_GetFontVMetrics(&out->stbttFontInfo, &out->fontDesc.baseline, &descender, &out->fontDesc.lineGap);
+		out->fontDesc.baseline = int(ceilf(((float)out->fontDesc.baseline) * out->stbttScale));
+		out->fontDesc.lineGap = int(ceilf(((float)out->fontDesc.lineGap) * out->stbttScale));
 
 		// Extract glyph and kerning info so we can map them to codepoints
-		int kernTableLength = stbtt_GetKerningTableLength(&this->stbttFontInfo);
+		int kernTableLength = stbtt_GetKerningTableLength(&out->stbttFontInfo);
 		std::vector<stbtt_kerningentry> kernEntry;
 		kernEntry.resize(kernTableLength);
-		stbtt_GetKerningTable(&this->stbttFontInfo, kernEntry.data(), kernTableLength);
+		stbtt_GetKerningTable(&out->stbttFontInfo, kernEntry.data(), kernTableLength);
 		std::vector<uint32_t> tableCodepoints;
 		PackedBoolArray exists; // One bool value for each element in 'tableCodepoints', indicating whether it exists.
-		tableCodepoints.resize((size_t)this->stbttFontInfo.numGlyphs + 1);
+		tableCodepoints.resize((size_t)out->stbttFontInfo.numGlyphs + 1);
 		exists.Resize(tableCodepoints.size());
 		uint32_t totalNumValidCodepoints = 0;
 		for (uint32_t codepoint = 0; codepoint < 0x10FFFF; codepoint++)
 		{
-			int index = stbtt_FindGlyphIndex(&this->stbttFontInfo, codepoint);
+			int index = stbtt_FindGlyphIndex(&out->stbttFontInfo, codepoint);
 			if (index != 0)
 			{
-				// Multiple codepoints can point to the same glyph indexes.
+				// Multiple codepoints can point to the same glyph indices.
 				totalNumValidCodepoints++;
 				tableCodepoints[index] = codepoint;
 				exists.SetTrue(index);
@@ -670,14 +656,13 @@ namespace ig
 		{
 			kerning[i].codepointPrev = tableCodepoints[kernEntry[i].glyph1];
 			kerning[i].codepointNext = tableCodepoints[kernEntry[i].glyph2];
-			kerning[i].x = int16_t(roundf(float(kernEntry[i].advance) * this->stbttScale));
+			kerning[i].x = int16_t(roundf(float(kernEntry[i].advance) * out->stbttScale));
 		}
 
+		out->SetDynamicGlyphs(tableCodepoints, exists, totalNumValidCodepoints);
+		out->SetKerning(kerning);
 
-		SetDynamicGlyphs(tableCodepoints, exists, totalNumValidCodepoints);
-		SetKerning(kerning);
-
-		return true;
+		return out;
 	}
 
 	inline uint64_t Font::GetKernKey(uint32_t codepointPrev, uint32_t codepointNext) const
@@ -766,7 +751,7 @@ namespace ig
 			}
 			if (codepointGlyphs[i].codepoint < atlas.glyphTableSize)
 			{
-				// Put this glyph in the glyph table, which flag saying it is loaded.
+				// Put this glyph in the glyph table, with a flag saying it's loaded.
 				atlas.glyphTable[codepointGlyphs[i].codepoint] = codepointGlyphs[i].glyph;
 				atlas.glyphTable[codepointGlyphs[i].codepoint].flags = (uint16_t)Atlas::GlyphFlags::IsLoaded;
 			}
@@ -780,38 +765,8 @@ namespace ig
 		atlas.errorGlyph = errorGlyph;
 	}
 
-	void Font::Unload()
-	{
-		isLoaded = false;
-		context = nullptr;
-		isPrebaked = false;
-
-		fileDataReadOnly = nullptr;
-		fileDataOwned.clear();
-		fileDataOwned.shrink_to_fit();
-
-		fontDesc = FontDesc();
-		fontSettings = FontSettings();
-
-		stbttScale = 0;
-		stbttFontInfo = stbtt_fontinfo();
-
-		atlas = Atlas();
-
-		page.texture = nullptr;
-		page.rects.clear();
-		page.rects.shrink_to_fit();
-		page.pixels.clear();
-		page.pixels.shrink_to_fit();
-		page.width = 0;
-		page.height = 0;
-		page.dirty = false;
-
-	}
-
 	void Font::ClearTexture()
 	{
-		if (!isLoaded) return;
 		if (IsPrebaked()) return;
 
 		atlas.loadedGlyphCount = 0;
@@ -822,8 +777,7 @@ namespace ig
 		}
 		atlas.glyphMap.clear();
 
-		if (page.texture) context->DelayedTextureUnload(page.texture);
-		page.texture = nullptr;
+		if (page.texture) context.DelayedDestroyTexture(std::move(page.texture));
 		page.rects.clear();
 		page.rects.shrink_to_fit();
 		page.pixels.clear();
@@ -838,7 +792,6 @@ namespace ig
 
 	void Font::PreloadGlyphs(uint32_t first, uint32_t last)
 	{
-		if (!isLoaded) return;
 		if (IsPrebaked()) return;
 
 		// As an optimization, cap to highest valid codepoint.
@@ -853,7 +806,6 @@ namespace ig
 
 	void Font::PreloadGlyphs(const std::string& utf8string)
 	{
-		if (!isLoaded) return;
 		if (IsPrebaked()) return;
 		std::u32string codepoints = utf8_to_utf32(utf8string);
 		for (size_t i = 0; i < codepoints.size(); i++)
@@ -864,7 +816,6 @@ namespace ig
 
 	bool Font::HasGlyph(uint32_t codepoint) const
 	{
-		if (!isLoaded) return false;
 		if (codepoint < atlas.glyphTableSize)
 		{
 			uint16_t flag = (uint16_t)Atlas::GlyphFlags::IsLoaded;
@@ -894,7 +845,6 @@ namespace ig
 
 	void Font::ApplyChangesToTexture(CommandList& cmd)
 	{
-		if (!isLoaded) return;
 		if (!page.dirty) return;
 		if (isPrebaked) return;
 
@@ -902,36 +852,31 @@ namespace ig
 
 		if (page.width == 0 || page.height == 0)
 		{
-			if (page.texture) context->DelayedTextureUnload(page.texture);
-			page.texture = nullptr;
+			if (page.texture) context.DelayedDestroyTexture(std::move(page.texture));
 			return;
 		}
 
-		// If dimensions have changed, must load new texture
-		bool mustLoadNewTexture = true;
+		// If dimensions have changed, must create new texture
+		bool mustCreateNewTexture = true;
 		if (page.texture)
 		{
-			if (page.texture->IsLoaded())
+			if (page.texture->GetWidth() == page.width &&
+				page.texture->GetHeight() == page.height)
 			{
-				if (page.texture->GetWidth() == page.width && page.texture->GetHeight() == page.height)
-				{
-					mustLoadNewTexture = false;
-				}
+				mustCreateNewTexture = false;
 			}
 		}
 
-		if (mustLoadNewTexture)
+		if (mustCreateNewTexture)
 		{
-			// We can't instantly unload the previous texture because the GPU might still depend on it in a previous frame.
-			// We let IGLOContext hold a shared pointer to the old texture so it remains loaded for a while longer.
-			if (page.texture) context->DelayedTextureUnload(page.texture);
+			// We can't instantly destroy the old texture because the GPU might still depend on it in a previous frame.
+			if (page.texture) context.DelayedDestroyTexture(std::move(page.texture));
 
-			page.texture = std::make_shared<Texture>();
-			if (!page.texture->Load(*context, page.width, page.height, Format::BYTE, TextureUsage::Default))
+			page.texture = Texture::Create(context, page.width, page.height, Format::BYTE, TextureUsage::Default);
+			if (!page.texture)
 			{
 				Log(LogType::Error, ToString("Failed to apply changes to font texture."
 					" Reason: Failed to create texture with size ", page.width, "x", page.height, "."));
-				page.texture = nullptr;
 				return;
 			}
 
@@ -1057,7 +1002,6 @@ namespace ig
 	{
 		Glyph out;
 
-		if (!isLoaded) return out;
 		if (isPrebaked) return out;
 
 		int stbttGlyphIndex = stbtt_FindGlyphIndex(&stbttFontInfo, codepoint);
@@ -1234,7 +1178,7 @@ namespace ig
 		{
 			// Glyph doesn't fit. Expand texture size until it fits or reaches max texture size.
 			uint32_t powerOf2 = 1;
-			const uint32_t maxTextureSize = context->GetGraphicsSpecs().maxTextureDimension;
+			const uint32_t maxTextureSize = context.GetGraphicsSpecs().maxTextureDimension;
 			while (true)
 			{
 				if (powerOf2 > maxTextureSize) // Reached max texture size
@@ -1285,7 +1229,6 @@ namespace ig
 
 	void Font::PlaceGlyph(const byte* bitmap, uint16_t texPosX, uint16_t texPosY, uint16_t bitmapWidth, uint16_t bitmapHeight)
 	{
-		if (!isLoaded) return;
 		if (isPrebaked) return;
 		if (bitmapWidth == 0 || bitmapHeight == 0 || !bitmap) return;
 
@@ -1298,8 +1241,7 @@ namespace ig
 				int pixelX = texPosX + x;
 				int p = pixelX + (page.width * pixelY);
 				byte alpha = bitmap[x + (bitmapWidth * y)];
-				//page.pixels[p] = (0x01000000 * alpha) + 0xFFFFFF; // 32 bit format
-				page.pixels[p] = alpha; // 8 bit format
+				page.pixels[p] = alpha;
 			}
 		}
 

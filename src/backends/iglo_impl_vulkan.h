@@ -114,7 +114,7 @@ namespace ig
 		VkDescriptorSet descriptorSet = VK_NULL_HANDLE;
 		VkPipelineLayout bindlessPipelineLayout = VK_NULL_HANDLE;
 
-		std::vector<std::vector<VkImageView>> tempImageViews; // Per-frame.
+		std::vector<std::vector<VkImageView>> tempImageViews; // Per-frame
 	};
 
 	struct Impl_Texture

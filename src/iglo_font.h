@@ -90,7 +90,7 @@ namespace ig
 		std::vector<CodepointGlyph> glyphs;
 		std::vector<Kerning> kerns;
 		Glyph errorGlyph;
-		Image image;
+		std::unique_ptr<Image> image;
 
 		bool SaveToFile(const std::string& filename);
 		bool LoadFromFile(const std::string& filename);
@@ -102,36 +102,35 @@ namespace ig
 
 	class Font
 	{
+	private:
+		Font(const IGLOContext& context, const FontSettings& settings, bool isPrebaked)
+			: context(context), fontSettings(settings), isPrebaked(isPrebaked) {}
+
+		Font& operator=(const Font&) = delete;
+		Font(const Font&) = delete;
+
 	public:
 
-		Font() = default;
-		~Font() { Unload(); }
+		// Load .TTF/.OTF font from file.
+		static std::unique_ptr<Font> LoadFromFile(const IGLOContext&, const std::string& filename,
+			float fontSize, FontSettings fontSettings = FontSettings());
+		
+		// Load .TTF/.OTF font from memory.
+		// Font will rely on the file data buffer during its lifetime,
+		// so don't delete the data buffer before destroying this font.
+		static std::unique_ptr<Font> LoadFromMemory(const IGLOContext&, const byte* data, size_t numBytes,
+			std::string fontName, float fontSize, FontSettings fontSettings = FontSettings());
 
-		Font& operator=(Font&) = delete;
-		Font(Font&) = delete;
-
-		void Unload();
-		bool IsLoaded() const { return isLoaded; }
-
-		// Loads the font from a file. Returns true if success.
-		// Files that can be loaded are .ttf and .otf files. 
-		bool LoadFromFile(const IGLOContext&, const std::string& filename, float fontSize, FontSettings fontSettings = FontSettings());
-
-		// Loads the font from a file in memory.
-		// This font will rely on the file data buffer during its lifetime, so don't delete the data buffer before unloading this font.
-		bool LoadFromMemory(const IGLOContext&, const byte* data, size_t numBytes, std::string fontName, float fontSize,
-			FontSettings fontSettings = FontSettings());
-
-		// Loads the font as prebaked, which means that all the glyphs has already been rasterized at one font size.
+		// Create prebaked font. A prebaked font has pre-rasterized glyphs.
 		// You can programmatically fill in the values of PrebakedFontData, or you can load one from file.
-		bool LoadAsPrebaked(const IGLOContext&, CommandList&, const PrebakedFontData&);
+		static std::unique_ptr<Font> CreatePrebaked(const IGLOContext&, CommandList&, const PrebakedFontData&);
 
-		// Loads the font from an iglo prebaked font file.
+		// Load prebaked font from file.
 		// Such a font file can be created with PrebakedFontData::SaveToFile().
-		bool LoadAsPrebakedFromFile(const IGLOContext&, CommandList&, const std::string& filename);
+		static std::unique_ptr<Font> LoadPrebakedFromFile(const IGLOContext&, CommandList&, const std::string& filename);
 
-		// Loads the font from an iglo prebaked font file located in memory.
-		bool LoadAsPrebakedFromMemory(const IGLOContext&, CommandList&, const byte* fileData, size_t numBytes);
+		// Load prebaked font from memory.
+		static std::unique_ptr<Font> LoadPrebakedFromMemory(const IGLOContext&, CommandList&, const byte* fileData, size_t numBytes);
 
 		// Gets a glyph that corresponds to the specified UTF-32 codepoint.
 		// If the glyph hasn't been loaded yet, it is rasterized and placed on the glyph atlas texture.
@@ -214,15 +213,15 @@ namespace ig
 
 		inline uint64_t GetKernKey(uint32_t codepointPrev, uint32_t codepointNext) const;
 
-		bool isLoaded = false; // If this font is loaded, it's ready to be used.
-		const IGLOContext* context = nullptr;
-
-		bool isPrebaked = true; // If true, new glyphs can't be loaded and placed on the glyph atlas texture.
-		const byte* fileDataReadOnly = nullptr; // A read only pointer to font file data. (dont delete this)
-		std::vector<byte> fileDataOwned; // Only used if this font owns the font file data.
+	private:
+		const IGLOContext& context;
+		const FontSettings fontSettings;
+		const bool isPrebaked = true; // If true, new glyphs can't be loaded and placed on the glyph atlas texture.
 
 		FontDesc fontDesc;
-		FontSettings fontSettings;
+
+		const byte* fileDataReadOnly = nullptr; // A read only pointer to font file data. (dont delete this)
+		std::vector<byte> fileDataOwned; // Only used if this font owns the font file data.
 
 		float stbttScale = 0;
 		stbtt_fontinfo stbttFontInfo = stbtt_fontinfo(); // font identity
@@ -255,7 +254,7 @@ namespace ig
 
 		struct Page
 		{
-			std::shared_ptr<Texture> texture; // Glyph atlas texture.
+			std::unique_ptr<Texture> texture; // Glyph atlas texture.
 			std::vector<IntRect> rects; // Rectangle areas of which pixels are occupied.
 			std::vector<byte> pixels; // A pixel buffer containing the pixel values of the texture. Monochrome. Not used if font is prebaked.
 			uint32_t width = 0; // The width of the pixel buffer.
@@ -264,8 +263,6 @@ namespace ig
 		};
 		Page page;
 
-
 	};
-
 
 } //end of namespace ig

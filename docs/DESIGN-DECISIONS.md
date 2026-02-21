@@ -3,9 +3,9 @@ This document contains my personal thoughts behind various design decisions i ha
 
 # Design decisions
 
-- iglo's design philosophy is to avoid behaving like an engine.
-  Engines often hide the interesting parts of graphics programming, while raw APIs bury you in boilerplate.
-  The goal is to let you write graphics code that reads like pseudocode, while still giving full access to the underlying APIs.
+- iglo's design philosophy is to **not be an engine**.
+  Engines often limit your freedom and hide the interesting parts of graphics programming from you, while raw APIs have too much boilerplate.
+  The goal is to reduce boilerplate as much as possible in such a way that you still have full knowledge and control over what's going on.
 
 - iglo should use the native D3D12/Vulkan command buffers directly.
   Don't use command buffer abstractions on top of the native API ones.
@@ -19,7 +19,7 @@ This document contains my personal thoughts behind various design decisions i ha
 
 - I prefer the name 'IGLOContext' over 'RenderWindow', but i'm open to feedback on this issue.
 
-- iglo shouldn't be able to throw exceptions based on user behaviour, much like D3D12.
+- iglo shouldn't throw exceptions based on user behaviour, much like D3D12.
   It's OK for iglo to throw exceptions in situations that should be impossible in the first place and would be iglo's own fault.
 
 - iglo shouldn't support runtime shader compilation, it's a bad practice imo (needless waste of CPU).
@@ -30,26 +30,12 @@ This document contains my personal thoughts behind various design decisions i ha
 
 # Coding guidelines
 
-- An iglo object that must be initialized before use should follow this design pattern:
-  - `bool Load();`\
-    Initializes the object. Replaces existing instance if already loaded.
-  - `void Unload();`\
-    Destroys the object. It's safe to call `Unload()` on an already unloaded object.
-  - `bool IsLoaded() const;`\
-    Returns whether the object is currently initialized.
-
-- Calling `const` functions on unloaded iglo objects should always be safe.
-  For example, `texture.GetWidth()` must return 0 if the texture isn't loaded.
-
-- Functions should not use output parameters.
+- Functions should generally not use output parameters.
   Always consider returning a struct for multiple return values, even for vectors and strings.
   There are exceptions to this rule, but you should only make exceptions if there are good reasons for it.\
   Exceptions to this rule so far:
   - utf8 functions. Pointer output params are the fastest, and utf8 iteration should be fast for an app that uses utf8 internal string representation.
   - `bool IGLOContext::GetEvent(Event& out_event)`. Returning a struct here would just make things less readable and more complex for no good reason.
-
-- Good: `ig::Buffer CreateCube();`\
-  Bad: `void CreateCube(ig::Buffer& out_vertexBuffer);`
 
 - iglo objects in function arguments should be reference if mandatory, and pointer if optional. (this goes for non iglo objects too)
 
@@ -57,7 +43,7 @@ This document contains my personal thoughts behind various design decisions i ha
   Any new utf8 string the app receives should be checked if valid.
   Use the functions `ig::utf8_is_valid` and `ig::utf8_make_valid` to check and repair utf8 strings.
 
-- Since destructors run in reverse order of definitions, declare/define IGLOContext before other iglo resources so that IGLOContext is unloaded last.
+- Since destructors run in reverse order of definitions, declare/define IGLOContext before other iglo resources so that IGLOContext is destroyed last.
 
 ## Dynamic arrays
 

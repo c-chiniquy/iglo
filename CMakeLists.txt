@@ -36,7 +36,7 @@ set(IGLO_SOURCES
 if (MSVC)
 
     # set Agility SDK version
-    set(AGILITY_SDK_VERSION "1.715.1-preview")
+    set(AGILITY_SDK_VERSION "1.717.1-preview")
 
     # set download URL for Agility SDK
     set(AGILITY_SDK_URL "https://www.nuget.org/api/v2/package/Microsoft.Direct3D.D3D12/${AGILITY_SDK_VERSION}")
@@ -84,7 +84,6 @@ if (MSVC)
     set(AGILITY_SDK_DLLS
         "${AGILITY_SDK_DLL64_DIR}/D3D12Core.dll"
         "${AGILITY_SDK_DLL64_DIR}/D3D12SDKLayers.dll"
-        "${AGILITY_SDK_DLL64_DIR}/DirectSR.dll"
     )
 
 endif()

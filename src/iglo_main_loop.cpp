@@ -3,11 +3,6 @@
 
 namespace ig
 {
-	MainLoop::MainLoop()
-	{
-		SetFixedUpdateFrameRate(60);
-	}
-
 	void MainLoop::MeasureTimePassed()
 	{
 		elapsedSeconds = timer.GetSecondsAndReset();
@@ -28,7 +23,7 @@ namespace ig
 	void MainLoop::Tick()
 	{
 		//-------------- Time --------------//
-		if (!mainLoopRunning || !context->IsLoaded()) return;
+		if (!mainLoopRunning) return;
 		if (enableFixedFrameRateSync)
 		{
 			if (fixedUpdateFrameRate > 0)
@@ -57,21 +52,21 @@ namespace ig
 		if (idleMode)
 		{
 			context->WaitForEvent(e, 70); // If no event is pending, then thread will sleep here for a little while.
-			if (!mainLoopRunning || !context->IsLoaded()) return;
+			if (!mainLoopRunning) return;
 			if (callbackOnEvent) callbackOnEvent(e);
 		}
 		while (context->GetEvent(e))
 		{
-			if (!mainLoopRunning || !context->IsLoaded()) return;
+			if (!mainLoopRunning) return;
 			if (callbackOnEvent) callbackOnEvent(e);
 		}
 
 		//-------------- Update --------------//
-		if (!mainLoopRunning || !context->IsLoaded()) return;
+		if (!mainLoopRunning) return;
 		if (callbackUpdate) callbackUpdate(elapsedSeconds);
 
 		//-------------- Fixed time step updates --------------//
-		if (!mainLoopRunning || !context->IsLoaded()) return;
+		if (!mainLoopRunning) return;
 		if (fixedUpdateFrameRate > 0)
 		{
 			timeAccumulator += elapsedSeconds;
@@ -87,7 +82,7 @@ namespace ig
 		}
 
 		//-------------- Draw --------------//
-		if (!mainLoopRunning || !context->IsLoaded()) return;
+		if (!mainLoopRunning) return;
 		if (context->GetWindowMinimized())
 		{
 			if (windowMinimizedBehaviour == WindowMinimizedBehaviour::None)
@@ -112,11 +107,6 @@ namespace ig
 		CallbackDraw callback_Draw, CallbackUpdate callback_Update, CallbackFixedUpdate callback_FixedUpdate,
 		CallbackOnEvent callback_OnEvent, bool useModalLoopCallback)
 	{
-		if (!context.IsLoaded())
-		{
-			Log(LogType::Error, "Failed to start main loop. Reason: iglo context is not loaded.");
-			return;
-		}
 		if (this->started)
 		{
 			Log(LogType::Error, "Failed to start main loop. Reason: This main loop is already running.");
@@ -149,7 +139,7 @@ namespace ig
 
 		if (this->callbackStart) this->callbackStart();
 
-		if (this->mainLoopRunning && context.IsLoaded())
+		if (this->mainLoopRunning)
 		{
 			CallbackModalLoop oldModalCallback = nullptr;
 			if (useModalLoopCallback)
@@ -159,7 +149,7 @@ namespace ig
 				// Assign a modal loop callback to prevent the window from freezing during window drag/resize.
 				context.SetModalLoopCallback(std::bind(&MainLoop::Tick, this));
 			}
-			while (this->mainLoopRunning && context.IsLoaded())
+			while (this->mainLoopRunning)
 			{
 				Tick(); // Do updating, drawing etc...
 			}

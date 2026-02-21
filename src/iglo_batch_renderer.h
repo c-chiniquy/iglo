@@ -92,6 +92,7 @@ namespace ig
 	enum class StandardBatchType : BatchType
 	{
 		None = 0,
+
 		Points_XYC,
 		Lines_XYC, // Smooth lines
 		Lines_XYC_Pixelated, // Pixelated lines
@@ -115,7 +116,7 @@ namespace ig
 		TransformedSprites_SDF,
 		Circles,
 
-		NumStandardBatchTypes // To keep count
+		COUNT, // To keep count
 	};
 
 	enum class TextureDrawStyle : BatchType
@@ -161,24 +162,19 @@ namespace ig
 		BatchDesc batchDesc;
 	};
 
-	BatchParams GetStandardBatchParams(StandardBatchType type, RenderTargetDesc renderTargetDesc);
+	BatchParams GetStandardBatchParams(StandardBatchType type, const RenderTargetDesc& renderTargetDesc);
 
 	// BatchRenderer helps you draw 2D stuff effortlessly such as sprites, strings, shapes, etc.
 	class BatchRenderer
 	{
+	private:
+		BatchRenderer(const IGLOContext& context) : context(context) {}
+
+		BatchRenderer& operator=(const BatchRenderer&) = delete;
+		BatchRenderer(const BatchRenderer&) = delete;
+
 	public:
-		BatchRenderer() = default;
-		~BatchRenderer() { Unload(); }
-
-		BatchRenderer& operator=(BatchRenderer&) = delete;
-		BatchRenderer(BatchRenderer&) = delete;
-
-		// Initializes the BatchRenderer. Returns true if success.
-		bool Load(IGLOContext&, CommandList&, RenderTargetDesc renderTargetDesc);
-		// Destroys the BatchRenderer.
-		void Unload();
-
-		bool IsLoaded() const { return isLoaded; }
+		static std::unique_ptr<BatchRenderer> Create(const IGLOContext&, const RenderTargetDesc&);
 
 		// BatchRenderer's drawing functions must be called between Begin() and End().
 		// By default, a 2D orthographic projection is used that matches the backbuffer size
@@ -216,17 +212,17 @@ namespace ig
 		// 'viewArea' behaves like a 2D camera. By adjusting the location and size of the rectangle you adjust the
 		// camera position and zoom.
 		void SetViewAndProjection2D(FloatRect viewArea);
-		void SetViewAndProjection(Matrix4x4 view, Matrix4x4 projection);
+		void SetViewAndProjection(const Matrix4x4& view, const Matrix4x4& projection);
 
 		void SetWorldMatrix(Vector3 translation, Quaternion quaternionRotation, Vector3 scale);
-		void SetWorldMatrix(Matrix4x4 world);
+		void SetWorldMatrix(const Matrix4x4& world);
 
 		// Resets the world matrix to its default value Matrix4x4::Identity().
 		void RestoreWorldMatrix();
 
-		Matrix4x4 GetWorldMatrix() const { return state.world; }
-		Matrix4x4 GetViewMatrix() const { return state.view; }
-		Matrix4x4 GetProjectionMatrix() const { return state.proj; }
+		const Matrix4x4& GetWorldMatrix() const { return state.world; }
+		const Matrix4x4& GetViewMatrix() const { return state.view; }
+		const Matrix4x4& GetProjectionMatrix() const { return state.proj; }
 
 		void SetSampler(const Sampler&);
 
@@ -307,18 +303,20 @@ namespace ig
 		// Draws a point primitive.
 		void DrawPoint(float x, float y, Color32 color);
 
+		// Creates a custom batch type from the given parameters.
+		// Use it by calling UsingBatch() with the returned BatchType.
 		BatchType CreateBatchType(BatchParams batchParams);
 
-		void SetDepthBufferDrawStyle(float zNear, float zFar, bool drawStencilComponent);
 		void SetSDFEffect(const SDFEffect&);
+		void SetDepthBufferDrawStyle(float zNear, float zFar, bool drawStencilComponent);
 
-		Descriptor GetSDFEffectRenderConstant() const { return tempConstantSDFEffect; }
-		Descriptor GetDepthBufferDrawStyleRenderConstant() const { return tempConstantDepthBufferDrawStyle; }
+		Descriptor GetSDFEffectRenderConstant();
+		Descriptor GetDepthBufferDrawStyleRenderConstant();
 
 		// All UsingX() functions use redundancy checks, so calling them repeatedly with the same value is OK.
 		void UsingBatch(BatchType batchType);
 		void UsingTexture(const Texture& texture);
-		void UsingRenderConstants(const Descriptor& descriptor);
+		void UsingRenderConstants(Descriptor descriptor);
 
 		void AddPrimitive(const void* vertexData);
 		void AddPrimitives(const void* vertexData, uint32_t numPrimitives);
@@ -331,6 +329,8 @@ namespace ig
 			const Texture* texture = nullptr, Descriptor renderConstants = Descriptor());
 
 	private:
+		static void GenerateViewProj2D(Matrix4x4& out_view, Matrix4x4& out_proj,
+			float viewX, float viewY, float viewWidth, float viewHeight, float zNear, float zFar);
 		void ResetRenderStates();
 		void InternalDraw(const void* vertexData, uint32_t numPrimitives);
 
@@ -354,7 +354,7 @@ namespace ig
 
 		struct BatchState
 		{
-			BatchType batchType = 0;
+			BatchType batchType = IGLO_UINT32_MAX;
 			BatchDesc batchDesc;
 			uint32_t maxPrimitives = 0;
 			uint32_t bytesPerPrimitive = 0;
@@ -365,6 +365,9 @@ namespace ig
 
 			const Sampler* sampler = nullptr;
 			const Texture* texture = nullptr;
+
+			Descriptor tempConstantDepthBufferDrawStyle;
+			Descriptor tempConstantSDFEffect;
 
 			PushConstants pushConstants;
 		};
@@ -384,18 +387,13 @@ namespace ig
 
 		static constexpr uint32_t MaxBatchSizeInBytes = IGLO_MEGABYTE * 1;
 
-		bool isLoaded = false;
-		const IGLOContext* context = nullptr;
+		const IGLOContext& context;
 		CommandList* cmd = nullptr;
 		RenderTargetDesc renderTargetDesc;
 
-		Texture nullTexture;
-		Sampler samplerSmoothTextures;
-		Sampler samplerSmoothClampedTextures;
-		Sampler samplerPixelatedTextures;
-
-		Descriptor tempConstantDepthBufferDrawStyle;
-		Descriptor tempConstantSDFEffect;
+		std::unique_ptr<Sampler> samplerSmoothTextures;
+		std::unique_ptr<Sampler> samplerSmoothClampedTextures;
+		std::unique_ptr<Sampler> samplerPixelatedTextures;
 
 		std::vector<BatchPipeline> batchPipelines; // One for each batch type
 		

@@ -10,27 +10,11 @@
 
 namespace ig
 {
-	void ScreenRenderer::Unload()
+	std::unique_ptr<ScreenRenderer> ScreenRenderer::Create(const IGLOContext& context, const RenderTargetDesc& renderTargetDesc)
 	{
-		isLoaded = false;
-		context = nullptr;
+		const char* errStr = "Failed to create screen renderer.";
 
-		for (uint32_t i = 0; i < 3; i++)
-		{
-			pipeline[i].Unload();
-		}
-
-		samplerPoint.Unload();
-		samplerAnisotropicClamp.Unload();
-	}
-
-	bool ScreenRenderer::Load(IGLOContext& context, const RenderTargetDesc& renderTargetDesc)
-	{
-		Unload();
-
-		const char* errStr = "Failed to load screen renderer.";
-
-		this->context = &context;
+		std::unique_ptr<ScreenRenderer> out = std::unique_ptr<ScreenRenderer>(new ScreenRenderer(context));
 
 		std::array<BlendDesc, 3> blendDesc =
 		{
@@ -41,14 +25,15 @@ namespace ig
 
 		for (uint32_t i = 0; i < 3; i++)
 		{
-			if (!this->pipeline[i].Load(context,
-				SHADER_VS(g_VS_FullscreenQuad), SHADER_PS(g_PS_FullscreenQuad),
+			out->pipelines.at(i) = Pipeline::CreateGraphics(context,
+				SHADER_VS(g_VS_FullscreenQuad),
+				SHADER_PS(g_PS_FullscreenQuad),
 				renderTargetDesc, {}, PrimitiveTopology::TriangleStrip,
-				DepthDesc::DepthDisabled, RasterizerDesc::NoCull, { blendDesc[i] }))
+				DepthDesc::DepthDisabled, RasterizerDesc::NoCull, { blendDesc[i] });
+			if (!out->pipelines.at(i))
 			{
 				Log(LogType::Error, errStr);
-				Unload();
-				return false;
+				return nullptr;
 			}
 		}
 
@@ -58,11 +43,11 @@ namespace ig
 			desc.wrapU = TextureWrapMode::Clamp;
 			desc.wrapV = TextureWrapMode::Clamp;
 			desc.wrapW = TextureWrapMode::Clamp;
-			if (!this->samplerPoint.Load(context, desc))
+			out->samplerPoint = Sampler::Create(context, desc);
+			if (!out->samplerPoint)
 			{
 				Log(LogType::Error, errStr);
-				Unload();
-				return false;
+				return nullptr;
 			}
 		}
 
@@ -72,32 +57,27 @@ namespace ig
 			desc.wrapU = TextureWrapMode::Clamp;
 			desc.wrapV = TextureWrapMode::Clamp;
 			desc.wrapW = TextureWrapMode::Clamp;
-			if (!this->samplerAnisotropicClamp.Load(context, desc))
+			out->samplerAnisotropicClamp = Sampler::Create(context, desc);
+			if (!out->samplerAnisotropicClamp)
 			{
 				Log(LogType::Error, errStr);
-				Unload();
-				return false;
+				return nullptr;
 			}
 		}
 
-		this->isLoaded = true;
-		return true;
+		return out;
 	}
 
 	void ScreenRenderer::DrawFullscreenQuad(CommandList& cmd, const Texture& source, const Texture& destTarget, ScreenRendererBlend blend)
 	{
-		if (!source.IsLoaded() || !source.GetDescriptor() || !destTarget.IsLoaded())
-		{
-			Log(LogType::Error, "Failed to draw fullscreen quad. Reason: Invalid source and dest textures.");
-			return;
-		}
+		if (!source.GetDescriptor()) throw std::runtime_error("No SRV.");
 
 		bool sameSize =
 			(source.GetWidth() == destTarget.GetWidth()) &&
 			(source.GetHeight() == destTarget.GetHeight());
 
 		// If source and dest texture are the same size, use point sampling (fastest).
-		const Sampler& chosenSampler = sameSize ? samplerPoint : samplerAnisotropicClamp;
+		const Sampler& chosenSampler = sameSize ? *samplerPoint : *samplerAnisotropicClamp;
 
 		struct PushConstants
 		{
@@ -105,10 +85,10 @@ namespace ig
 			uint32_t samplerIndex = IGLO_UINT32_MAX;
 		};
 		PushConstants pushConstants;
-		pushConstants.textureIndex = source.GetDescriptor()->heapIndex;
-		pushConstants.samplerIndex = chosenSampler.GetDescriptor()->heapIndex;
+		pushConstants.textureIndex = source.GetDescriptor().heapIndex;
+		pushConstants.samplerIndex = chosenSampler.GetDescriptor().heapIndex;
 
-		cmd.SetPipeline(pipeline[(uint32_t)blend]);
+		cmd.SetPipeline(*pipelines.at((uint32_t)blend));
 		cmd.SetPushConstants(&pushConstants, sizeof(pushConstants));
 		cmd.Draw(4);
 	}

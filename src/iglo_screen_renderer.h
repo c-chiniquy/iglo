@@ -12,17 +12,14 @@ namespace ig
 
 	class ScreenRenderer
 	{
+	private:
+		ScreenRenderer(const IGLOContext& context) : context(context) {}
+
+		ScreenRenderer& operator=(const ScreenRenderer&) = delete;
+		ScreenRenderer(const ScreenRenderer&) = delete;
+
 	public:
-		ScreenRenderer() = default;
-		~ScreenRenderer() { Unload(); }
-
-		ScreenRenderer& operator=(ScreenRenderer&) = delete;
-		ScreenRenderer(ScreenRenderer&) = delete;
-
-		void Unload();
-		bool IsLoaded() const { return isLoaded; }
-
-		bool Load(IGLOContext&, const RenderTargetDesc&);
+		static std::unique_ptr<ScreenRenderer> Create(const IGLOContext&, const RenderTargetDesc&);
 
 		// This function sets a pipeline state and then issues a draw command.
 		// You are required to set a rendertarget, scissor rect, and viewport before calling this function.
@@ -30,11 +27,10 @@ namespace ig
 			ScreenRendererBlend blend = ScreenRendererBlend::BlendDisabled);
 
 	private:
-		bool isLoaded = false;
-		const IGLOContext* context = nullptr;
-		Pipeline pipeline[3]; // [blend]
-		Sampler samplerPoint;
-		Sampler samplerAnisotropicClamp;
+		const IGLOContext& context;
+		std::array<std::unique_ptr<Pipeline>, 3> pipelines; // [blend]
+		std::unique_ptr<Sampler> samplerPoint;
+		std::unique_ptr<Sampler> samplerAnisotropicClamp;
 
 	};
 

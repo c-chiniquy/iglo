@@ -4,8 +4,8 @@ namespace ig
 {
 
 	/*
-		These string drawing functions are shown as examples of how you can make your own custom string drawing functions
-		with whatever functionality you need.
+		These string drawing functions are shown as examples of how you can make
+		your own custom string drawing functions with whatever functionality you need.
 	*/
 
 	enum class StringAlignment

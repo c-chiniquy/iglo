@@ -5,7 +5,7 @@
 
 #ifdef IGLO_D3D12
 // Agility SDK path and version
-extern "C" { __declspec(dllexport) extern const UINT D3D12SDKVersion = 715; }
+extern "C" { __declspec(dllexport) extern const UINT D3D12SDKVersion = 717; }
 extern "C" { __declspec(dllexport) extern const char* D3D12SDKPath = ".\\D3D12\\"; }
 #endif
 
@@ -14,7 +14,7 @@ class App
 public:
 	void Run()
 	{
-		if (context.Load(
+		context = ig::IGLOContext::CreateContext(
 			ig::WindowSettings
 			{
 				.title = sampleName,
@@ -26,9 +26,10 @@ public:
 			ig::RenderSettings
 			{
 				.presentMode = ig::PresentMode::ImmediateWithTearing,
-			}))
+			});
+		if (context)
 		{
-			mainloop.Run(context,
+			mainloop.Run(*context,
 				std::bind(&App::Start, this),
 				std::bind(&App::OnLoopExited, this),
 				std::bind(&App::Draw, this),
@@ -44,23 +45,23 @@ private:
 	const std::string resourceFolder = "resources/";
 	const std::string shaderFolder = "shaders/";
 
-	ig::IGLOContext context;
-	ig::CommandList cmd;
+	std::unique_ptr<ig::IGLOContext> context;
+	std::unique_ptr<ig::CommandList> cmd;
+	std::unique_ptr<ig::BatchRenderer> r;
 	ig::MainLoop mainloop;
-	ig::BatchRenderer r;
 
-	ig::Font defaultFont;
-	ig::Pipeline pipeline;
-	ig::Texture renderTexture;
-	ig::Texture depthBuffer;
-	ig::Buffer matrixConstants;
-	ig::Texture stoneTexture;
-	ig::Sampler sampler;
+	std::unique_ptr<ig::Font> defaultFont;
+	std::unique_ptr<ig::Pipeline> pipeline;
+	std::unique_ptr<ig::Texture> renderTexture;
+	std::unique_ptr<ig::Texture> depthBuffer;
+	std::unique_ptr<ig::Buffer> matrixConstants;
+	std::unique_ptr<ig::Texture> cubeTexture;
+	std::unique_ptr<ig::Sampler> sampler;
 
 	struct Mesh
 	{
-		ig::Buffer vertexBuffer;
-		ig::Buffer indexBuffer;
+		std::unique_ptr<ig::Buffer> vertexBuffer;
+		std::unique_ptr<ig::Buffer> indexBuffer;
 	};
 	Mesh cube;
 
@@ -90,8 +91,8 @@ private:
 		ig::Vector2 uv;
 	};
 
-	// Origin is in the center.
-	Mesh GenerateCubeMesh(const ig::IGLOContext& context, ig::CommandList& commandList, float cubeSize)
+	// Origin is in the center
+	Mesh GenerateCubeMesh(ig::CommandList& currentCmd, float cubeSize)
 	{
 		float d = cubeSize * 0.5f;
 		const uint32_t vertexCount = 48;
@@ -148,12 +149,12 @@ private:
 		}
 
 		Mesh out;
-		out.vertexBuffer.LoadAsVertexBuffer(context, sizeof(Vertex), vertexCount, ig::BufferUsage::Default);
-		out.indexBuffer.LoadAsIndexBuffer(context, ig::IndexFormat::UINT16, indexCount, ig::BufferUsage::Default);
-		if (out.vertexBuffer.IsLoaded() && out.indexBuffer.IsLoaded())
+		out.vertexBuffer = ig::Buffer::CreateVertexBuffer(*context, sizeof(Vertex), vertexCount, ig::BufferUsage::Default);
+		out.indexBuffer = ig::Buffer::CreateIndexBuffer(*context, ig::IndexFormat::UINT16, indexCount, ig::BufferUsage::Default);
+		if (out.vertexBuffer && out.indexBuffer)
 		{
-			out.vertexBuffer.SetData(commandList, vertices);
-			out.indexBuffer.SetData(commandList, indices);
+			out.vertexBuffer->SetData(currentCmd, vertices);
+			out.indexBuffer->SetData(currentCmd, indices);
 			return out;
 		}
 		else
@@ -163,20 +164,23 @@ private:
 		}
 	}
 
-	void LoadSizeDependentResources()
+	void CreateRenderTargets()
 	{
-		uint32_t width = context.GetWidth();
-		uint32_t height = context.GetHeight();
-		renderTexture.Load(context, width, height, targetDesc.colorFormats[0], ig::TextureUsage::RenderTexture, targetDesc.msaa);
-		depthBuffer.Load(context, width, height, targetDesc.depthFormat, ig::TextureUsage::DepthBuffer, targetDesc.msaa);
+		uint32_t width = context->GetWidth();
+		uint32_t height = context->GetHeight();
+		ig::MSAA msaa = targetDesc.msaa;
+
+		renderTexture = ig::Texture::Create(*context, width, height, targetDesc.colorFormats[0], ig::TextureUsage::RenderTexture, msaa);
+		depthBuffer = ig::Texture::Create(*context, width, height, targetDesc.depthFormat, ig::TextureUsage::DepthBuffer, msaa);
 	}
 
 	void Start()
 	{
 		// Cap MSAA to highest possible value
-		targetDesc.msaa = context.GetMaxMultiSampleCount(targetDesc.colorFormats[0]);
+		targetDesc.msaa = context->GetMaxMultiSampleCount(targetDesc.colorFormats[0]);
 
-		cmd.Load(context, ig::CommandListType::Graphics);
+		cmd = ig::CommandList::Create(*context, ig::CommandListType::Graphics);
+		r = ig::BatchRenderer::Create(*context, targetDesc);
 
 		ig::VertexElement position(ig::Format::FLOAT_FLOAT_FLOAT, "POSITION");
 		ig::VertexElement texcoord(ig::Format::FLOAT_FLOAT, "TEXCOORD");
@@ -188,41 +192,42 @@ private:
 		const std::string fileExt = "_SPIRV.cso";
 #endif
 
-		if (!pipeline.LoadFromFile(context,
+		pipeline = ig::Pipeline::LoadFromFile(*context,
 			shaderFolder + "VS_HelloCube" + fileExt, "VSMain",
 			shaderFolder + "PS_HelloCube" + fileExt, "PSMain",
 			targetDesc, vertexLayout, ig::PrimitiveTopology::TriangleList,
-			ig::DepthDesc::DepthAndStencilEnabled, ig::RasterizerDesc::BackCull, { ig::BlendDesc::StraightAlpha }))
+			ig::DepthDesc::DepthAndStencilEnabled, ig::RasterizerDesc::BackCull, { ig::BlendDesc::StraightAlpha });
+		if (!pipeline)
 		{
-			PopupMessage("Failed to create pipeline state.", "Error", &context);
+			PopupMessage("Failed to create pipeline state.", "Error", context.get());
 			mainloop.Quit();
 			return;
 		}
 
-		LoadSizeDependentResources();
-		sampler.Load(context, ig::SamplerDesc::SmoothRepeatSampler);
-		matrixConstants.LoadAsShaderConstant(context, sizeof(MatrixConstants), ig::BufferUsage::Dynamic);
+		CreateRenderTargets();
+		sampler = ig::Sampler::Create(*context, ig::SamplerDesc::SmoothRepeatSampler);
+		matrixConstants = ig::Buffer::CreateShaderConstant(*context, sizeof(MatrixConstants), ig::BufferUsage::Dynamic);
 
-		cmd.Begin();
+		cmd->Begin();
 		{
-			if (!stoneTexture.LoadFromFile(context, cmd, resourceFolder + "wood-planks.jpg"))
+			cubeTexture = ig::Texture::LoadFromFile(*context, *cmd, resourceFolder + "wood-planks.jpg");
+			if (!cubeTexture)
 			{
-				PopupMessage("Failed to load texture.", "Error", &context);
+				PopupMessage("Failed to load texture.", "Error", context.get());
 				mainloop.Quit();
 				return;
 			}
 
-			cube = GenerateCubeMesh(context, cmd, 1.0f);
-			r.Load(context, cmd, targetDesc);
-			defaultFont.LoadAsPrebaked(context, cmd, ig::GetDefaultFont());
+			cube = GenerateCubeMesh(*cmd, 1.0f);
+			defaultFont = ig::Font::CreatePrebaked(*context, *cmd, ig::GetDefaultFont());
 		}
-		cmd.End();
-		context.WaitForCompletion(context.Submit(cmd));
+		cmd->End();
+		context->WaitForCompletion(context->Submit(*cmd));
 	}
 
 	void OnLoopExited()
 	{
-		context.WaitForIdleDevice();
+		context->WaitForIdleDevice();
 	}
 
 	double tick = 0;
@@ -244,7 +249,7 @@ private:
 		}
 		else if (e.type == ig::EventType::Resize)
 		{
-			LoadSizeDependentResources();
+			CreateRenderTargets();
 		}
 		else if (e.type == ig::EventType::KeyPress)
 		{
@@ -255,11 +260,11 @@ private:
 				return;
 
 			case ig::Key::Enter:
-				if (context.IsKeyDown(ig::Key::LeftAlt)) context.ToggleFullscreen();
+				if (context->IsKeyDown(ig::Key::LeftAlt)) context->ToggleFullscreen();
 				break;
 
 			case ig::Key::F11:
-				context.ToggleFullscreen();
+				context->ToggleFullscreen();
 				break;
 
 			default:
@@ -270,22 +275,22 @@ private:
 
 	void Draw()
 	{
-		cmd.Begin();
+		cmd->Begin();
 		{
-			cmd.AddTextureBarrier(renderTexture, ig::SimpleBarrier::Discard, ig::SimpleBarrier::RenderTarget);
-			cmd.AddTextureBarrier(depthBuffer, ig::SimpleBarrier::Discard, ig::SimpleBarrier::DepthWrite);
-			cmd.FlushBarriers();
+			cmd->AddTextureBarrier(*renderTexture, ig::SimpleBarrier::Discard, ig::SimpleBarrier::RenderTarget);
+			cmd->AddTextureBarrier(*depthBuffer, ig::SimpleBarrier::Discard, ig::SimpleBarrier::DepthWrite);
+			cmd->FlushBarriers();
 
-			cmd.SetRenderTarget(&renderTexture, &depthBuffer, true);
-			cmd.SetViewport((float)renderTexture.GetWidth(), (float)renderTexture.GetHeight());
-			cmd.SetScissorRectangle(renderTexture.GetWidth(), renderTexture.GetHeight());
-			cmd.SetPipeline(pipeline);
+			cmd->SetRenderTarget(renderTexture.get(), depthBuffer.get(), true);
+			cmd->SetViewport((float)renderTexture->GetWidth(), (float)renderTexture->GetHeight());
+			cmd->SetScissorRectangle(renderTexture->GetWidth(), renderTexture->GetHeight());
+			cmd->SetPipeline(*pipeline);
 
 			// Generate matrices
 			ig::Vector3 cameraPos = ig::Vector3(-1.5f, 1.25f, 0);
 			ig::Vector3 cameraLookAt = ig::Vector3(0, 0, 0);
 			ig::Vector3 cameraLookUp = ig::Vector3(0, 1, 0);
-			float cameraAspectRatio = (float)context.GetWidth() / (float)context.GetHeight();
+			float cameraAspectRatio = (float)context->GetWidth() / (float)context->GetHeight();
 			float cameraFOV = 70.0f;
 			float zNear = 0.5f;
 			float zFar = 20.0f;
@@ -300,21 +305,21 @@ private:
 			MatrixConstants data;
 			data.viewProj = (proj * view).GetTransposed();
 			data.world = world.GetTransposed();
-			matrixConstants.SetDynamicData(&data);
+			matrixConstants->SetDynamicData(&data);
 
 			// Bind texture, sampler and constants
 			PushConstants pushConstants;
-			pushConstants.textureIndex = stoneTexture.GetDescriptor()->heapIndex;
-			pushConstants.samplerIndex = sampler.GetDescriptor()->heapIndex;
-			pushConstants.constantsIndex = matrixConstants.GetDescriptor()->heapIndex;
-			cmd.SetPushConstants(&pushConstants, sizeof(pushConstants));
+			pushConstants.textureIndex = cubeTexture->GetDescriptor().heapIndex;
+			pushConstants.samplerIndex = sampler->GetDescriptor().heapIndex;
+			pushConstants.constantsIndex = matrixConstants->GetDescriptor().heapIndex;
+			cmd->SetPushConstants(&pushConstants, sizeof(pushConstants));
 
 			// Draw cube
-			cmd.SetVertexBuffer(cube.vertexBuffer);
-			cmd.SetIndexBuffer(cube.indexBuffer);
-			cmd.DrawIndexed(cube.indexBuffer.GetNumElements());
+			cmd->SetVertexBuffer(*cube.vertexBuffer);
+			cmd->SetIndexBuffer(*cube.indexBuffer);
+			cmd->DrawIndexed(cube.indexBuffer->GetNumElements());
 
-			r.Begin(cmd);
+			r->Begin(*cmd);
 			{
 				std::string str = ig::ToString
 				(
@@ -322,23 +327,23 @@ private:
 					"iglo v" IGLO_VERSION_STRING " " IGLO_GRAPHICS_API_STRING "\n",
 					"FPS: ", mainloop.GetAvarageFPS()
 				);
-				r.DrawString(4, 4, str, defaultFont, ig::Colors::Yellow);
+				r->DrawString(4, 4, str, *defaultFont, ig::Colors::Yellow);
 			}
-			r.End();
+			r->End();
 
-			cmd.AddTextureBarrier(renderTexture, ig::SimpleBarrier::RenderTarget, ig::SimpleBarrier::ResolveSource);
-			cmd.AddTextureBarrier(context.GetBackBuffer(), ig::SimpleBarrier::Discard, ig::SimpleBarrier::ResolveDest);
-			cmd.FlushBarriers();
+			cmd->AddTextureBarrier(*renderTexture, ig::SimpleBarrier::RenderTarget, ig::SimpleBarrier::ResolveSource);
+			cmd->AddTextureBarrier(context->GetBackBuffer(), ig::SimpleBarrier::Discard, ig::SimpleBarrier::ResolveDest);
+			cmd->FlushBarriers();
 
-			cmd.ResolveTexture(renderTexture, context.GetBackBuffer());
+			cmd->ResolveTexture(*renderTexture, context->GetBackBuffer());
 
-			cmd.AddTextureBarrier(context.GetBackBuffer(), ig::SimpleBarrier::ResolveDest, ig::SimpleBarrier::Present);
-			cmd.FlushBarriers();
+			cmd->AddTextureBarrier(context->GetBackBuffer(), ig::SimpleBarrier::ResolveDest, ig::SimpleBarrier::Present);
+			cmd->FlushBarriers();
 		}
-		cmd.End();
+		cmd->End();
 
-		context.Submit(cmd);
-		context.Present();
+		context->Submit(*cmd);
+		context->Present();
 	}
 
 };

@@ -12,7 +12,7 @@
 
 #ifdef IGLO_D3D12
 // Agility SDK path and version
-extern "C" { __declspec(dllexport) extern const UINT D3D12SDKVersion = 715; }
+extern "C" { __declspec(dllexport) extern const UINT D3D12SDKVersion = 717; }
 extern "C" { __declspec(dllexport) extern const char* D3D12SDKPath = ".\\D3D12\\"; }
 #endif
 
@@ -21,7 +21,7 @@ class App
 public:
 	void Run()
 	{
-		if (context.Load(
+		context = ig::IGLOContext::CreateContext(
 			ig::WindowSettings
 			{
 				.title = sampleName,
@@ -33,9 +33,10 @@ public:
 			ig::RenderSettings
 			{
 				.presentMode = ig::PresentMode::Immediate,
-			}))
+			});
+		if (context)
 		{
-			mainloop.Run(context,
+			mainloop.Run(*context,
 				std::bind(&App::Start, this),
 				std::bind(&App::OnLoopExited, this),
 				std::bind(&App::Draw, this),
@@ -51,16 +52,16 @@ private:
 	const std::string resourceFolder = "resources/";
 	const std::string shaderFolder = "shaders/";
 
-	ig::IGLOContext context;
-	ig::CommandList cmd;
-	ig::BatchRenderer r;
-	ig::ScreenRenderer screenRenderer;
+	std::unique_ptr<ig::IGLOContext> context;
+	std::unique_ptr<ig::CommandList> cmd;
+	std::unique_ptr<ig::BatchRenderer> r;
+	std::unique_ptr<ig::ScreenRenderer> screenRenderer;
 	ig::MainLoop mainloop;
 
 	struct Mesh
 	{
-		ig::Buffer vertexBuffer;
-		ig::Buffer indexBuffer;
+		std::unique_ptr<ig::Buffer> vertexBuffer;
+		std::unique_ptr<ig::Buffer> indexBuffer;
 	};
 
 	struct Vertex
@@ -85,27 +86,27 @@ private:
 
 	Mesh cube;
 	Mesh skybox;
-	ig::Buffer instancePosBuffer;
-	ig::Buffer pointVertexBuffer;
-	ig::Buffer XYZLines;
-	ig::Texture skyboxCubemapTexture;
+	std::unique_ptr<ig::Buffer> instancePosBuffer;
+	std::unique_ptr<ig::Buffer> pointVertexBuffer;
+	std::unique_ptr<ig::Buffer> XYZLines;
+	std::unique_ptr<ig::Texture> skyboxCubemapTexture;
 
-	ig::Font vegur;
-	ig::Font trimSDF;
+	std::unique_ptr<ig::Font> vegur;
+	std::unique_ptr<ig::Font> trimSDF;
 
-	ig::Sampler skyboxSampler;
-	ig::Pipeline skyboxPipeline;
-	ig::Pipeline skyboxPipelineMSAA;
-	ig::Pipeline instancingPipeline;
-	ig::Pipeline instancingPipelineMSAA;
-	ig::Pipeline pointPipeline;
-	ig::Pipeline pointPipelineMSAA;
-	ig::Pipeline linePipeline;
-	ig::Pipeline linePipelineMSAA;
+	std::unique_ptr<ig::Sampler> skyboxSampler;
+	std::unique_ptr<ig::Pipeline> skyboxPipeline;
+	std::unique_ptr<ig::Pipeline> skyboxPipelineMSAA;
+	std::unique_ptr<ig::Pipeline> instancingPipeline;
+	std::unique_ptr<ig::Pipeline> instancingPipelineMSAA;
+	std::unique_ptr<ig::Pipeline> pointPipeline;
+	std::unique_ptr<ig::Pipeline> pointPipelineMSAA;
+	std::unique_ptr<ig::Pipeline> linePipeline;
+	std::unique_ptr<ig::Pipeline> linePipelineMSAA;
 
-	ig::Texture renderColor;
-	ig::Texture renderDepth;
-	ig::Texture resolved;
+	std::unique_ptr<ig::Texture> renderColor;
+	std::unique_ptr<ig::Texture> renderDepth;
+	std::unique_ptr<ig::Texture> resolved;
 	ig::RenderTargetDesc renderDesc;
 	ig::RenderTargetDesc renderDescMSAA;
 
@@ -117,8 +118,8 @@ private:
 
 	ig::DemoCamera camera;
 
-	// Origin is in the center.
-	Mesh GenerateCubeMesh(const ig::IGLOContext& context, ig::CommandList& commandList, float cubeSize)
+	// Origin is in the center
+	Mesh GenerateCubeMesh(ig::CommandList& currentCmd, float cubeSize)
 	{
 		float d = cubeSize * 0.5f;
 		const uint32_t vertexCount = 8;
@@ -147,12 +148,12 @@ private:
 		};
 
 		Mesh out;
-		out.vertexBuffer.LoadAsVertexBuffer(context, sizeof(Vertex), vertexCount, ig::BufferUsage::Default);
-		out.indexBuffer.LoadAsIndexBuffer(context, ig::IndexFormat::UINT16, indexCount, ig::BufferUsage::Default);
-		if (out.vertexBuffer.IsLoaded() && out.indexBuffer.IsLoaded())
+		out.vertexBuffer = ig::Buffer::CreateVertexBuffer(*context, sizeof(Vertex), vertexCount, ig::BufferUsage::Default);
+		out.indexBuffer = ig::Buffer::CreateIndexBuffer(*context, ig::IndexFormat::UINT16, indexCount, ig::BufferUsage::Default);
+		if (out.vertexBuffer && out.indexBuffer)
 		{
-			out.vertexBuffer.SetData(commandList, vertices);
-			out.indexBuffer.SetData(commandList, indices);
+			out.vertexBuffer->SetData(currentCmd, vertices);
+			out.indexBuffer->SetData(currentCmd, indices);
 			return out;
 		}
 		else
@@ -162,8 +163,8 @@ private:
 		}
 	}
 
-	// Origin is in the center.
-	Mesh GenerateSkyboxMesh(const ig::IGLOContext& context, ig::CommandList& commandList, float cubeSize)
+	// Origin is in the center
+	Mesh GenerateSkyboxMesh(ig::CommandList& currentCmd, float cubeSize)
 	{
 		float d = cubeSize * 0.5f;
 		const uint32_t vertexCount = 8;
@@ -192,12 +193,12 @@ private:
 		};
 
 		Mesh out;
-		out.vertexBuffer.LoadAsVertexBuffer(context, sizeof(ig::Vector3), vertexCount, ig::BufferUsage::Default);
-		out.indexBuffer.LoadAsIndexBuffer(context, ig::IndexFormat::UINT16, indexCount, ig::BufferUsage::Default);
-		if (out.vertexBuffer.IsLoaded() && out.indexBuffer.IsLoaded())
+		out.vertexBuffer = ig::Buffer::CreateVertexBuffer(*context, sizeof(ig::Vector3), vertexCount, ig::BufferUsage::Default);
+		out.indexBuffer = ig::Buffer::CreateIndexBuffer(*context, ig::IndexFormat::UINT16, indexCount, ig::BufferUsage::Default);
+		if (out.vertexBuffer && out.indexBuffer)
 		{
-			out.vertexBuffer.SetData(commandList, vertices);
-			out.indexBuffer.SetData(commandList, indices);
+			out.vertexBuffer->SetData(currentCmd, vertices);
+			out.indexBuffer->SetData(currentCmd, indices);
 			return out;
 		}
 		else
@@ -207,17 +208,17 @@ private:
 		}
 	}
 
-	void LoadRenderTargets()
+	void CreateRenderTargets()
 	{
 		ig::RenderTargetDesc& desc = msaaEnabled ? renderDescMSAA : renderDesc;
-		uint32_t width = context.GetWidth();
-		uint32_t height = context.GetHeight();
-		renderColor.Load(context, width, height, desc.colorFormats[0], ig::TextureUsage::RenderTexture, desc.msaa);
-		renderDepth.Load(context, width, height, desc.depthFormat, ig::TextureUsage::DepthBuffer, desc.msaa);
-		resolved.Load(context, width, height, desc.colorFormats[0], ig::TextureUsage::Default);
+		uint32_t width = context->GetWidth();
+		uint32_t height = context->GetHeight();
+		renderColor = ig::Texture::Create(*context, width, height, desc.colorFormats[0], ig::TextureUsage::RenderTexture, desc.msaa);
+		renderDepth = ig::Texture::Create(*context, width, height, desc.depthFormat, ig::TextureUsage::DepthBuffer, desc.msaa);
+		resolved = ig::Texture::Create(*context, width, height, desc.colorFormats[0], ig::TextureUsage::Default);
 
 		// Update camera aspect ratio
-		camera.SetAspectRatio((float)renderColor.GetWidth() / (float)renderColor.GetHeight());
+		camera.SetAspectRatio((float)renderColor->GetWidth() / (float)renderColor->GetHeight());
 	}
 
 	void OnEvent(ig::Event e)
@@ -237,18 +238,18 @@ private:
 				if (objectDrawCount > MaxObjectCount) objectDrawCount = MaxObjectCount;
 				break;
 			case ig::Key::F11:
-				context.ToggleFullscreen();
+				context->ToggleFullscreen();
 				break;
 			case ig::Key::Enter:
-				if (context.IsKeyDown(ig::Key::LeftAlt)) context.ToggleFullscreen();
+				if (context->IsKeyDown(ig::Key::LeftAlt)) context->ToggleFullscreen();
 				break;
 			case ig::Key::Escape:
 				mainloop.Quit();
 				return;
 			case ig::Key::M:
-				context.WaitForIdleDevice();
+				context->WaitForIdleDevice();
 				msaaEnabled = !msaaEnabled;
-				LoadRenderTargets();
+				CreateRenderTargets();
 				break;
 			case ig::Key::N:
 				sceneDrawMode = (SceneDrawMode)(((int)sceneDrawMode + 1) % 2);
@@ -260,7 +261,7 @@ private:
 		}
 		else if (e.type == ig::EventType::Resize)
 		{
-			LoadRenderTargets();
+			CreateRenderTargets();
 		}
 		else if (e.type == ig::EventType::CloseRequest)
 		{
@@ -295,8 +296,9 @@ private:
 
 	void Start()
 	{
-		cmd.Load(context, ig::CommandListType::Graphics);
-		screenRenderer.Load(context, context.GetBackBufferRenderTargetDesc());
+		cmd = ig::CommandList::Create(*context, ig::CommandListType::Graphics);
+		screenRenderer = ig::ScreenRenderer::Create(*context, context->GetBackBufferRenderTargetDesc());
+		r = ig::BatchRenderer::Create(*context, context->GetBackBufferRenderTargetDesc());
 
 		// Render target descriptions
 		renderDesc =
@@ -305,11 +307,11 @@ private:
 			.depthFormat = ig::Format::DEPTHFORMAT_FLOAT,
 		};
 		renderDescMSAA = renderDesc;
-		renderDescMSAA.msaa = context.GetMaxMultiSampleCount(renderDesc.colorFormats[0]);
+		renderDescMSAA.msaa = context->GetMaxMultiSampleCount(renderDesc.colorFormats[0]);
 
-		// Load pipelines
+		// Create pipelines
 		{
-			skyboxSampler.Load(context, ig::SamplerDesc::SmoothRepeatSampler);
+			skyboxSampler = ig::Sampler::Create(*context, ig::SamplerDesc::SmoothRepeatSampler);
 
 #ifdef IGLO_D3D12
 			std::string fileExt = ".cso";
@@ -328,7 +330,7 @@ private:
 				!regularVS.success || !regularPS.success ||
 				!instancingVS.success || !instancingPS.success)
 			{
-				PopupMessage("Failed to read shader binary files from folder: " + shaderFolder, "Error", &context);
+				PopupMessage("Failed to read shader binary files from folder: " + shaderFolder, "Error", context.get());
 				mainloop.Quit();
 				return;
 			}
@@ -346,9 +348,9 @@ private:
 			skyboxDesc.primitiveTopology = ig::PrimitiveTopology::TriangleList;
 			skyboxDesc.vertexLayout = { position };
 			skyboxDesc.renderTargetDesc = renderDesc;
-			skyboxPipeline.Load(context, skyboxDesc);
+			skyboxPipeline = ig::Pipeline::CreateGraphics(*context, skyboxDesc);
 			skyboxDesc.renderTargetDesc = renderDescMSAA;
-			skyboxPipelineMSAA.Load(context, skyboxDesc);
+			skyboxPipelineMSAA = ig::Pipeline::CreateGraphics(*context, skyboxDesc);
 
 			ig::PipelineDesc instancingDesc;
 			instancingDesc.VS = ig::Shader(instancingVS.fileContent, "VSMain");
@@ -359,9 +361,9 @@ private:
 			instancingDesc.primitiveTopology = ig::PrimitiveTopology::TriangleList;
 			instancingDesc.vertexLayout = { position, color, instancePos };
 			instancingDesc.renderTargetDesc = renderDesc;
-			instancingPipeline.Load(context, instancingDesc);
+			instancingPipeline = ig::Pipeline::CreateGraphics(*context, instancingDesc);
 			instancingDesc.renderTargetDesc = renderDescMSAA;
-			instancingPipelineMSAA.Load(context, instancingDesc);
+			instancingPipelineMSAA = ig::Pipeline::CreateGraphics(*context, instancingDesc);
 
 			ig::PipelineDesc regularDesc = instancingDesc;
 			regularDesc.VS = ig::Shader(regularVS.fileContent, "VSMain");
@@ -369,52 +371,48 @@ private:
 			regularDesc.primitiveTopology = ig::PrimitiveTopology::PointList;
 			regularDesc.vertexLayout = { position, color };
 			regularDesc.renderTargetDesc = renderDesc;
-			pointPipeline.Load(context, regularDesc);
+			pointPipeline = ig::Pipeline::CreateGraphics(*context, regularDesc);
 			regularDesc.primitiveTopology = ig::PrimitiveTopology::LineList;
-			linePipeline.Load(context, regularDesc);
+			linePipeline = ig::Pipeline::CreateGraphics(*context, regularDesc);
 			regularDesc.primitiveTopology = ig::PrimitiveTopology::PointList;
 			regularDesc.renderTargetDesc = renderDescMSAA;
-			pointPipelineMSAA.Load(context, regularDesc);
+			pointPipelineMSAA = ig::Pipeline::CreateGraphics(*context, regularDesc);
 			regularDesc.primitiveTopology = ig::PrimitiveTopology::LineList;
-			linePipelineMSAA.Load(context, regularDesc);
+			linePipelineMSAA = ig::Pipeline::CreateGraphics(*context, regularDesc);
 		}
 
 		// Load resources
 		{
-			instancePosBuffer.LoadAsVertexBuffer(context, sizeof(ig::Vector3), MaxObjectCount, ig::BufferUsage::Default);
-			pointVertexBuffer.LoadAsVertexBuffer(context, sizeof(Vertex), MaxObjectCount, ig::BufferUsage::Default);
+			instancePosBuffer = ig::Buffer::CreateVertexBuffer(*context, sizeof(ig::Vector3), MaxObjectCount, ig::BufferUsage::Default);
+			pointVertexBuffer = ig::Buffer::CreateVertexBuffer(*context, sizeof(Vertex), MaxObjectCount, ig::BufferUsage::Default);
 
-			if (!vegur.LoadFromFile(context, resourceFolder + "Vegur-Regular.otf", 18) ||
-				!trimSDF.LoadFromFile(context, resourceFolder + "trim.ttf", 17, ig::FontSettings(ig::FontType::SDF)))
+			vegur = ig::Font::LoadFromFile(*context, resourceFolder + "Vegur-Regular.otf", 18);
+			trimSDF = ig::Font::LoadFromFile(*context, resourceFolder + "trim.ttf", 17, ig::FontSettings(ig::FontType::SDF));
+			if (!vegur || !trimSDF)
 			{
-				ig::PopupMessage("Failed to load one or more fonts from: " + resourceFolder, "Error", &context);
+				ig::PopupMessage("Failed to load fonts from: " + resourceFolder, "Error", context.get());
 				mainloop.Quit();
 				return;
 			}
 
-			cmd.Begin();
+			cmd->Begin();
 			{
-				r.Load(context, cmd, context.GetBackBufferRenderTargetDesc());
+				cube = GenerateCubeMesh(*cmd, 1.0f);
+				skybox = GenerateSkyboxMesh(*cmd, 10.0f);
+				skyboxCubemapTexture = ig::Texture::LoadFromFile(*context, *cmd, resourceFolder + "cubemap.dds", false);
 
-				cube = GenerateCubeMesh(context, cmd, 1.0f);
-				skybox = GenerateSkyboxMesh(context, cmd, 10.0f);
-
+				const uint32_t numVertices = 6;
+				Vertex vertices[numVertices] =
 				{
-					const uint32_t numVertices = 6;
-					Vertex vertices[numVertices] =
-					{
-						ig::Vector3(0, 0, 0), ig::Colors::Red, ig::Vector3(10000, 0, 0), ig::Colors::Red,
-						ig::Vector3(0, 0, 0), ig::Colors::Green, ig::Vector3(0, 10000, 0), ig::Colors::Green,
-						ig::Vector3(0, 0, 0), ig::Colors::Blue, ig::Vector3(0, 0, 10000), ig::Colors::Blue,
-					};
-					XYZLines.LoadAsVertexBuffer(context, sizeof(Vertex), numVertices, ig::BufferUsage::Default);
-					XYZLines.SetData(cmd, vertices);
-				}
-
-				skyboxCubemapTexture.LoadFromFile(context, cmd, resourceFolder + "cubemap.dds", false);
+					ig::Vector3(0, 0, 0), ig::Colors::Red, ig::Vector3(10000, 0, 0), ig::Colors::Red,
+					ig::Vector3(0, 0, 0), ig::Colors::Green, ig::Vector3(0, 10000, 0), ig::Colors::Green,
+					ig::Vector3(0, 0, 0), ig::Colors::Blue, ig::Vector3(0, 0, 10000), ig::Colors::Blue,
+				};
+				XYZLines = ig::Buffer::CreateVertexBuffer(*context, sizeof(Vertex), numVertices, ig::BufferUsage::Default);
+				XYZLines->SetData(*cmd, vertices);
 			}
-			cmd.End();
-			context.WaitForCompletion(context.Submit(cmd));
+			cmd->End();
+			context->WaitForCompletion(context->Submit(*cmd));
 		}
 
 		// Begin generating objects
@@ -423,19 +421,19 @@ private:
 		worker = std::thread(std::bind(&App::GenerateObjects, this));
 		bar.SetCurrentTask("Generating objects...");
 
-		LoadRenderTargets();
+		CreateRenderTargets();
 	}
 
 	void OnLoopExited()
 	{
 		threadShouldRun = false;
 		worker.join();
-		context.WaitForIdleDevice();
+		context->WaitForIdleDevice();
 	}
 
 	void Update(double elapsedSeconds)
 	{
-		camera.Update(context, elapsedSeconds);
+		camera.Update(*context, elapsedSeconds);
 	}
 
 	void FixedUpdate()
@@ -448,7 +446,7 @@ private:
 		{
 			float floatProgress = (float)generationProgress / (float)MaxObjectCount;
 			std::string strProgress = ig::ToString(generationProgress, "/", MaxObjectCount);
-			bar.DrawAndPresent(context, cmd, r, vegur, strProgress, floatProgress);
+			bar.DrawAndPresent(*context, *cmd, *r, *vegur, strProgress, floatProgress);
 			ig::BasicSleep(10); // Lower GPU and CPU usage on this thread while the other thread generates instance data.
 			return;
 		}
@@ -458,28 +456,28 @@ private:
 			if (!generationIsComplete)
 			{
 				generationIsComplete = true;
-				cmd.Begin();
+				cmd->Begin();
 				{
 					// Upload data to GPU
-					instancePosBuffer.SetData(cmd, instancePositions.data());
-					pointVertexBuffer.SetData(cmd, pointVertices.data());
+					instancePosBuffer->SetData(*cmd, instancePositions.data());
+					pointVertexBuffer->SetData(*cmd, pointVertices.data());
 				}
-				cmd.End();
-				context.WaitForCompletion(context.Submit(cmd));
+				cmd->End();
+				context->WaitForCompletion(context->Submit(*cmd));
 			}
 		}
 
-		cmd.Begin();
+		cmd->Begin();
 		{
-			cmd.AddTextureBarrier(renderColor, ig::SimpleBarrier::Discard, ig::SimpleBarrier::RenderTarget);
-			cmd.AddTextureBarrier(renderDepth, ig::SimpleBarrier::Discard, ig::SimpleBarrier::DepthWrite);
-			cmd.FlushBarriers();
+			cmd->AddTextureBarrier(*renderColor, ig::SimpleBarrier::Discard, ig::SimpleBarrier::RenderTarget);
+			cmd->AddTextureBarrier(*renderDepth, ig::SimpleBarrier::Discard, ig::SimpleBarrier::DepthWrite);
+			cmd->FlushBarriers();
 
-			cmd.SetRenderTarget(&renderColor, &renderDepth);
-			cmd.SetViewport((float)renderColor.GetWidth(), (float)renderColor.GetHeight());
-			cmd.SetScissorRectangle(renderColor.GetWidth(), renderColor.GetHeight());
-			if (!skyboxEnabled) cmd.ClearColor(renderColor);
-			cmd.ClearDepth(renderDepth);
+			cmd->SetRenderTarget(renderColor.get(), renderDepth.get());
+			cmd->SetViewport((float)renderColor->GetWidth(), (float)renderColor->GetHeight());
+			cmd->SetScissorRectangle(renderColor->GetWidth(), renderColor->GetHeight());
+			if (!skyboxEnabled) cmd->ClearColor(*renderColor);
+			cmd->ClearDepth(*renderDepth);
 
 			struct PushConstants
 			{
@@ -492,71 +490,71 @@ private:
 			PushConstants pushConstants;
 			pushConstants.viewProj = camera.GetViewProjMatrix().GetTransposed();
 			pushConstants.cameraPos = camera.GetPosition();
-			pushConstants.textureIndex = skyboxCubemapTexture.GetDescriptor()->heapIndex;
-			pushConstants.samplerIndex = skyboxSampler.GetDescriptor()->heapIndex;
-			cmd.SetPushConstants(&pushConstants, sizeof(pushConstants));
+			pushConstants.textureIndex = skyboxCubemapTexture->GetDescriptor().heapIndex;
+			pushConstants.samplerIndex = skyboxSampler->GetDescriptor().heapIndex;
+			cmd->SetPushConstants(&pushConstants, sizeof(pushConstants));
 
 			// Draw skybox
 			if (skyboxEnabled)
 			{
-				cmd.SetPipeline(msaaEnabled ? skyboxPipelineMSAA : skyboxPipeline);
-				cmd.SetVertexBuffer(skybox.vertexBuffer);
-				cmd.SetIndexBuffer(skybox.indexBuffer);
-				cmd.DrawIndexed(skybox.indexBuffer.GetNumElements());
+				cmd->SetPipeline(msaaEnabled ? *skyboxPipelineMSAA : *skyboxPipeline);
+				cmd->SetVertexBuffer(*skybox.vertexBuffer);
+				cmd->SetIndexBuffer(*skybox.indexBuffer);
+				cmd->DrawIndexed(skybox.indexBuffer->GetNumElements());
 			}
 
 			// Draw the XYZ lines
-			cmd.SetPipeline(msaaEnabled ? linePipelineMSAA : linePipeline);
-			cmd.SetVertexBuffer(XYZLines);
-			cmd.Draw(XYZLines.GetNumElements());
+			cmd->SetPipeline(msaaEnabled ? *linePipelineMSAA : *linePipeline);
+			cmd->SetVertexBuffer(*XYZLines);
+			cmd->Draw(XYZLines->GetNumElements());
 
 			if (sceneDrawMode == SceneDrawMode::InstancedCubes)
 			{
 				// Draw instanced cubes
-				cmd.SetPipeline(msaaEnabled ? instancingPipelineMSAA : instancingPipeline);
-				cmd.SetVertexBuffer(cube.vertexBuffer, 0);
-				cmd.SetVertexBuffer(instancePosBuffer, 1);
-				cmd.SetIndexBuffer(cube.indexBuffer);
-				cmd.DrawIndexedInstanced(cube.indexBuffer.GetNumElements(), objectDrawCount);
+				cmd->SetPipeline(msaaEnabled ? *instancingPipelineMSAA : *instancingPipeline);
+				cmd->SetVertexBuffer(*cube.vertexBuffer, 0);
+				cmd->SetVertexBuffer(*instancePosBuffer, 1);
+				cmd->SetIndexBuffer(*cube.indexBuffer);
+				cmd->DrawIndexedInstanced(cube.indexBuffer->GetNumElements(), objectDrawCount);
 			}
 			else if (sceneDrawMode == SceneDrawMode::Points)
 			{
 				// Draw points
-				cmd.SetPipeline(msaaEnabled ? pointPipelineMSAA : pointPipeline);
-				cmd.SetVertexBuffer(pointVertexBuffer);
-				cmd.Draw(objectDrawCount);
+				cmd->SetPipeline(msaaEnabled ? *pointPipelineMSAA : *pointPipeline);
+				cmd->SetVertexBuffer(*pointVertexBuffer);
+				cmd->Draw(objectDrawCount);
 			}
 
 			if (msaaEnabled)
 			{
-				cmd.AddTextureBarrier(renderColor, ig::SimpleBarrier::RenderTarget, ig::SimpleBarrier::ResolveSource);
-				cmd.AddTextureBarrier(resolved, ig::SimpleBarrier::Discard, ig::SimpleBarrier::ResolveDest);
-				cmd.FlushBarriers();
+				cmd->AddTextureBarrier(*renderColor, ig::SimpleBarrier::RenderTarget, ig::SimpleBarrier::ResolveSource);
+				cmd->AddTextureBarrier(*resolved, ig::SimpleBarrier::Discard, ig::SimpleBarrier::ResolveDest);
+				cmd->FlushBarriers();
 
-				cmd.ResolveTexture(renderColor, resolved);
+				cmd->ResolveTexture(*renderColor, *resolved);
 
-				cmd.AddTextureBarrier(resolved, ig::SimpleBarrier::ResolveDest, ig::SimpleBarrier::PixelShaderResource);
-				cmd.FlushBarriers();
+				cmd->AddTextureBarrier(*resolved, ig::SimpleBarrier::ResolveDest, ig::SimpleBarrier::PixelShaderResource);
+				cmd->FlushBarriers();
 			}
 			else
 			{
-				cmd.AddTextureBarrier(renderColor, ig::SimpleBarrier::RenderTarget, ig::SimpleBarrier::PixelShaderResource);
-				cmd.FlushBarriers();
+				cmd->AddTextureBarrier(*renderColor, ig::SimpleBarrier::RenderTarget, ig::SimpleBarrier::PixelShaderResource);
+				cmd->FlushBarriers();
 			}
 
-			cmd.AddTextureBarrier(context.GetBackBuffer(), ig::SimpleBarrier::Discard, ig::SimpleBarrier::RenderTarget);
-			cmd.FlushBarriers();
+			cmd->AddTextureBarrier(context->GetBackBuffer(), ig::SimpleBarrier::Discard, ig::SimpleBarrier::RenderTarget);
+			cmd->FlushBarriers();
 
-			cmd.SetRenderTarget(&context.GetBackBuffer());
-			cmd.SetViewport((float)context.GetWidth(), (float)context.GetHeight());
-			cmd.SetScissorRectangle(context.GetWidth(), context.GetHeight());
+			cmd->SetRenderTarget(&context->GetBackBuffer());
+			cmd->SetViewport((float)context->GetWidth(), (float)context->GetHeight());
+			cmd->SetScissorRectangle(context->GetWidth(), context->GetHeight());
 
 			// Draw the render texture onto the backbuffer
-			screenRenderer.DrawFullscreenQuad(cmd, msaaEnabled ? resolved : renderColor, context.GetBackBuffer());
+			screenRenderer->DrawFullscreenQuad(*cmd, msaaEnabled ? *resolved : *renderColor, context->GetBackBuffer());
 
-			r.Begin(cmd);
+			r->Begin(*cmd);
 			{
-				r.SetSamplerToPixelatedTextures();
+				r->SetSamplerToPixelatedTextures();
 
 				// Draw text
 				std::string str = ig::ToString
@@ -567,7 +565,7 @@ private:
 					"Yaw: ", camera.GetYaw(), "\n",
 					"Pitch: ", camera.GetPitch(), "\n",
 					"Roll: ", camera.GetRoll(), "\n",
-					"MSAA X", (int)renderColor.GetMSAA(), " [M]\n",
+					"MSAA X", (int)renderColor->GetMSAA(), " [M]\n",
 					"Objects: ", objectDrawCount, " [,][.]\n",
 					"Drawing ", (sceneDrawMode == SceneDrawMode::InstancedCubes ? "instanced cubes" : "points"), " [N]\n"
 					"Skybox ", (skyboxEnabled ? "enabled" : "disabled"), " [B]\n"
@@ -575,10 +573,10 @@ private:
 
 				ig::SDFEffect sdfEffect;
 				sdfEffect.sdfEffectFlags = (uint32_t)ig::SDFEffectFlags::Glow | (uint32_t)ig::SDFEffectFlags::Outline;
-				r.SetSDFEffect(sdfEffect);
+				r->SetSDFEffect(sdfEffect);
 
 				ig::Vector2 strPos = ig::Vector2(7, 2);
-				r.DrawString(strPos, str, trimSDF, ig::Colors::Yellow);
+				r->DrawString(strPos, str, *trimSDF, ig::Colors::Yellow);
 
 				if (camera.GetPosition() == ig::Vector3(0, 0, 0))
 				{
@@ -588,22 +586,22 @@ private:
 						"[Middle mouse]: reset camera\n"
 						"[Right mouse]: rotate camera around scene";
 
-					ig::Vector2 strSize = r.MeasureString(helperText, trimSDF);
-					float x = floorf(((float)context.GetWidth() / 2.0f) - (strSize.x / 2.0f));
-					float y = floorf((float)context.GetHeight() - (strSize.y + 15.0f));
-					r.DrawString(x, y, helperText, trimSDF, ig::Colors::White);
+					ig::Vector2 strSize = r->MeasureString(helperText, *trimSDF);
+					float x = floorf(((float)context->GetWidth() / 2.0f) - (strSize.x / 2.0f));
+					float y = floorf((float)context->GetHeight() - (strSize.y + 15.0f));
+					r->DrawString(x, y, helperText, *trimSDF, ig::Colors::White);
 				}
 
 			}
-			r.End();
+			r->End();
 
-			cmd.AddTextureBarrier(context.GetBackBuffer(), ig::SimpleBarrier::RenderTarget, ig::SimpleBarrier::Present);
-			cmd.FlushBarriers();
+			cmd->AddTextureBarrier(context->GetBackBuffer(), ig::SimpleBarrier::RenderTarget, ig::SimpleBarrier::Present);
+			cmd->FlushBarriers();
 		}
-		cmd.End();
+		cmd->End();
 
-		context.Submit(cmd);
-		context.Present();
+		context->Submit(*cmd);
+		context->Present();
 	}
 
 };

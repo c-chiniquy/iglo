@@ -63,22 +63,21 @@ namespace ig
 		MessageBoxW(hwnd, (wchar_t*)utf16_message.c_str(), (wchar_t*)utf16_caption.c_str(), 0);
 	}
 
-	void Cursor::Impl_Unload()
+	void Cursor::Impl_Destroy()
 	{
 		if (impl.handle)
 		{
-			if (!context || !context->IsLoaded()) throw std::runtime_error("This should be impossible.");
-			if (context->GetCursor() == this) context->ResetCursor();
+			if (context.GetCursor() == this) context.ResetCursor();
 		}
 		if (impl.handle && impl.ownsHandle)
 		{
 			DestroyCursor(impl.handle);
+			impl.handle = nullptr;
+			impl.ownsHandle = false;
 		}
-
-		impl = Impl_Cursor();
 	}
 
-	DetailedResult Cursor::Impl_LoadFromSystem(const IGLOContext& context, SystemCursor systemCursor)
+	DetailedResult Cursor::Impl_LoadFromSystem(SystemCursor systemCursor)
 	{
 		HCURSOR hCursor = nullptr;
 
@@ -108,7 +107,7 @@ namespace ig
 		return DetailedResult::Success();
 	}
 
-	DetailedResult Cursor::Impl_LoadFromMemory_BGRA(const IGLOContext& context, Extent2D extent, const uint32_t* pixels, IntPoint hotspot)
+	DetailedResult Cursor::Impl_LoadFromMemory_BGRA(Extent2D extent, const uint32_t* pixels, IntPoint hotspot)
 	{
 		if (extent.width > LONG_MAX ||
 			extent.height > LONG_MAX)
@@ -216,7 +215,7 @@ namespace ig
 		out.totalRAM = mem.ullTotalPhys;
 		out.availableRAM = mem.ullAvailPhys;
 		out.usedRAM = out.totalRAM - out.availableRAM;
-		
+
 		return out;
 	}
 
@@ -347,12 +346,6 @@ namespace ig
 
 	void IGLOContext::SetCursor(const Cursor& cursor) const
 	{
-		if (!cursor.IsLoaded())
-		{
-			Log(LogType::Error, "Failed to set cursor. Reason: Invalid cursor.");
-			return;
-		}
-
 		currentCursor = &cursor;
 		if (IsMouseInsideWindow_Win32(window.hwnd))
 		{
@@ -592,7 +585,7 @@ namespace ig
 		return true;
 	}
 
-	DetailedResult IGLOContext::Impl_LoadWindow(const WindowSettings& windowSettings)
+	DetailedResult IGLOContext::Impl_InitWindow(const WindowSettings& windowSettings)
 	{
 		HINSTANCE hInstance = (HINSTANCE)GetModuleHandleW(0);
 		window.defaultCursor = LoadCursorW(0, IDC_ARROW);
@@ -638,7 +631,8 @@ namespace ig
 		RECT rect = {};
 		if (GetWindowRect(window.hwnd, &rect)) windowedMode.pos = IntPoint(rect.left, rect.top);
 
-		// Don't make the window visible yet. Window should be made visible after graphics device has been loaded.
+		// Don't make the window visible yet.
+		// Window should be made visible after graphics device has been initialized.
 		WindowState temp = windowedMode;
 		temp.visible = false;
 		SetWindowState_Win32(window, temp, false, false);
@@ -660,17 +654,17 @@ namespace ig
 		if (windowedMode.visible) ShowWindow(window.hwnd, SW_NORMAL);
 	}
 
-	void IGLOContext::Impl_UnloadWindow()
+	void IGLOContext::Impl_DestroyWindow()
 	{
 		if (window.iconOwned)
 		{
 			DestroyIcon(window.iconOwned);
-			window.iconOwned = 0;
+			window.iconOwned = nullptr;
 		}
 		if (window.hwnd)
 		{
-			DestroyWindow(window.hwnd);
-			window.hwnd = 0;
+			::DestroyWindow(window.hwnd);
+			window.hwnd = nullptr;
 			if (numWindows > 0)
 			{
 				numWindows--;
@@ -682,7 +676,6 @@ namespace ig
 				}
 			}
 		}
-		window = Impl_WindowData();
 	}
 
 	LRESULT CALLBACK IGLOContext::WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
@@ -747,7 +740,7 @@ namespace ig
 
 		case WM_PAINT:
 			// Use the modal loop callback if there is a modal operation active
-			if (isLoaded)
+			if (isWindowInitialized && isGraphicsDeviceInitialized)
 			{
 				if (!insideModalLoopCallback && callbackModalLoop && (window.activeResizing || window.activeMenuLoop))
 				{
@@ -796,7 +789,6 @@ namespace ig
 			// LOWORD(lParam) == 1 means mouse is inside client area
 			if (LOWORD(lParam) == HTCLIENT)
 			{
-				if (currentCursor && !currentCursor->IsLoaded()) throw std::runtime_error("This should be impossible.");
 				HCURSOR hCursor = currentCursor ? currentCursor->GetWin32CursorHandle() : window.defaultCursor;
 				::SetCursor(hCursor);
 				return true;
@@ -827,11 +819,14 @@ namespace ig
 				RECT clientArea = {};
 				GetClientRect(window.hwnd, &clientArea);
 				Extent2D resize = Extent2D(clientArea.right - clientArea.left, clientArea.bottom - clientArea.top);
-				if (resize != swapChain.extent && resize.width != 0 && resize.height != 0)
+				if (resize.width != 0 && resize.height != 0)
 				{
 					windowedMode.size = resize;
 #ifdef IGLO_D3D12
-					ResizeD3D12SwapChain(resize);
+					if (resize != swapChain.extent)
+					{
+						ResizeD3D12SwapChain(resize);
+					}
 #endif
 				}
 			}
@@ -861,11 +856,14 @@ namespace ig
 			{
 				Extent2D resize = Extent2D(LOWORD(lParam), HIWORD(lParam));
 
-				if (resize != swapChain.extent && resize.width != 0 && resize.height != 0)
+				if (resize.width != 0 && resize.height != 0)
 				{
 					if (displayMode == DisplayMode::Windowed) windowedMode.size = resize;
 #ifdef IGLO_D3D12
-					ResizeD3D12SwapChain(resize);
+					if (resize != swapChain.extent)
+					{
+						ResizeD3D12SwapChain(resize);
+					}
 #endif
 				}
 			}

@@ -1,12 +1,4 @@
 
-TODO: Fix Linux segmentation fault during window close.
-      This is caused by the interaction between X11 and the NVIDIA driver.
-      Someone else had a similar problem and fixed it by unloading the X11 window before unloading the vulkan instance:
-      https://github.com/KhronosGroup/Vulkan-LoaderAndValidationLayers/issues/1894
-      I tried both unload orders, but the segfault persists.
-      When unloading the vulkan instance before the window, it segfaults in XCloseDisplay().
-      When unloading the window before the vulkan instance, it segfaults in _XSend() (called by the NVIDIA driver) while cleaning up the vulkan instance.
-
 TODO: Maybe create an iglo test project that runs a set of tests (ig::Texture DDS loading,
       ig::Font behavior, etc.) to catch accidental breakage in future commits.
 

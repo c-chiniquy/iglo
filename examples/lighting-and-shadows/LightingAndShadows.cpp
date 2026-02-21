@@ -7,7 +7,7 @@
 
 #ifdef IGLO_D3D12
 // Agility SDK path and version
-extern "C" { __declspec(dllexport) extern const UINT D3D12SDKVersion = 715; }
+extern "C" { __declspec(dllexport) extern const UINT D3D12SDKVersion = 717; }
 extern "C" { __declspec(dllexport) extern const char* D3D12SDKPath = ".\\D3D12\\"; }
 #endif
 
@@ -17,7 +17,7 @@ public:
 
 	void Run()
 	{
-		if (context.Load(
+		context = ig::IGLOContext::CreateContext(
 			ig::WindowSettings
 			{
 				.title = sampleName,
@@ -30,9 +30,10 @@ public:
 			{
 				.presentMode = ig::PresentMode::Vsync,
 				.backBufferFormat = ig::Format::BYTE_BYTE_BYTE_BYTE_BGRA,
-			}))
+			});
+		if (context)
 		{
-			mainloop.Run(context,
+			mainloop.Run(*context,
 				std::bind(&App::Start, this),
 				std::bind(&App::OnLoopExited, this),
 				std::bind(&App::Draw, this),
@@ -48,36 +49,36 @@ private:
 	const std::string resourceFolder = "resources/";
 	const std::string shaderFolder = "shaders/";
 
-	ig::IGLOContext context;
-	ig::CommandList cmd;
+	std::unique_ptr<ig::IGLOContext> context;
+	std::unique_ptr<ig::CommandList> cmd;
+	std::unique_ptr<ig::BatchRenderer> r;
+	std::unique_ptr<ig::ScreenRenderer> screenRenderer;
 	ig::MainLoop mainloop;
-	ig::BatchRenderer r;
-	ig::ScreenRenderer screenRenderer;
 
 	// Shader constants
-	ig::Buffer lightConstants;
-	ig::Buffer cameraConstants;
+	std::unique_ptr<ig::Buffer> lightConstants;
+	std::unique_ptr<ig::Buffer> cameraConstants;
 
 	// Pipelines
-	ig::Pipeline pipelineLightAndShadow;
-	ig::Pipeline pipelineLightAndShadowMSAA;
-	ig::Pipeline pipelineDepth;
-	ig::Sampler colorSampler;
-	ig::Sampler depthSampler;
+	std::unique_ptr<ig::Pipeline> pipelineLightAndShadow;
+	std::unique_ptr<ig::Pipeline> pipelineLightAndShadowMSAA;
+	std::unique_ptr<ig::Pipeline> pipelineDepth;
+	std::unique_ptr<ig::Sampler> colorSampler;
+	std::unique_ptr<ig::Sampler> depthSampler;
 
 	// Render targets
-	ig::Texture sceneRender;
-	ig::Texture sceneDepth;
-	ig::Texture sceneResolved;
-	ig::Texture shadowMap;
+	std::unique_ptr<ig::Texture> sceneRender;
+	std::unique_ptr<ig::Texture> sceneDepth;
+	std::unique_ptr<ig::Texture> sceneResolved;
+	std::unique_ptr<ig::Texture> shadowMap;
 	ig::RenderTargetDesc sceneDesc;
 	ig::RenderTargetDesc sceneDescMSAA;
 	ig::RenderTargetDesc shadowMapDesc;
 
 	struct Mesh
 	{
-		ig::Buffer vertexBuffer;
-		ig::Buffer indexBuffer;
+		std::unique_ptr<ig::Buffer> vertexBuffer;
+		std::unique_ptr<ig::Buffer> indexBuffer;
 	};
 
 	struct ModelConstants
@@ -88,9 +89,9 @@ private:
 	struct Model
 	{
 		Mesh mesh;
-		ig::Texture texture;
+		std::unique_ptr<ig::Texture> texture;
+		std::unique_ptr<ig::Buffer> constantBuffer;
 		ModelConstants constantData;
-		ig::Buffer constantBuffer;
 	};
 
 	// Models
@@ -99,8 +100,8 @@ private:
 	Model sphere;
 
 	// Fonts
-	ig::Font defaultFont;
-	ig::Font trimSDF;
+	std::unique_ptr<ig::Font> defaultFont;
+	std::unique_ptr<ig::Font> trimSDF;
 
 	// Parameters
 	const float cameraFOV = 50.0f;
@@ -118,7 +119,7 @@ private:
 	// While shadows don't require a stencil, i have included an option to use a stencil format here
 	// to demonstrate how to draw the stencil component of a depthbuffer (which can be useful for debugging).
 	const bool useStencilFormat = false;
-	ig::StencilTextureView stencilView;
+	std::unique_ptr<ig::StencilTextureView> stencilView;
 
 	// User settings
 	float lightDistance = 10.5f; //10.5f;
@@ -159,8 +160,8 @@ private:
 		ig::Vector3 normal;
 	};
 
-	// Origin is in the center.
-	Mesh GenerateCubeMesh(const ig::IGLOContext& context, ig::CommandList& commandList, float cubeSize)
+	// Origin is in the center
+	Mesh GenerateCubeMesh(ig::CommandList& currentCmd, float cubeSize)
 	{
 		float d = cubeSize * 0.5f;
 		const uint32_t vertexCount = 48;
@@ -217,12 +218,12 @@ private:
 		}
 
 		Mesh out;
-		out.vertexBuffer.LoadAsVertexBuffer(context, sizeof(Vertex), vertexCount, ig::BufferUsage::Default);
-		out.indexBuffer.LoadAsIndexBuffer(context, ig::IndexFormat::UINT16, indexCount, ig::BufferUsage::Default);
-		if (out.vertexBuffer.IsLoaded() && out.indexBuffer.IsLoaded())
+		out.vertexBuffer = ig::Buffer::CreateVertexBuffer(*context, sizeof(Vertex), vertexCount, ig::BufferUsage::Default);
+		out.indexBuffer = ig::Buffer::CreateIndexBuffer(*context, ig::IndexFormat::UINT16, indexCount, ig::BufferUsage::Default);
+		if (out.vertexBuffer && out.indexBuffer)
 		{
-			out.vertexBuffer.SetData(commandList, vertices);
-			out.indexBuffer.SetData(commandList, indices);
+			out.vertexBuffer->SetData(currentCmd, vertices);
+			out.indexBuffer->SetData(currentCmd, indices);
 			return out;
 		}
 		else
@@ -232,8 +233,8 @@ private:
 		}
 	}
 
-	// Origin is in the center.
-	Mesh GeneratePlaneMesh(const ig::IGLOContext& context, ig::CommandList& commandList, float width, float height)
+	// Origin is in the center
+	Mesh GeneratePlaneMesh(ig::CommandList& currentCmd, float width, float height)
 	{
 		// Clockwise culling is used
 		float w = width / 2;
@@ -254,12 +255,12 @@ private:
 		uint16_t indices[indexCount] = { 0, 1, 2, 2, 1, 3 };
 
 		Mesh out;
-		out.vertexBuffer.LoadAsVertexBuffer(context, sizeof(Vertex), vertexCount, ig::BufferUsage::Default);
-		out.indexBuffer.LoadAsIndexBuffer(context, ig::IndexFormat::UINT16, indexCount, ig::BufferUsage::Default);
-		if (out.vertexBuffer.IsLoaded() && out.indexBuffer.IsLoaded())
+		out.vertexBuffer = ig::Buffer::CreateVertexBuffer(*context, sizeof(Vertex), vertexCount, ig::BufferUsage::Default);
+		out.indexBuffer = ig::Buffer::CreateIndexBuffer(*context, ig::IndexFormat::UINT16, indexCount, ig::BufferUsage::Default);
+		if (out.vertexBuffer && out.indexBuffer)
 		{
-			out.vertexBuffer.SetData(commandList, vertices);
-			out.indexBuffer.SetData(commandList, indices);
+			out.vertexBuffer->SetData(currentCmd, vertices);
+			out.indexBuffer->SetData(currentCmd, indices);
 			return out;
 		}
 		else
@@ -269,8 +270,8 @@ private:
 		}
 	}
 
-	// Origin is in the center.
-	Mesh GenerateSphereMesh(const ig::IGLOContext& context, ig::CommandList& commandList, float radius, uint32_t latitudeSegments, uint32_t longitudeSegments)
+	// Origin is in the center
+	Mesh GenerateSphereMesh(ig::CommandList& currentCmd, float radius, uint32_t latitudeSegments, uint32_t longitudeSegments)
 	{
 		if ((size_t)latitudeSegments * longitudeSegments >= (size_t)IGLO_UINT16_MAX) throw std::invalid_argument("Too many vertices!");
 
@@ -330,12 +331,12 @@ private:
 		}
 
 		Mesh out;
-		out.vertexBuffer.LoadAsVertexBuffer(context, sizeof(Vertex), (uint32_t)vertices.size(), ig::BufferUsage::Default);
-		out.indexBuffer.LoadAsIndexBuffer(context, ig::IndexFormat::UINT16, (uint32_t)indices.size(), ig::BufferUsage::Default);
-		if (out.vertexBuffer.IsLoaded() && out.indexBuffer.IsLoaded())
+		out.vertexBuffer = ig::Buffer::CreateVertexBuffer(*context, sizeof(Vertex), (uint32_t)vertices.size(), ig::BufferUsage::Default);
+		out.indexBuffer = ig::Buffer::CreateIndexBuffer(*context, ig::IndexFormat::UINT16, (uint32_t)indices.size(), ig::BufferUsage::Default);
+		if (out.vertexBuffer && out.indexBuffer)
 		{
-			out.vertexBuffer.SetData(commandList, vertices.data());
-			out.indexBuffer.SetData(commandList, indices.data());
+			out.vertexBuffer->SetData(currentCmd, vertices.data());
+			out.indexBuffer->SetData(currentCmd, indices.data());
 			return out;
 		}
 		else
@@ -354,7 +355,7 @@ private:
 			.depthFormat = useStencilFormat ? ig::Format::DEPTHFORMAT_UINT24_BYTE : ig::Format::DEPTHFORMAT_FLOAT,
 		};
 		sceneDescMSAA = sceneDesc;
-		sceneDescMSAA.msaa = context.GetMaxMultiSampleCount(sceneDesc.colorFormats[0]);
+		sceneDescMSAA.msaa = context->GetMaxMultiSampleCount(sceneDesc.colorFormats[0]);
 
 		// Shadow map
 		shadowMapDesc =
@@ -365,11 +366,11 @@ private:
 
 	ig::Extent2D GetInternalRenderingResolution()
 	{
-		// You can set whatever internal rendering resolution you want here
-		return context.GetBackBufferExtent();
+		// You can choose whatever internal rendering resolution you want here
+		return context->GetBackBufferExtent();
 	}
 
-	void LoadRenderTargets()
+	void CreateRenderTargets()
 	{
 		// Main scene
 		{
@@ -380,36 +381,38 @@ private:
 			ig::ClearValue clearValue;
 			clearValue.color = backgroundColor;
 
-			sceneRender.Load(context, width, height, desc.colorFormats[0], ig::TextureUsage::RenderTexture, desc.msaa, clearValue);
-			sceneDepth.Load(context, width, height, desc.depthFormat, ig::TextureUsage::DepthBuffer, desc.msaa);
-			sceneResolved.Load(context, width, height, desc.colorFormats[0], ig::TextureUsage::Default);
+			sceneRender = ig::Texture::Create(*context, width, height, desc.colorFormats[0], ig::TextureUsage::RenderTexture, desc.msaa, clearValue);
+			sceneDepth = ig::Texture::Create(*context, width, height, desc.depthFormat, ig::TextureUsage::DepthBuffer, desc.msaa);
+			sceneResolved = ig::Texture::Create(*context, width, height, desc.colorFormats[0], ig::TextureUsage::Default);
 
 			if (useStencilFormat)
 			{
-				stencilView.Load(context, sceneDepth);
+				stencilView = ig::StencilTextureView::Create(*context, *sceneDepth);
 			}
 		}
 
 		// Shadow map
-		shadowMap.Load(context, shadowMapRes, shadowMapRes, shadowMapDesc.depthFormat, ig::TextureUsage::DepthBuffer, shadowMapDesc.msaa);
+		shadowMap = ig::Texture::Create(*context, shadowMapRes, shadowMapRes, shadowMapDesc.depthFormat,
+			ig::TextureUsage::DepthBuffer, shadowMapDesc.msaa);
 	}
 
 	void Start()
 	{
-		cmd.Load(context, ig::CommandListType::Graphics);
-		screenRenderer.Load(context, context.GetBackBufferRenderTargetDesc(true));
+		cmd = ig::CommandList::Create(*context, ig::CommandListType::Graphics);
+		r = ig::BatchRenderer::Create(*context, context->GetBackBufferRenderTargetDesc());
+		screenRenderer = ig::ScreenRenderer::Create(*context, context->GetBackBufferRenderTargetDesc(true));
 
 		InitRenderTargetDescriptions();
-		LoadRenderTargets();
+		CreateRenderTargets();
 
-		// Load shader constant buffers
-		lightConstants.LoadAsShaderConstant(context, sizeof(LightConstants), ig::BufferUsage::Dynamic);
-		cameraConstants.LoadAsShaderConstant(context, sizeof(CameraConstants), ig::BufferUsage::Dynamic);
-		ground.constantBuffer.LoadAsShaderConstant(context, sizeof(ModelConstants), ig::BufferUsage::Dynamic);
-		cube.constantBuffer.LoadAsShaderConstant(context, sizeof(ModelConstants), ig::BufferUsage::Dynamic);
-		sphere.constantBuffer.LoadAsShaderConstant(context, sizeof(ModelConstants), ig::BufferUsage::Dynamic);
+		// Create shader constant buffers
+		lightConstants = ig::Buffer::CreateShaderConstant(*context, sizeof(LightConstants), ig::BufferUsage::Dynamic);
+		cameraConstants = ig::Buffer::CreateShaderConstant(*context, sizeof(CameraConstants), ig::BufferUsage::Dynamic);
+		ground.constantBuffer = ig::Buffer::CreateShaderConstant(*context, sizeof(ModelConstants), ig::BufferUsage::Dynamic);
+		cube.constantBuffer = ig::Buffer::CreateShaderConstant(*context, sizeof(ModelConstants), ig::BufferUsage::Dynamic);
+		sphere.constantBuffer = ig::Buffer::CreateShaderConstant(*context, sizeof(ModelConstants), ig::BufferUsage::Dynamic);
 
-		// Load pipelines
+		// Create pipelines
 		{
 #ifdef IGLO_D3D12
 			const std::string fileExt = ".cso";
@@ -421,9 +424,11 @@ private:
 			ig::ReadFileResult scenePS = ig::ReadFile(shaderFolder + "PS_LightingAndShadows" + fileExt);
 			ig::ReadFileResult depthVS = ig::ReadFile(shaderFolder + "VS_Depth" + fileExt);
 
-			if (!sceneVS.success || !scenePS.success || !depthVS.success)
+			if (!sceneVS.success ||
+				!scenePS.success ||
+				!depthVS.success)
 			{
-				PopupMessage("Failed to read shader binary files from folder: " + shaderFolder, "Error", &context);
+				PopupMessage("Failed to read shader binary files from folder: " + shaderFolder, "Error", context.get());
 				mainloop.Quit();
 				return;
 			}
@@ -442,21 +447,21 @@ private:
 			desc.rasterizerState = ig::RasterizerDesc::BackCull;
 			desc.rasterizerState.slopeScaledDepthBias = slopeScaleDepthBias;
 			desc.renderTargetDesc = sceneDesc;
-			pipelineLightAndShadow.Load(context, desc);
+			pipelineLightAndShadow = ig::Pipeline::CreateGraphics(*context, desc);
 
 			desc.renderTargetDesc = sceneDescMSAA;
-			pipelineLightAndShadowMSAA.Load(context, desc);
+			pipelineLightAndShadowMSAA = ig::Pipeline::CreateGraphics(*context, desc);
 
 			desc.renderTargetDesc = shadowMapDesc;
 			desc.PS = ig::Shader();
 			desc.VS = ig::Shader(depthVS.fileContent, "VSDepth");
 			desc.depthState = ig::DepthDesc::DepthEnabled;
-			pipelineDepth.Load(context, desc);
+			pipelineDepth = ig::Pipeline::CreateGraphics(*context, desc);
 		}
 
-		// Load samplers
+		// Create samplers
 		{
-			colorSampler.Load(context, ig::SamplerDesc::SmoothRepeatSampler);
+			colorSampler = ig::Sampler::Create(*context, ig::SamplerDesc::SmoothRepeatSampler);
 
 			ig::SamplerDesc desc;
 			desc.filter = ig::TextureFilter::_Comparison_Bilinear;
@@ -465,41 +470,44 @@ private:
 			desc.wrapW = ig::TextureWrapMode::BorderColor;
 			desc.comparisonFunc = ig::ComparisonFunc::Less;
 			desc.borderColor = ig::Colors::Black;
-			depthSampler.Load(context, desc);
+			depthSampler = ig::Sampler::Create(*context, desc);
 
 		}
 
 		// Load resources
 		{
-			if (!trimSDF.LoadFromFile(context, resourceFolder + "trim.ttf", 20, ig::FontSettings(ig::FontType::SDF)))
+			trimSDF = ig::Font::LoadFromFile(*context, resourceFolder + "trim.ttf", 20, ig::FontSettings(ig::FontType::SDF));
+			if (!trimSDF)
 			{
-				ig::PopupMessage("Failed to load one or more fonts from: " + resourceFolder, "Error", &context);
+				ig::PopupMessage("Failed to load one or more fonts from: " + resourceFolder, "Error", context.get());
 				mainloop.Quit();
 				return;
 			}
 
-			cmd.Begin();
+			cmd->Begin();
 			{
-				r.Load(context, cmd, context.GetBackBufferRenderTargetDesc());
-				defaultFont.LoadAsPrebaked(context, cmd, ig::GetDefaultFont());
+				defaultFont = ig::Font::CreatePrebaked(*context, *cmd, ig::GetDefaultFont());
 
 				const bool sRGB = true;
 				const bool genMips = true;
-				if (!ground.texture.LoadFromFile(context, cmd, resourceFolder + "grassy-cobblestone.jpg", genMips, sRGB) ||
-					!cube.texture.LoadFromFile(context, cmd, resourceFolder + "paving-stones.jpg", genMips, sRGB) ||
-					!sphere.texture.LoadFromFile(context, cmd, resourceFolder + "green-metal-rust.jpg", genMips, sRGB))
+				ground.texture = ig::Texture::LoadFromFile(*context, *cmd, resourceFolder + "grassy-cobblestone.jpg", genMips, sRGB);
+				cube.texture = ig::Texture::LoadFromFile(*context, *cmd, resourceFolder + "paving-stones.jpg", genMips, sRGB);
+				sphere.texture = ig::Texture::LoadFromFile(*context, *cmd, resourceFolder + "green-metal-rust.jpg", genMips, sRGB);
+				if (!ground.texture ||
+					!cube.texture ||
+					!sphere.texture)
 				{
-					ig::PopupMessage("Failed to load one or more textures from: " + resourceFolder, "Error", &context);
+					ig::PopupMessage("Failed to load textures from: " + resourceFolder, "Error", context.get());
 					mainloop.Quit();
 					return;
 				}
 
-				ground.mesh = GeneratePlaneMesh(context, cmd, 1.0f, 1.0f);
-				cube.mesh = GenerateCubeMesh(context, cmd, 1.0f);
-				sphere.mesh = GenerateSphereMesh(context, cmd, 0.5f, 40, 80);
+				ground.mesh = GeneratePlaneMesh(*cmd, 1.0f, 1.0f);
+				cube.mesh = GenerateCubeMesh(*cmd, 1.0f);
+				sphere.mesh = GenerateSphereMesh(*cmd, 0.5f, 40, 80);
 			}
-			cmd.End();
-			context.WaitForCompletion(context.Submit(cmd));
+			cmd->End();
+			context->WaitForCompletion(context->Submit(*cmd));
 		}
 
 		// Generate a world matrix for each model
@@ -510,7 +518,7 @@ private:
 
 	void OnLoopExited()
 	{
-		context.WaitForIdleDevice();
+		context->WaitForIdleDevice();
 	}
 
 	double tick = 0;
@@ -518,13 +526,13 @@ private:
 	{
 		if (lightRotates) tick += elapsedSeconds;
 
-		if (context.IsKeyDown(ig::Key::K)) lightElevation -= 0.5f * (float)elapsedSeconds;
-		if (context.IsKeyDown(ig::Key::L)) lightElevation += 0.5f * (float)elapsedSeconds;
+		if (context->IsKeyDown(ig::Key::K)) lightElevation -= 0.5f * (float)elapsedSeconds;
+		if (context->IsKeyDown(ig::Key::L)) lightElevation += 0.5f * (float)elapsedSeconds;
 		if (lightElevation < 0) lightElevation = 0;
 		if (lightElevation > 1) lightElevation = 1;
 
-		if (context.IsKeyDown(ig::Key::I)) lightDistance -= 10.0f * (float)elapsedSeconds;
-		if (context.IsKeyDown(ig::Key::O)) lightDistance += 10.0f * (float)elapsedSeconds;
+		if (context->IsKeyDown(ig::Key::I)) lightDistance -= 10.0f * (float)elapsedSeconds;
+		if (context->IsKeyDown(ig::Key::O)) lightDistance += 10.0f * (float)elapsedSeconds;
 		if (lightDistance < lightZNear) lightDistance = lightZNear;
 		if (lightDistance > lightZFar) lightDistance = lightZFar;
 	}
@@ -542,7 +550,7 @@ private:
 		}
 		else if (e.type == ig::EventType::Resize)
 		{
-			LoadRenderTargets(); // Update render target size
+			CreateRenderTargets(); // Update render target size
 		}
 		else if (e.type == ig::EventType::KeyDown)
 		{
@@ -553,29 +561,29 @@ private:
 				return;
 
 			case ig::Key::Enter:
-				if (context.IsKeyDown(ig::Key::LeftAlt)) context.ToggleFullscreen();
+				if (context->IsKeyDown(ig::Key::LeftAlt)) context->ToggleFullscreen();
 				break;
 
 			case ig::Key::F11:
-				context.ToggleFullscreen();
+				context->ToggleFullscreen();
 				break;
 
 			case ig::Key::M:
-				context.WaitForIdleDevice();
+				context->WaitForIdleDevice();
 				enableMSAA = !enableMSAA;
-				LoadRenderTargets(); // Update render target MSAA
+				CreateRenderTargets(); // Update render target MSAA
 				break;
 
 			case ig::Key::P:
-				if (context.GetPresentMode() == ig::PresentMode::ImmediateWithTearing) context.SetPresentMode(ig::PresentMode::Immediate);
-				else if (context.GetPresentMode() == ig::PresentMode::Immediate) context.SetPresentMode(ig::PresentMode::Vsync);
+				if (context->GetPresentMode() == ig::PresentMode::ImmediateWithTearing) context->SetPresentMode(ig::PresentMode::Immediate);
+				else if (context->GetPresentMode() == ig::PresentMode::Immediate) context->SetPresentMode(ig::PresentMode::Vsync);
 #ifdef IGLO_D3D12
-				else if (context.GetPresentMode() == ig::PresentMode::Vsync) context.SetPresentMode(ig::PresentMode::VsyncHalf);
+				else if (context->GetPresentMode() == ig::PresentMode::Vsync) context->SetPresentMode(ig::PresentMode::VsyncHalf);
 #endif
 #ifdef IGLO_VULKAN
-				else if (context.GetPresentMode() == ig::PresentMode::Vsync) context.SetPresentMode(ig::PresentMode::VsyncRelaxed);
+				else if (context->GetPresentMode() == ig::PresentMode::Vsync) context->SetPresentMode(ig::PresentMode::VsyncRelaxed);
 #endif
-				else context.SetPresentMode(ig::PresentMode::ImmediateWithTearing);
+				else context->SetPresentMode(ig::PresentMode::ImmediateWithTearing);
 				break;
 
 			case ig::Key::R:
@@ -592,14 +600,14 @@ private:
 	{
 		if (bindTextures)
 		{
-			uint32_t textureIndex = model.texture.GetDescriptor()->heapIndex;
-			cmd.SetPushConstants(&textureIndex, sizeof(textureIndex), 0); // First push constant
+			uint32_t textureIndex = model.texture->GetDescriptor().heapIndex;
+			cmd->SetPushConstants(&textureIndex, sizeof(textureIndex), 0); // First push constant
 		}
-		uint32_t modelConstantsIndex = model.constantBuffer.GetDescriptor()->heapIndex;
-		cmd.SetPushConstants(&modelConstantsIndex, sizeof(modelConstantsIndex), sizeof(uint32_t) * 6); // Last push constant
-		cmd.SetVertexBuffer(model.mesh.vertexBuffer);
-		cmd.SetIndexBuffer(model.mesh.indexBuffer);
-		cmd.DrawIndexed(model.mesh.indexBuffer.GetNumElements());
+		uint32_t modelConstantsIndex = model.constantBuffer->GetDescriptor().heapIndex;
+		cmd->SetPushConstants(&modelConstantsIndex, sizeof(modelConstantsIndex), sizeof(uint32_t) * 6); // Last push constant
+		cmd->SetVertexBuffer(*model.mesh.vertexBuffer);
+		cmd->SetIndexBuffer(*model.mesh.indexBuffer);
+		cmd->DrawIndexed(model.mesh.indexBuffer->GetNumElements());
 	}
 
 	void RenderAllModels(bool bindTextures)
@@ -616,18 +624,18 @@ private:
 			ModelConstants transposed;
 
 			transposed.world = cube.constantData.world.GetTransposed();
-			cube.constantBuffer.SetDynamicData(&transposed);
+			cube.constantBuffer->SetDynamicData(&transposed);
 
 			transposed.world = ground.constantData.world.GetTransposed();
-			ground.constantBuffer.SetDynamicData(&transposed);
+			ground.constantBuffer->SetDynamicData(&transposed);
 
 			transposed.world = sphere.constantData.world.GetTransposed();
-			sphere.constantBuffer.SetDynamicData(&transposed);
+			sphere.constantBuffer->SetDynamicData(&transposed);
 		}
 
 		// Update camera
 		{
-			const float cameraAspectRatio = (float)sceneRender.GetWidth() / (float)sceneRender.GetHeight();
+			const float cameraAspectRatio = (float)sceneRender->GetWidth() / (float)sceneRender->GetHeight();
 			ig::Vector3 cameraPos = ig::Vector3(-4.0f, 1.5f, 0);
 			ig::Vector3 cameraLookAt = ig::Vector3(0, 0.5f, 0);
 			ig::Vector3 cameraUp = ig::Vector3(0, 1, 0);
@@ -637,7 +645,7 @@ private:
 
 			CameraConstants transposed;
 			transposed.viewAndProj = camera.viewAndProj.GetTransposed();
-			cameraConstants.SetDynamicData(&transposed);
+			cameraConstants->SetDynamicData(&transposed);
 		}
 
 		// Update light
@@ -656,43 +664,43 @@ private:
 
 			LightConstants transposed = light;
 			transposed.viewAndProj = light.viewAndProj.GetTransposed();
-			lightConstants.SetDynamicData(&transposed);
+			lightConstants->SetDynamicData(&transposed);
 		}
 
-		cmd.AddTextureBarrier(shadowMap, ig::SimpleBarrier::Discard, ig::SimpleBarrier::DepthWrite);
-		cmd.FlushBarriers();
+		cmd->AddTextureBarrier(*shadowMap, ig::SimpleBarrier::Discard, ig::SimpleBarrier::DepthWrite);
+		cmd->FlushBarriers();
 
 		// Prepare the shadow map pipeline
-		cmd.SetRenderTarget(nullptr, &shadowMap, true);
-		cmd.SetViewport((float)shadowMapRes, (float)shadowMapRes);
-		cmd.SetScissorRectangle(shadowMapRes, shadowMapRes);
-		cmd.SetPipeline(pipelineDepth);
+		cmd->SetRenderTarget(nullptr, shadowMap.get(), true);
+		cmd->SetViewport((float)shadowMapRes, (float)shadowMapRes);
+		cmd->SetScissorRectangle(shadowMapRes, shadowMapRes);
+		cmd->SetPipeline(*pipelineDepth);
 
-		// Bind constants and samplers
+		// Bind resources
 		PushConstants pushConstants;
 		pushConstants.colorTextureIndex = IGLO_UINT32_MAX; // Per model
-		pushConstants.depthTextureIndex = shadowMap.GetDescriptor()->heapIndex;
-		pushConstants.colorSamplerIndex = colorSampler.GetDescriptor()->heapIndex;
-		pushConstants.depthSamplerIndex = depthSampler.GetDescriptor()->heapIndex;
-		pushConstants.lightConstantsIndex = lightConstants.GetDescriptor()->heapIndex;
-		pushConstants.cameraConstantsIndex = cameraConstants.GetDescriptor()->heapIndex;
+		pushConstants.depthTextureIndex = shadowMap->GetDescriptor().heapIndex;
+		pushConstants.colorSamplerIndex = colorSampler->GetDescriptor().heapIndex;
+		pushConstants.depthSamplerIndex = depthSampler->GetDescriptor().heapIndex;
+		pushConstants.lightConstantsIndex = lightConstants->GetDescriptor().heapIndex;
+		pushConstants.cameraConstantsIndex = cameraConstants->GetDescriptor().heapIndex;
 		pushConstants.modelConstantsIndex = IGLO_UINT32_MAX; // Per model
-		cmd.SetPushConstants(&pushConstants, sizeof(pushConstants));
+		cmd->SetPushConstants(&pushConstants, sizeof(pushConstants));
 
 		// Render the scene from the lights perspective
 		RenderAllModels(false);
 
-		cmd.AddTextureBarrier(shadowMap, ig::SimpleBarrier::DepthWrite, ig::SimpleBarrier::PixelShaderResource);
-		cmd.AddTextureBarrier(sceneRender, ig::SimpleBarrier::Discard, ig::SimpleBarrier::RenderTarget);
-		cmd.AddTextureBarrier(sceneDepth, ig::SimpleBarrier::Discard, ig::SimpleBarrier::DepthWrite);
-		cmd.FlushBarriers();
+		cmd->AddTextureBarrier(*shadowMap, ig::SimpleBarrier::DepthWrite, ig::SimpleBarrier::PixelShaderResource);
+		cmd->AddTextureBarrier(*sceneRender, ig::SimpleBarrier::Discard, ig::SimpleBarrier::RenderTarget);
+		cmd->AddTextureBarrier(*sceneDepth, ig::SimpleBarrier::Discard, ig::SimpleBarrier::DepthWrite);
+		cmd->FlushBarriers();
 
 		// Prepare the lighting and shadows pipeline
-		cmd.SetRenderTarget(&sceneRender, &sceneDepth, true);
-		cmd.SetViewport((float)sceneRender.GetWidth(), (float)sceneRender.GetHeight());
-		cmd.SetScissorRectangle(sceneRender.GetWidth(), sceneRender.GetHeight());
-		cmd.SetPipeline(enableMSAA ? pipelineLightAndShadowMSAA : pipelineLightAndShadow);
-		cmd.SetPushConstants(&pushConstants.depthTextureIndex, sizeof(uint32_t) * 3, sizeof(uint32_t) * 1);
+		cmd->SetRenderTarget(sceneRender.get(), sceneDepth.get(), true);
+		cmd->SetViewport((float)sceneRender->GetWidth(), (float)sceneRender->GetHeight());
+		cmd->SetScissorRectangle(sceneRender->GetWidth(), sceneRender->GetHeight());
+		cmd->SetPipeline(enableMSAA ? *pipelineLightAndShadowMSAA : *pipelineLightAndShadow);
+		cmd->SetPushConstants(&pushConstants.depthTextureIndex, sizeof(uint32_t) * 3, sizeof(uint32_t) * 1);
 
 		// Render the scene from the cameras perspective
 		RenderAllModels(true);
@@ -700,10 +708,10 @@ private:
 
 	void RenderUI()
 	{
-		r.Begin(cmd);
+		r->Begin(*cmd);
 		{
 			// Use point sampling for textures
-			r.SetSamplerToPixelatedTextures();
+			r->SetSamplerToPixelatedTextures();
 
 			// Draw light source as a circle
 			{
@@ -711,8 +719,8 @@ private:
 				lightPos = ig::Vector4::Transform(lightPos, camera.viewAndProj);
 				float scaleFactor = 1.0f / lightPos.w;
 				lightPos /= lightPos.w;
-				float screenX = (lightPos.x + 1.0f) * 0.5f * (float)context.GetWidth();
-				float screenY = (1.0f - lightPos.y) * 0.5f * (float)context.GetHeight();
+				float screenX = (lightPos.x + 1.0f) * 0.5f * (float)context->GetWidth();
+				float screenY = (1.0f - lightPos.y) * 0.5f * (float)context->GetHeight();
 				ig::Color32 fillColor = ig::Color(0.15f, 0.15f, 0.15f).ToColor32();
 				ig::Color32 borderColor = ig::Color(1.0f, 1.0f, 1.0f).ToColor32();
 				ig::CircleParams circle =
@@ -725,50 +733,50 @@ private:
 					.outerColor = fillColor,
 					.borderColor = borderColor,
 				};
-				r.DrawCircle(circle);
+				r->DrawCircle(circle);
 			}
 
 			// Draw depth buffers
-			if (context.IsKeyDown(ig::Key::D))
+			if (context->IsKeyDown(ig::Key::D))
 			{
-				r.SetDepthBufferDrawStyle(cameraZNear, cameraZFar, false);
-				r.DrawTexture(sceneDepth, 0, 0, (float)context.GetWidth(), (float)context.GetHeight());
+				r->SetDepthBufferDrawStyle(cameraZNear, cameraZFar, false);
+				r->DrawTexture(*sceneDepth, 0, 0, (float)context->GetWidth(), (float)context->GetHeight());
 			}
-			else if (context.IsKeyDown(ig::Key::E) && useStencilFormat)
+			else if (context->IsKeyDown(ig::Key::E) && useStencilFormat)
 			{
-				r.SetDepthBufferDrawStyle(0, 0, true); // Draw stencil component
-				r.DrawTexture(stencilView.GetWrappedTexture(), 0, 0, (float)context.GetWidth(), (float)context.GetHeight());
+				r->SetDepthBufferDrawStyle(0, 0, true); // Draw stencil component
+				r->DrawTexture(stencilView->GetWrappedTexture(), 0, 0, (float)context->GetWidth(), (float)context->GetHeight());
 			}
-			else if (context.IsKeyDown(ig::Key::S))
+			else if (context->IsKeyDown(ig::Key::S))
 			{
-				r.SetDepthBufferDrawStyle(lightZNear, lightZFar, false);
-				r.DrawTexture(shadowMap, 0, 0, (float)context.GetWidth(), (float)context.GetHeight());
+				r->SetDepthBufferDrawStyle(lightZNear, lightZFar, false);
+				r->DrawTexture(*shadowMap, 0, 0, (float)context->GetWidth(), (float)context->GetHeight());
 			}
 			else
 			{
 				float textureSize = 128;
-				float textureX = (float)context.GetWidth() - textureSize - 14;
+				float textureX = (float)context->GetWidth() - textureSize - 14;
 				float textureY = 32;
 
 				// Draw scene depth
-				r.SetDepthBufferDrawStyle(cameraZNear, cameraZFar, false);
-				r.DrawTexture(sceneDepth, textureX, textureY, textureSize, textureSize);
-				r.DrawString(textureX, textureY - 20, "Depth [D]", defaultFont, ig::Colors::White);
+				r->SetDepthBufferDrawStyle(cameraZNear, cameraZFar, false);
+				r->DrawTexture(*sceneDepth, textureX, textureY, textureSize, textureSize);
+				r->DrawString(textureX, textureY - 20, "Depth [D]", *defaultFont, ig::Colors::White);
 
 				// Draw scene stencil (if used)
 				if (useStencilFormat)
 				{
 					textureY += textureSize + 42;
-					r.SetDepthBufferDrawStyle(0, 0, true); // Draw stencil component
-					r.DrawTexture(stencilView.GetWrappedTexture(), textureX, textureY, textureSize, textureSize);
-					r.DrawString(textureX, textureY - 20, "Stencil [E]", defaultFont, ig::Colors::White);
+					r->SetDepthBufferDrawStyle(0, 0, true); // Draw stencil component
+					r->DrawTexture(stencilView->GetWrappedTexture(), textureX, textureY, textureSize, textureSize);
+					r->DrawString(textureX, textureY - 20, "Stencil [E]", *defaultFont, ig::Colors::White);
 				}
 
 				// Draw shadow map
 				textureY += textureSize + 42;
-				r.SetDepthBufferDrawStyle(lightZNear, lightZFar, false);
-				r.DrawTexture(shadowMap, textureX, textureY, textureSize, textureSize);
-				r.DrawString(textureX, textureY - 20, "Shadow map [S]", defaultFont, ig::Colors::White);
+				r->SetDepthBufferDrawStyle(lightZNear, lightZFar, false);
+				r->DrawTexture(*shadowMap, textureX, textureY, textureSize, textureSize);
+				r->DrawString(textureX, textureY - 20, "Shadow map [S]", *defaultFont, ig::Colors::White);
 			}
 
 			// Draw text
@@ -779,7 +787,7 @@ private:
 					"FPS: ", mainloop.GetAvarageFPS());
 
 				std::string presentModeStr = "";
-				switch (context.GetPresentMode())
+				switch (context->GetPresentMode())
 				{
 				default: throw std::runtime_error("Unexpected present mode");
 				case ig::PresentMode::Immediate: presentModeStr = "Immediate"; break;
@@ -794,7 +802,7 @@ private:
 				}
 
 				std::string strBottom = ig::ToString(
-					"MSAA X", (int)sceneRender.GetMSAA(), " [M]\n",
+					"MSAA X", (int)sceneRender->GetMSAA(), " [M]\n",
 					"Present mode [P]: ", presentModeStr, "\n",
 					"Light distance [I, O]: ", lightDistance, "\n",
 					"Light elevation [K, L]: ", lightElevation, "\n",
@@ -802,20 +810,20 @@ private:
 
 				ig::SDFEffect sdfEffect;
 				sdfEffect.sdfEffectFlags = (uint32_t)ig::SDFEffectFlags::Outline | (uint32_t)ig::SDFEffectFlags::Glow;
-				r.SetSDFEffect(sdfEffect);
+				r->SetSDFEffect(sdfEffect);
 
-				float bottomStrHeight = r.MeasureString(strBottom, trimSDF).y;
+				float bottomStrHeight = r->MeasureString(strBottom, *trimSDF).y;
 
-				r.DrawString(5, 0, strTop, trimSDF, ig::Colors::White);
-				r.DrawString(5, (float)context.GetHeight() - bottomStrHeight - 5, strBottom, trimSDF, ig::Colors::White);
+				r->DrawString(5, 0, strTop, *trimSDF, ig::Colors::White);
+				r->DrawString(5, (float)context->GetHeight() - bottomStrHeight - 5, strBottom, *trimSDF, ig::Colors::White);
 			}
 		}
-		r.End();
+		r->End();
 	}
 
 	void Draw()
 	{
-		cmd.Begin();
+		cmd->Begin();
 		{
 			// Render all 3D content
 			RenderScene();
@@ -823,42 +831,42 @@ private:
 			if (enableMSAA)
 			{
 				// Resolve the scene if MSAA is enabled
-				cmd.AddTextureBarrier(sceneRender, ig::SimpleBarrier::RenderTarget, ig::SimpleBarrier::ResolveSource);
-				cmd.AddTextureBarrier(sceneResolved, ig::SimpleBarrier::Discard, ig::SimpleBarrier::ResolveDest);
-				cmd.FlushBarriers();
+				cmd->AddTextureBarrier(*sceneRender, ig::SimpleBarrier::RenderTarget, ig::SimpleBarrier::ResolveSource);
+				cmd->AddTextureBarrier(*sceneResolved, ig::SimpleBarrier::Discard, ig::SimpleBarrier::ResolveDest);
+				cmd->FlushBarriers();
 
-				cmd.ResolveTexture(sceneRender, sceneResolved);
+				cmd->ResolveTexture(*sceneRender, *sceneResolved);
 
-				cmd.AddTextureBarrier(sceneResolved, ig::SimpleBarrier::ResolveDest, ig::SimpleBarrier::PixelShaderResource);
-				cmd.FlushBarriers();
+				cmd->AddTextureBarrier(*sceneResolved, ig::SimpleBarrier::ResolveDest, ig::SimpleBarrier::PixelShaderResource);
+				cmd->FlushBarriers();
 			}
 			else
 			{
 				// If MSAA is not enabled, prepare to sample the render texture directly
-				cmd.AddTextureBarrier(sceneRender, ig::SimpleBarrier::RenderTarget, ig::SimpleBarrier::PixelShaderResource);
-				cmd.FlushBarriers();
+				cmd->AddTextureBarrier(*sceneRender, ig::SimpleBarrier::RenderTarget, ig::SimpleBarrier::PixelShaderResource);
+				cmd->FlushBarriers();
 			}
 
-			cmd.AddTextureBarrier(context.GetBackBuffer(), ig::SimpleBarrier::Discard, ig::SimpleBarrier::RenderTarget);
-			cmd.FlushBarriers();
+			cmd->AddTextureBarrier(context->GetBackBuffer(), ig::SimpleBarrier::Discard, ig::SimpleBarrier::RenderTarget);
+			cmd->FlushBarriers();
 
 			// Draw the final scene to the back buffer
-			cmd.SetRenderTarget(&context.GetBackBuffer(true)); // Use an sRGB render target view
-			cmd.SetViewport((float)context.GetWidth(), (float)context.GetHeight());
-			cmd.SetScissorRectangle(context.GetWidth(), context.GetHeight());
-			screenRenderer.DrawFullscreenQuad(cmd, enableMSAA ? sceneResolved : sceneRender, context.GetBackBuffer());
+			cmd->SetRenderTarget(&context->GetBackBuffer(true)); // Use an sRGB render target view
+			cmd->SetViewport((float)context->GetWidth(), (float)context->GetHeight());
+			cmd->SetScissorRectangle(context->GetWidth(), context->GetHeight());
+			screenRenderer->DrawFullscreenQuad(*cmd, enableMSAA ? *sceneResolved : *sceneRender, context->GetBackBuffer());
 
 			// Render all 2D content
-			cmd.SetRenderTarget(&context.GetBackBuffer(false)); // Use a non-sRGB render target view
+			cmd->SetRenderTarget(&context->GetBackBuffer(false)); // Use a non-sRGB render target view
 			RenderUI();
 
-			cmd.AddTextureBarrier(context.GetBackBuffer(), ig::SimpleBarrier::RenderTarget, ig::SimpleBarrier::Present);
-			cmd.FlushBarriers();
+			cmd->AddTextureBarrier(context->GetBackBuffer(), ig::SimpleBarrier::RenderTarget, ig::SimpleBarrier::Present);
+			cmd->FlushBarriers();
 		}
-		cmd.End();
+		cmd->End();
 
-		context.Submit(cmd);
-		context.Present();
+		context->Submit(*cmd);
+		context->Present();
 	}
 };
 

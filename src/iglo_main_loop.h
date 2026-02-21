@@ -7,11 +7,10 @@ namespace ig
 	class MainLoop
 	{
 	public:
-		MainLoop();
-		~MainLoop() = default;
+		MainLoop() { SetFixedUpdateFrameRate(60); }
 
-		MainLoop& operator=(MainLoop&) = delete;
-		MainLoop(MainLoop&) = delete;
+		MainLoop& operator=(const MainLoop&) = delete;
+		MainLoop(const MainLoop&) = delete;
 
 		enum class WindowMinimizedBehaviour
 		{

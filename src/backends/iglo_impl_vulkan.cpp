@@ -567,43 +567,43 @@ namespace ig
 		return aspect;
 	}
 
-	void DescriptorHeap::Impl_Unload()
+	void DescriptorHeap::Impl_Destroy()
 	{
+		VkDevice device = context.GetVulkanDevice();
+
 		for (auto& tempViews : impl.tempImageViews)
 		{
 			for (VkImageView imageView : tempViews)
 			{
-				if (imageView) vkDestroyImageView(context->GetVulkanDevice(), imageView, nullptr);
+				if (imageView) vkDestroyImageView(device, imageView, nullptr);
 			}
 		}
 		impl.tempImageViews.clear();
-		impl.tempImageViews.shrink_to_fit();
 
 		if (impl.descriptorPool)
 		{
-			vkDestroyDescriptorPool(context->GetVulkanDevice(), impl.descriptorPool, nullptr);
+			vkDestroyDescriptorPool(device, impl.descriptorPool, nullptr);
 			impl.descriptorPool = VK_NULL_HANDLE;
 		}
 		if (impl.descriptorSetLayout)
 		{
-			vkDestroyDescriptorSetLayout(context->GetVulkanDevice(), impl.descriptorSetLayout, nullptr);
+			vkDestroyDescriptorSetLayout(device, impl.descriptorSetLayout, nullptr);
 			impl.descriptorSetLayout = VK_NULL_HANDLE;
 		}
 		if (impl.bindlessPipelineLayout)
 		{
-			vkDestroyPipelineLayout(context->GetVulkanDevice(), impl.bindlessPipelineLayout, nullptr);
+			vkDestroyPipelineLayout(device, impl.bindlessPipelineLayout, nullptr);
 			impl.bindlessPipelineLayout = VK_NULL_HANDLE;
 		}
-		impl.descriptorSet = VK_NULL_HANDLE;
+
 	}
 
-	DetailedResult DescriptorHeap::Impl_Load(const IGLOContext& context, uint32_t maxPersistentResources,
-		uint32_t maxTempResourcesPerFrame, uint32_t maxSamplers, uint32_t numFramesInFlight)
+	DetailedResult DescriptorHeap::Impl_Create(uint32_t maxPersistentResources, uint32_t maxTempResourcesPerFrame, uint32_t maxSamplers)
 	{
 		VkDevice device = context.GetVulkanDevice();
-		uint32_t totalResDescriptors = CalcTotalResDescriptors(maxPersistentResources, maxTempResourcesPerFrame, numFramesInFlight);
+		uint32_t totalResDescriptors = CalcTotalResDescriptors(maxPersistentResources, maxTempResourcesPerFrame, maxFramesInFlight);
 
-		impl.tempImageViews.resize(numFramesInFlight, {});
+		impl.tempImageViews.resize(maxFramesInFlight, {});
 
 		std::array<uint32_t, NUM_DESCRIPTOR_TYPES> propMax = GetVulkanPropsMaxDescriptors(context.GetVulkanPhysicalDevice());
 
@@ -753,7 +753,7 @@ namespace ig
 		auto& tempViews = impl.tempImageViews[frameIndex];
 		for (VkImageView imageView : tempViews)
 		{
-			if (imageView) vkDestroyImageView(context->GetVulkanDevice(), imageView, nullptr);
+			if (imageView) vkDestroyImageView(context.GetVulkanDevice(), imageView, nullptr);
 		}
 		tempViews.clear();
 	}
@@ -764,7 +764,7 @@ namespace ig
 		{
 			for (VkImageView imageView : tempViews)
 			{
-				if (imageView) vkDestroyImageView(context->GetVulkanDevice(), imageView, nullptr);
+				if (imageView) vkDestroyImageView(context.GetVulkanDevice(), imageView, nullptr);
 			}
 			tempViews.clear();
 		}
@@ -790,12 +790,7 @@ namespace ig
 
 	void DescriptorHeap::WriteBufferDescriptor(Descriptor descriptor, VkBuffer buffer, VkDeviceSize offset, VkDeviceSize range)
 	{
-		if (LogErrorIfNotLoaded()) return;
-		if (descriptor.IsNull())
-		{
-			Log(LogType::Error, "Failed to write buffer descriptor. Reason: The descriptor isn't loaded.");
-			return;
-		}
+		assert(descriptor);
 
 		VkDescriptorBufferInfo bufferInfo = {};
 		bufferInfo.buffer = buffer;
@@ -811,17 +806,12 @@ namespace ig
 		write.descriptorType = vkDescriptorTypeTable[(uint32_t)descriptor.type];
 		write.pBufferInfo = &bufferInfo;
 
-		vkUpdateDescriptorSets(context->GetVulkanDevice(), 1, &write, 0, nullptr);
+		vkUpdateDescriptorSets(context.GetVulkanDevice(), 1, &write, 0, nullptr);
 	}
 
 	void DescriptorHeap::WriteImageDescriptor(Descriptor descriptor, VkImageView imageView, VkImageLayout imageLayout)
 	{
-		if (LogErrorIfNotLoaded()) return;
-		if (descriptor.IsNull())
-		{
-			Log(LogType::Error, "Failed to write image descriptor. Reason: The descriptor isn't loaded.");
-			return;
-		}
+		assert(descriptor);
 
 		VkDescriptorImageInfo imageInfo = {};
 		imageInfo.imageView = imageView;
@@ -837,17 +827,12 @@ namespace ig
 		write.descriptorCount = 1;
 		write.pImageInfo = &imageInfo;
 
-		vkUpdateDescriptorSets(context->GetVulkanDevice(), 1, &write, 0, nullptr);
+		vkUpdateDescriptorSets(context.GetVulkanDevice(), 1, &write, 0, nullptr);
 	}
 
 	void DescriptorHeap::WriteSamplerDescriptor(Descriptor descriptor, VkSampler sampler)
 	{
-		if (LogErrorIfNotLoaded()) return;
-		if (descriptor.IsNull())
-		{
-			Log(LogType::Error, "Failed to write sampler descriptor. Reason: The descriptor isn't loaded.");
-			return;
-		}
+		assert(descriptor);
 
 		VkDescriptorImageInfo imageInfo = {};
 		imageInfo.sampler = sampler;
@@ -861,14 +846,12 @@ namespace ig
 		write.descriptorType = vkDescriptorTypeTable[(uint32_t)descriptor.type];
 		write.pImageInfo = &imageInfo;
 
-		vkUpdateDescriptorSets(context->GetVulkanDevice(), 1, &write, 0, nullptr);
+		vkUpdateDescriptorSets(context.GetVulkanDevice(), 1, &write, 0, nullptr);
 	}
 
 	VkResult DescriptorHeap::CreateTempVulkanImageView(VkDevice device, const VkImageViewCreateInfo* pCreateInfo,
 		const VkAllocationCallbacks* pAllocator, VkImageView* pView)
 	{
-		if (LogErrorIfNotLoaded()) return VkResult::VK_NOT_READY;
-
 		VkResult result = vkCreateImageView(device, pCreateInfo, pAllocator, pView);
 
 		if (result == VK_SUCCESS)
@@ -879,16 +862,16 @@ namespace ig
 		return result;
 	}
 
-	void Pipeline::Impl_Unload()
+	void Pipeline::Impl_Destroy()
 	{
 		if (impl.pipeline)
 		{
-			vkDestroyPipeline(context->GetVulkanDevice(), impl.pipeline, nullptr);
+			vkDestroyPipeline(context.GetVulkanDevice(), impl.pipeline, nullptr);
 			impl.pipeline = VK_NULL_HANDLE;
 		}
 	}
 
-	DetailedResult Pipeline::Impl_Load(const IGLOContext& context, const PipelineDesc& desc)
+	DetailedResult Pipeline::Impl_CreateGraphics(const PipelineDesc& desc)
 	{
 		VkDevice device = context.GetVulkanDevice();
 
@@ -1112,7 +1095,7 @@ namespace ig
 		return DetailedResult::Success();
 	}
 
-	DetailedResult Pipeline::Impl_LoadAsCompute(const IGLOContext& context, const Shader& CS)
+	DetailedResult Pipeline::Impl_CreateCompute(const Shader& CS)
 	{
 		VkDevice device = context.GetVulkanDevice();
 
@@ -1147,40 +1130,31 @@ namespace ig
 	{
 		for (auto& semaphore : impl.acquireSemaphores)
 		{
-			if (semaphore) vkDestroySemaphore(context->GetVulkanDevice(), semaphore, nullptr);
-			semaphore = VK_NULL_HANDLE;
-		}
-		for (auto& semaphore : impl.presentReadySemaphores)
-		{
-			if (semaphore) vkDestroySemaphore(context->GetVulkanDevice(), semaphore, nullptr);
+			if (semaphore) vkDestroySemaphore(context.GetVulkanDevice(), semaphore, nullptr);
 			semaphore = VK_NULL_HANDLE;
 		}
 		impl.acquireSemaphores.clear();
-		impl.acquireSemaphores.shrink_to_fit();
+
+		for (auto& semaphore : impl.presentReadySemaphores)
+		{
+			if (semaphore) vkDestroySemaphore(context.GetVulkanDevice(), semaphore, nullptr);
+			semaphore = VK_NULL_HANDLE;
+		}
 		impl.presentReadySemaphores.clear();
-		impl.presentReadySemaphores.shrink_to_fit();
 	}
 
-	void CommandQueue::Impl_Unload()
+	void CommandQueue::Impl_Destroy()
 	{
 		DestroySwapChainSemaphores();
 
 		for (auto& semaphore : impl.timelineSemaphores)
 		{
-			if (semaphore) vkDestroySemaphore(context->GetVulkanDevice(), semaphore, nullptr);
+			if (semaphore) vkDestroySemaphore(context.GetVulkanDevice(), semaphore, nullptr);
 			semaphore = VK_NULL_HANDLE;
 		}
-
-		impl.queues = { VK_NULL_HANDLE, VK_NULL_HANDLE, VK_NULL_HANDLE };
-		impl.queueFamIndices = {};
-		impl.presentQueue = VK_NULL_HANDLE;
-		impl.fenceValues = {};
-		impl.frameIndex = 0;
-		impl.numFrames = 0;
-		impl.currentBackBufferIndex = 0;
 	}
 
-	DetailedResult CommandQueue::Impl_Load(const IGLOContext& context, uint32_t numFramesInFlight, uint32_t numBackBuffers)
+	DetailedResult CommandQueue::Impl_Create()
 	{
 		VkDevice device = context.GetVulkanDevice();
 		VulkanQueueFamilies fams = GetVulkanQueueFamilies(context.GetVulkanPhysicalDevice(), context.GetVulkanSurface());
@@ -1242,14 +1216,14 @@ namespace ig
 			}
 		}
 
-		RecreateSwapChainSemaphores(numFramesInFlight, numBackBuffers);
+		RecreateSwapChainSemaphores(maxFramesInFlight, numBackBuffers);
 
 		return DetailedResult::Success();
 	}
 
 	void CommandQueue::RecreateSwapChainSemaphores(uint32_t numFramesInFlight, uint32_t numBackBuffers)
 	{
-		VkDevice device = context->GetVulkanDevice();
+		VkDevice device = context.GetVulkanDevice();
 
 		DestroySwapChainSemaphores();
 
@@ -1333,7 +1307,7 @@ namespace ig
 	bool CommandQueue::Impl_IsComplete(Receipt receipt) const
 	{
 		uint64_t currentValue = 0;
-		vkGetSemaphoreCounterValue(context->GetVulkanDevice(), receipt.impl.timelineSemaphore, &currentValue);
+		vkGetSemaphoreCounterValue(context.GetVulkanDevice(), receipt.impl.timelineSemaphore, &currentValue);
 		return currentValue >= receipt.fenceValue;
 	}
 
@@ -1342,7 +1316,7 @@ namespace ig
 		for (size_t i = 0; i < impl.fenceValues.size(); i++)
 		{
 			uint64_t currentValue = 0;
-			vkGetSemaphoreCounterValue(context->GetVulkanDevice(), impl.timelineSemaphores[i], &currentValue);
+			vkGetSemaphoreCounterValue(context.GetVulkanDevice(), impl.timelineSemaphores[i], &currentValue);
 			if (currentValue < impl.fenceValues[i]) return false;
 		}
 		return true;
@@ -1357,7 +1331,7 @@ namespace ig
 		waitInfo.pSemaphores = &receipt.impl.timelineSemaphore;
 		waitInfo.pValues = &receipt.fenceValue;
 
-		vkWaitSemaphores(context->GetVulkanDevice(), &waitInfo, UINT64_MAX);
+		vkWaitSemaphores(context.GetVulkanDevice(), &waitInfo, UINT64_MAX);
 	}
 
 	void CommandQueue::WaitForIdle()
@@ -1460,47 +1434,33 @@ namespace ig
 		return { signalValue, impl.timelineSemaphores[cmdTypeInt] };
 	}
 
-	void CommandList::Impl_Unload()
+	void CommandList::Impl_Destroy()
 	{
 		for (size_t i = 0; i < impl.commandBuffer.size(); i++)
 		{
 			if (impl.commandBuffer[i])
 			{
-				assert(i < impl.commandPool.size());
-				vkFreeCommandBuffers(context->GetVulkanDevice(), impl.commandPool[i], 1, &impl.commandBuffer[i]);
+				vkFreeCommandBuffers(context.GetVulkanDevice(), impl.commandPool.at(i), 1, &impl.commandBuffer[i]);
 			}
 		}
 		for (VkCommandPool pool : impl.commandPool)
 		{
-			if (pool) vkDestroyCommandPool(context->GetVulkanDevice(), pool, nullptr);
+			if (pool) vkDestroyCommandPool(context.GetVulkanDevice(), pool, nullptr);
 		}
 
-		impl.commandPool.clear();
-		impl.commandPool.shrink_to_fit();
 		impl.commandBuffer.clear();
-		impl.commandBuffer.shrink_to_fit();
-
-		impl.numGlobalBarriers = 0;
-		impl.numTextureBarriers = 0;
-		impl.numBufferBarriers = 0;
-
-		impl.numCurrentRenderTextures = 0;
-		impl.currentDepthTexture = nullptr;
-		impl.currentCommandBuffer = VK_NULL_HANDLE;
-
-		impl.isRendering = false;
-		impl.temporaryRenderPause = false;
+		impl.commandPool.clear();
 	}
 
-	DetailedResult CommandList::Impl_Load(const IGLOContext& context, CommandListType commandListType)
+	DetailedResult CommandList::Impl_Create()
 	{
 		VkDevice device = context.GetVulkanDevice();
 		uint32_t queueFamilyIndex = context.GetCommandQueue().GetVulkanQueueFamilyIndex(commandListType);
 
-		impl.commandPool.resize(numFrames, VK_NULL_HANDLE);
-		impl.commandBuffer.resize(numFrames, VK_NULL_HANDLE);
+		impl.commandPool.resize(maxFrames, VK_NULL_HANDLE);
+		impl.commandBuffer.resize(maxFrames, VK_NULL_HANDLE);
 
-		for (uint32_t i = 0; i < numFrames; i++)
+		for (uint32_t i = 0; i < maxFrames; i++)
 		{
 			VkCommandPoolCreateInfo poolInfo = {};
 			poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
@@ -1538,10 +1498,10 @@ namespace ig
 
 	void CommandList::Impl_Begin()
 	{
-		DescriptorHeap& heap = context->GetDescriptorHeap();
+		DescriptorHeap& heap = context.GetDescriptorHeap();
 		VkCommandBuffer cmdBuf = impl.commandBuffer[frameIndex];
 
-		VkResult res = vkResetCommandPool(context->GetVulkanDevice(), impl.commandPool[frameIndex], 0);
+		VkResult res = vkResetCommandPool(context.GetVulkanDevice(), impl.commandPool[frameIndex], 0);
 		if (res != VK_SUCCESS)
 		{
 			Log(LogType::Error, "vkResetCommandPool failed!");
@@ -1739,7 +1699,7 @@ namespace ig
 
 				if (optimizedClear)
 				{
-					Color color = renderTextures[i]->GetOptimiziedClearValue().color;
+					Color color = renderTextures[i]->GetOptimizedClearValue().color;
 					attachment.clearValue.color = { color.red, color.green, color.blue, color.alpha };
 				}
 			}
@@ -1773,7 +1733,7 @@ namespace ig
 
 				if (optimizedClear)
 				{
-					ClearValue clearValue = depthBuffer->GetOptimiziedClearValue();
+					ClearValue clearValue = depthBuffer->GetOptimizedClearValue();
 					impl.renderInfo.depthAttachment.clearValue.depthStencil.depth = clearValue.depth;
 					if (hasStencil) impl.renderInfo.stencilAttachment.clearValue.depthStencil.stencil = clearValue.stencil;
 				}
@@ -1980,13 +1940,13 @@ namespace ig
 
 	void CommandList::Impl_SetPushConstants(const void* data, uint32_t sizeInBytes, uint32_t destOffsetInBytes)
 	{
-		VkPipelineLayout layout = context->GetDescriptorHeap().GetVulkanBindlessPipelineLayout();
+		VkPipelineLayout layout = context.GetDescriptorHeap().GetVulkanBindlessPipelineLayout();
 		vkCmdPushConstants(impl.currentCommandBuffer, layout, VK_SHADER_STAGE_ALL, destOffsetInBytes, sizeInBytes, data);
 	}
 
 	void CommandList::Impl_SetComputePushConstants(const void* data, uint32_t sizeInBytes, uint32_t destOffsetInBytes)
 	{
-		VkPipelineLayout layout = context->GetDescriptorHeap().GetVulkanBindlessPipelineLayout();
+		VkPipelineLayout layout = context.GetDescriptorHeap().GetVulkanBindlessPipelineLayout();
 		vkCmdPushConstants(impl.currentCommandBuffer, layout, VK_SHADER_STAGE_ALL, destOffsetInBytes, sizeInBytes, data);
 	}
 
@@ -2213,7 +2173,7 @@ namespace ig
 
 				uint64_t basicRowPitch = Image::CalculateMipRowPitch(destination.GetExtent(), destination.GetFormat(), mip);
 				uint64_t basicMipSize = Image::CalculateMipSize(destination.GetExtent(), destination.GetFormat(), mip);
-				uint64_t alignedRowPitch = AlignUp(basicRowPitch, context->GetGraphicsSpecs().bufferPlacementAlignments.textureRowPitch);
+				uint64_t alignedRowPitch = AlignUp(basicRowPitch, context.GetGraphicsSpecs().bufferPlacementAlignments.textureRowPitch);
 				uint64_t numScanLines = basicMipSize / basicRowPitch;
 				vkBufferOffset += (alignedRowPitch * numScanLines);
 			}
@@ -2404,38 +2364,47 @@ namespace ig
 		return out;
 	}
 
-	void Texture::Impl_Unload()
+	void Texture::Impl_Destroy()
 	{
-		if (!isWrapped)
-		{
-			if (impl.imageView_SRV) vkDestroyImageView(context->GetVulkanDevice(), impl.imageView_SRV, nullptr);
-			if (impl.imageView_UAV) vkDestroyImageView(context->GetVulkanDevice(), impl.imageView_UAV, nullptr);
-			if (impl.imageView_RTV_DSV) vkDestroyImageView(context->GetVulkanDevice(), impl.imageView_RTV_DSV, nullptr);
+		VkDevice device = context.GetVulkanDevice();
 
-			for (size_t i = 0; i < readMapped.size(); i++)
-			{
-				vkUnmapMemory(context->GetVulkanDevice(), impl.memory[i]);
-			}
-			for (size_t i = 0; i < impl.image.size(); i++)
-			{
-				if (impl.image[i]) vkDestroyImage(context->GetVulkanDevice(), impl.image[i], nullptr);
-			}
-			for (size_t i = 0; i < impl.memory.size(); i++)
-			{
-				if (impl.memory[i]) vkFreeMemory(context->GetVulkanDevice(), impl.memory[i], nullptr);
-			}
+		if (impl.imageView_SRV)
+		{
+			vkDestroyImageView(device, impl.imageView_SRV, nullptr);
+			impl.imageView_SRV = VK_NULL_HANDLE;
+		}
+		if (impl.imageView_UAV)
+		{
+			vkDestroyImageView(device, impl.imageView_UAV, nullptr);
+			impl.imageView_UAV = VK_NULL_HANDLE;
+		}
+		if (impl.imageView_RTV_DSV)
+		{
+			vkDestroyImageView(device, impl.imageView_RTV_DSV, nullptr);
+			impl.imageView_RTV_DSV = VK_NULL_HANDLE;
 		}
 
-		impl.image.clear();
-		impl.memory.clear();
+		for (size_t i = 0; i < readMapped.size(); i++)
+		{
+			vkUnmapMemory(device, impl.memory.at(i));
+		}
+		readMapped.clear();
 
-		impl.imageView_SRV = VK_NULL_HANDLE;
-		impl.imageView_UAV = VK_NULL_HANDLE;
-		impl.imageView_RTV_DSV = VK_NULL_HANDLE;
+		for (const auto& img : impl.image)
+		{
+			if (img) vkDestroyImage(device, img, nullptr);
+		}
+		impl.image.clear();
+
+		for (const auto& mem : impl.memory)
+		{
+			if (mem) vkFreeMemory(device, mem, nullptr);
+		}
+		impl.memory.clear();
 
 	}
 
-	DetailedResult Texture::Impl_Load(const IGLOContext& context, const TextureDesc& desc)
+	DetailedResult Texture::Impl_Create()
 	{
 		FormatInfo formatInfo = GetFormatInfo(desc.format);
 		bool isMultisampledCubemap = (desc.isCubemap && desc.msaa != MSAA::Disabled);
@@ -2447,7 +2416,7 @@ namespace ig
 		VkFormat vkFormat = ToVulkanFormat(desc.format);
 		if (vkFormat == VK_FORMAT_UNDEFINED)
 		{
-			return DetailedResult::Fail(ToString("This iglo format is not supported in Vulkan: ", (uint32_t)desc.format, "."));
+			return DetailedResult::Fail(ToString("This iglo format is not supported in Vulkan: ", GetFormatName(desc.format)));
 		}
 
 		uint32_t numImages = (desc.usage == TextureUsage::Readable) ? context.GetMaxFramesInFlight() : 1;
@@ -2605,7 +2574,7 @@ namespace ig
 		{
 			// Allocate descriptor
 			srvDescriptor = heap.AllocatePersistent(DescriptorType::Texture_SRV);
-			if (srvDescriptor.IsNull()) return DetailedResult::Fail("Failed to allocate descriptor.");
+			if (!srvDescriptor) return DetailedResult::Fail("Failed to allocate descriptor.");
 
 			VkImageViewType srvViewType = VK_IMAGE_VIEW_TYPE_2D;
 			if (desc.isCubemap)
@@ -2636,7 +2605,7 @@ namespace ig
 		{
 			// Allocate descriptor
 			uavDescriptor = heap.AllocatePersistent(DescriptorType::Texture_UAV);
-			if (uavDescriptor.IsNull()) return DetailedResult::Fail("Failed to allocate descriptor.");
+			if (!uavDescriptor) return DetailedResult::Fail("Failed to allocate descriptor.");
 
 			VkImageViewType viewType = (desc.numFaces == 1) ? VK_IMAGE_VIEW_TYPE_2D : VK_IMAGE_VIEW_TYPE_2D_ARRAY;
 
@@ -2683,8 +2652,7 @@ namespace ig
 
 	VkImage Texture::GetVulkanImage() const
 	{
-		if (!isLoaded) return VK_NULL_HANDLE;
-		if (impl.image.size() == 0) throw std::runtime_error("This should be impossible.");
+		assert(impl.image.size() > 0);
 		switch (desc.usage)
 		{
 		case TextureUsage::Default:
@@ -2693,7 +2661,7 @@ namespace ig
 		case TextureUsage::DepthBuffer:
 			return impl.image[0];
 		case TextureUsage::Readable:
-			return impl.image[context->GetFrameIndex()];
+			return impl.image[context.GetFrameIndex()];
 		default:
 			throw std::runtime_error("Invalid texture usage.");
 		}
@@ -2701,8 +2669,7 @@ namespace ig
 
 	VkDeviceMemory Texture::GetVulkanMemory() const
 	{
-		if (!isLoaded) return VK_NULL_HANDLE;
-		if (impl.memory.size() == 0) throw std::runtime_error("This should be impossible.");
+		assert(impl.memory.size() > 0);
 		switch (desc.usage)
 		{
 		case TextureUsage::Default:
@@ -2711,42 +2678,41 @@ namespace ig
 		case TextureUsage::DepthBuffer:
 			return impl.memory[0];
 		case TextureUsage::Readable:
-			return impl.memory[context->GetFrameIndex()];
+			return impl.memory[context.GetFrameIndex()];
 		default:
 			throw std::runtime_error("Invalid texture usage.");
 		}
 	}
 
-	void Buffer::Impl_Unload()
+	void Buffer::Impl_Destroy()
 	{
 		for (size_t i = 0; i < mapped.size(); i++)
 		{
-			assert(i < impl.memory.size());
-			vkUnmapMemory(context->GetVulkanDevice(), impl.memory[i]);
-		}
-		for (size_t i = 0; i < impl.buffer.size(); i++)
-		{
-			if (impl.buffer[i]) vkDestroyBuffer(context->GetVulkanDevice(), impl.buffer[i], nullptr);
-		}
-		for (size_t i = 0; i < impl.memory.size(); i++)
-		{
-			if (impl.memory[i]) vkFreeMemory(context->GetVulkanDevice(), impl.memory[i], nullptr);
+			vkUnmapMemory(context.GetVulkanDevice(), impl.memory.at(i));
 		}
 
+		for (const auto& buf : impl.buffer)
+		{
+			if (buf) vkDestroyBuffer(context.GetVulkanDevice(), buf, nullptr);
+		}
 		impl.buffer.clear();
+
+		for (const auto& mem : impl.memory)
+		{
+			if (mem) vkFreeMemory(context.GetVulkanDevice(), mem, nullptr);
+		}
 		impl.memory.clear();
 	}
 
-	DetailedResult Buffer::Impl_InternalLoad(const IGLOContext& context, uint64_t size, uint32_t stride,
-		uint32_t numElements, BufferUsage usage, BufferType type)
+	DetailedResult Buffer::Impl_Create()
 	{
 		VkDevice device = context.GetVulkanDevice();
 		VkPhysicalDevice physicalDevice = context.GetVulkanPhysicalDevice();
 		DescriptorHeap& heap = context.GetDescriptorHeap();
 
 		uint32_t numBuffers = 1;
-		if (usage == BufferUsage::Readable ||
-			usage == BufferUsage::Dynamic)
+		if (desc.usage == BufferUsage::Readable ||
+			desc.usage == BufferUsage::Dynamic)
 		{
 			numBuffers = context.GetMaxFramesInFlight();
 		}
@@ -2754,14 +2720,14 @@ namespace ig
 		impl.buffer.resize(numBuffers, VK_NULL_HANDLE);
 		impl.memory.resize(numBuffers, VK_NULL_HANDLE);
 
-		uint64_t bufferSize = size;
-		if (type == BufferType::ShaderConstant)
+		uint64_t bufferSize = desc.size;
+		if (desc.type == BufferType::ShaderConstant)
 		{
-			bufferSize = AlignUp(size, context.GetGraphicsSpecs().bufferPlacementAlignments.constant);
+			bufferSize = AlignUp(desc.size, context.GetGraphicsSpecs().bufferPlacementAlignments.constant);
 		}
 
 		VkBufferUsageFlags usageFlags = 0;
-		switch (type)
+		switch (desc.type)
 		{
 		case BufferType::VertexBuffer: usageFlags |= VK_BUFFER_USAGE_VERTEX_BUFFER_BIT; break;
 		case BufferType::IndexBuffer: usageFlags |= VK_BUFFER_USAGE_INDEX_BUFFER_BIT; break;
@@ -2772,7 +2738,7 @@ namespace ig
 			throw std::invalid_argument("Invalid buffer type.");
 		}
 
-		switch (usage)
+		switch (desc.usage)
 		{
 		case BufferUsage::Default:
 			usageFlags |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
@@ -2795,8 +2761,8 @@ namespace ig
 		}
 
 		VkMemoryPropertyFlags memoryProperties = 0;
-		if (usage == BufferUsage::Dynamic ||
-			usage == BufferUsage::Readable)
+		if (desc.usage == BufferUsage::Dynamic ||
+			desc.usage == BufferUsage::Readable)
 		{
 			memoryProperties |= VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
 			memoryProperties |= VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
@@ -2842,8 +2808,8 @@ namespace ig
 
 			vkBindBufferMemory(device, impl.buffer[i], impl.memory[i], 0);
 
-			if (usage == BufferUsage::Dynamic ||
-				usage == BufferUsage::Readable)
+			if (desc.usage == BufferUsage::Dynamic ||
+				desc.usage == BufferUsage::Readable)
 			{
 				void* mappedPtr = nullptr;
 
@@ -2858,37 +2824,37 @@ namespace ig
 		}
 
 		uint32_t numDescriptors = 0;
-		if (usage == BufferUsage::Default) numDescriptors = 1;
-		else if (usage == BufferUsage::UnorderedAccess) numDescriptors = 1;
-		else if (usage == BufferUsage::Dynamic) numDescriptors = context.GetMaxFramesInFlight();
+		if (desc.usage == BufferUsage::Default) numDescriptors = 1;
+		else if (desc.usage == BufferUsage::UnorderedAccess) numDescriptors = 1;
+		else if (desc.usage == BufferUsage::Dynamic) numDescriptors = context.GetMaxFramesInFlight();
 
 		// SRV or CBV
 		for (uint32_t i = 0; i < numDescriptors; i++)
 		{
-			if (type == BufferType::StructuredBuffer ||
-				type == BufferType::RawBuffer ||
-				type == BufferType::ShaderConstant)
+			if (desc.type == BufferType::StructuredBuffer ||
+				desc.type == BufferType::RawBuffer ||
+				desc.type == BufferType::ShaderConstant)
 			{
-				DescriptorType descriptorType = (type == BufferType::ShaderConstant)
+				DescriptorType descriptorType = (desc.type == BufferType::ShaderConstant)
 					? DescriptorType::ConstantBuffer_CBV
 					: DescriptorType::RawOrStructuredBuffer_SRV_UAV;
 
 				Descriptor allocatedDescriptor = heap.AllocatePersistent(descriptorType);
-				if (allocatedDescriptor.IsNull()) return DetailedResult::Fail("Failed to allocate descriptor.");
+				if (!allocatedDescriptor) return DetailedResult::Fail("Failed to allocate descriptor.");
 
-				heap.WriteBufferDescriptor(allocatedDescriptor, impl.buffer[i], 0, size);
+				heap.WriteBufferDescriptor(allocatedDescriptor, impl.buffer[i], 0, desc.size);
 
 				descriptor_SRV_or_CBV.push_back(allocatedDescriptor);
 			}
 		}
 
 		// UAV
-		if (usage == BufferUsage::UnorderedAccess)
+		if (desc.usage == BufferUsage::UnorderedAccess)
 		{
 			descriptor_UAV = heap.AllocatePersistent(DescriptorType::RawOrStructuredBuffer_SRV_UAV);
-			if (descriptor_UAV.IsNull()) return DetailedResult::Fail("Failed to allocate UAV descriptor.");
+			if (!descriptor_UAV) return DetailedResult::Fail("Failed to allocate UAV descriptor.");
 
-			heap.WriteBufferDescriptor(descriptor_UAV, impl.buffer[0], 0, size);
+			heap.WriteBufferDescriptor(descriptor_UAV, impl.buffer[0], 0, desc.size);
 		}
 
 		return DetailedResult::Success();
@@ -2896,14 +2862,13 @@ namespace ig
 
 	VkBuffer Buffer::GetVulkanBuffer() const
 	{
-		if (!isLoaded) return nullptr;
-		switch (usage)
+		switch (desc.usage)
 		{
 		case BufferUsage::Default:
 		case BufferUsage::UnorderedAccess:
 			return impl.buffer[0];
 		case BufferUsage::Readable:
-			return impl.buffer[context->GetFrameIndex()];
+			return impl.buffer[context.GetFrameIndex()];
 		case BufferUsage::Dynamic:
 			return impl.buffer[dynamicSetCounter];
 		default:
@@ -2913,14 +2878,13 @@ namespace ig
 
 	VkDeviceMemory Buffer::GetVulkanMemory() const
 	{
-		if (!isLoaded) return nullptr;
-		switch (usage)
+		switch (desc.usage)
 		{
 		case BufferUsage::Default:
 		case BufferUsage::UnorderedAccess:
 			return impl.memory[0];
 		case BufferUsage::Readable:
-			return impl.memory[context->GetFrameIndex()];
+			return impl.memory[context.GetFrameIndex()];
 		case BufferUsage::Dynamic:
 			return impl.memory[dynamicSetCounter];
 		default:
@@ -2928,13 +2892,13 @@ namespace ig
 		}
 	}
 
-	DetailedResult Sampler::Impl_Load(const IGLOContext& context, const SamplerDesc& desc)
+	DetailedResult Sampler::Impl_Create(const SamplerDesc& desc)
 	{
 		VkDevice device = context.GetVulkanDevice();
 		DescriptorHeap& heap = context.GetDescriptorHeap();
 
 		descriptor = heap.AllocatePersistent(DescriptorType::Sampler);
-		if (descriptor.IsNull())
+		if (!descriptor)
 		{
 			return DetailedResult::Fail("Failed to allocate sampler descriptor.");
 		}
@@ -2983,8 +2947,6 @@ namespace ig
 
 	VideoMemoryInfo IGLOContext::QueryVideoMemoryInfo()
 	{
-		if (!isLoaded) return VideoMemoryInfo();
-
 		VideoMemoryInfo out;
 
 		if (graphics.usesMemoryBudgetExt)
@@ -3063,14 +3025,14 @@ namespace ig
 
 	uint32_t IGLOContext::GetCurrentBackBufferIndex() const
 	{
-		return commandQueue.GetCurrentBackBufferIndex();
+		return commandQueue->GetCurrentBackBufferIndex();
 	}
 
 	void IGLOContext::SetPresentMode(PresentMode presentMode)
 	{
 		if (swapChain.presentMode == presentMode) return;
 
-		commandQueue.WaitForIdle();
+		commandQueue->WaitForIdle();
 		DetailedResult result = CreateSwapChain(swapChain.extent, swapChain.format,
 			swapChain.numBackBuffers, numFramesInFlight, presentMode);
 		if (!result)
@@ -3081,8 +3043,8 @@ namespace ig
 
 	void IGLOContext::DestroySwapChainResources()
 	{
-		// Wrapped textures don't free any graphical resources upon unloading, so we must do it manually.
-		// Don't free any VkImage from the wrapped textures, as they belong to the swap chain.
+		// Wrapped textures don't destroy their resources, so we must do it manually.
+		// Don't free any VkImage from the wrapped textures though, because they belong to the swap chain.
 		for (size_t i = 0; i < swapChain.wrapped.size(); i++)
 		{
 			VkImageView imageView_RTV = swapChain.wrapped[i]->GetVulkanImageView_RTV_DSV();
@@ -3152,7 +3114,7 @@ namespace ig
 
 		if (formatInfo.sRGB_opposite != Format::None)
 		{
-			VkFormat formats[2] = {createInfo.imageFormat, ToVulkanFormat(formatInfo.sRGB_opposite)};
+			VkFormat formats[2] = { createInfo.imageFormat, ToVulkanFormat(formatInfo.sRGB_opposite) };
 			formatListInfo.viewFormatCount = 2;
 			formatListInfo.pViewFormats = formats;
 
@@ -3168,7 +3130,7 @@ namespace ig
 		}
 
 		DestroySwapChainResources();
-		commandQueue.DestroySwapChainSemaphores();
+		commandQueue->DestroySwapChainSemaphores();
 
 		// Destroy old swapchain after creating new swapchain
 		if (graphics.swapChain) vkDestroySwapchainKHR(graphics.device, graphics.swapChain, nullptr);
@@ -3185,7 +3147,7 @@ namespace ig
 
 		graphics.swapChainUsesMinImageCount = (imageCount == caps.minImageCount);
 
-		commandQueue.RecreateSwapChainSemaphores(numFramesInFlight, imageCount);
+		commandQueue->RecreateSwapChainSemaphores(numFramesInFlight, imageCount);
 
 		swapChain.extent = cappedExtent;
 		swapChain.format = format;
@@ -3217,9 +3179,7 @@ namespace ig
 			desc.impl.memory = { VK_NULL_HANDLE };
 			desc.impl.imageView_RTV_DSV = imageView;
 
-			std::unique_ptr<Texture> currentBackBuffer = std::make_unique<Texture>();
-			currentBackBuffer->LoadAsWrapped(*this, desc);
-			swapChain.wrapped.push_back(std::move(currentBackBuffer));
+			swapChain.wrapped.push_back(std::move(Texture::CreateWrapped(*this, desc)));
 
 			// sRGB opposite views
 			if (formatInfo.sRGB_opposite != Format::None)
@@ -3229,14 +3189,12 @@ namespace ig
 					ToVulkanFormat(formatInfo.sRGB_opposite), &imageView_sRGB_opposite);
 				desc.impl.imageView_RTV_DSV = imageView_sRGB_opposite;
 
-				std::unique_ptr<Texture> backBuffer_sRGB_opposite = std::make_unique<Texture>();
-				backBuffer_sRGB_opposite->LoadAsWrapped(*this, desc);
-				swapChain.wrapped_sRGB_opposite.push_back(std::move(backBuffer_sRGB_opposite));
+				swapChain.wrapped_sRGB_opposite.push_back(std::move(Texture::CreateWrapped(*this, desc)));
 			}
 		}
 
 		// Acquire next image
-		result = commandQueue.AcquireNextVulkanSwapChainImage(graphics.device, graphics.swapChain,
+		result = commandQueue->AcquireNextVulkanSwapChainImage(graphics.device, graphics.swapChain,
 			graphics.swapChainUsesMinImageCount ? 0 : UINT64_MAX);
 
 		graphics.validSwapChain = false;
@@ -3288,7 +3246,7 @@ namespace ig
 		}
 	}
 
-	DetailedResult IGLOContext::Impl_LoadGraphicsDevice()
+	DetailedResult IGLOContext::Impl_InitGraphicsDevice()
 	{
 		const char* strEnsureLatestDrivers = "Ensure that you have the latest graphics drivers installed.";
 
@@ -3715,25 +3673,37 @@ namespace ig
 		return DetailedResult::Success();
 	}
 
-	void IGLOContext::Impl_UnloadGraphicsDevice()
+	void IGLOContext::Impl_DestroyGraphicsDevice()
 	{
 		if (graphics.device)
 		{
-			if (graphics.swapChain) vkDestroySwapchainKHR(graphics.device, graphics.swapChain, nullptr);
+			if (graphics.swapChain)
+			{
+				vkDestroySwapchainKHR(graphics.device, graphics.swapChain, nullptr);
+				graphics.swapChain = VK_NULL_HANDLE;
+			}
 			vkDestroyDevice(graphics.device, nullptr);
+			graphics.device = VK_NULL_HANDLE;
 		}
 		if (graphics.instance)
 		{
-			if (graphics.surface) vkDestroySurfaceKHR(graphics.instance, graphics.surface, nullptr);
+			if (graphics.surface)
+			{
+				vkDestroySurfaceKHR(graphics.instance, graphics.surface, nullptr);
+				graphics.surface = VK_NULL_HANDLE;
+			}
 
 #ifdef _DEBUG
-			if (graphics.debugMessenger) DestroyDebugUtilsMessengerEXT(graphics.instance, graphics.debugMessenger, nullptr);
+			if (graphics.debugMessenger)
+			{
+				DestroyDebugUtilsMessengerEXT(graphics.instance, graphics.debugMessenger, nullptr);
+				graphics.debugMessenger = VK_NULL_HANDLE;
+			}
 #endif
 
 			vkDestroyInstance(graphics.instance, nullptr);
+			graphics.instance = VK_NULL_HANDLE;
 		}
-
-		graphics = Impl_GraphicsContext();
 	}
 
 }

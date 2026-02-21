@@ -139,9 +139,7 @@ namespace ig
 	void DrawAlignedStringInsideRect(BatchRenderer& r, FloatRect rect, const std::string& str, Font& font, Color32 color,
 		StringAlignment align, bool wordWrap, bool pixelAligned)
 	{
-		if (!r.IsLoaded()) return;
 		if (str.length() == 0) return;
-		if (!font.IsLoaded()) return;
 		if (rect.left >= rect.right) return;
 		if (rect.top >= rect.bottom) return;
 
@@ -332,9 +330,7 @@ namespace ig
 	void DrawAlignedString(BatchRenderer& r, FloatRect rect, const std::string& str, Font& font, Color32 color,
 		StringAlignment align, bool pixelAligned)
 	{
-		if (!r.IsLoaded()) return;
 		if (str.length() == 0) return;
-		if (!font.IsLoaded()) return;
 
 		std::vector<size_t> newLineIndex; // The index of each new line (beginning after the '\n')
 		newLineIndex.push_back(0); // The first line starts at index 0.
@@ -378,8 +374,6 @@ namespace ig
 	void DrawColorfulAnimatedString(BatchRenderer& r, float x, float y, const std::string& str, Font& font,
 		float animationStep, bool pixelAligned)
 	{
-		if (!r.IsLoaded()) return;
-		if (!font.IsLoaded()) return;
 		if (str.length() == 0) return;
 
 		size_t step = 0;

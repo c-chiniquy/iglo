@@ -398,19 +398,18 @@ namespace ig
 		XFlush(display);
 	}
 
-	void Cursor::Impl_Unload()
+	void Cursor::Impl_Destroy()
 	{
 		if (impl.xcursor)
 		{
-			if (!context || !context->IsLoaded()) throw std::runtime_error("This should be impossible.");
-			if (context->GetCursor() == this) context->ResetCursor();
+			if (context.GetCursor() == this) context.ResetCursor();
+
 			XFreeCursor(impl.display, impl.xcursor);
+			impl.xcursor = 0;
 		}
-		
-		impl = Impl_Cursor();
 	}
 
-	DetailedResult Cursor::Impl_LoadFromSystem(const IGLOContext& context, SystemCursor systemCursor)
+	DetailedResult Cursor::Impl_LoadFromSystem(SystemCursor systemCursor)
 	{
 		Display* display = context.GetX11WindowDisplay();
 
@@ -446,7 +445,7 @@ namespace ig
 		return DetailedResult::Success();
 	}
 
-	DetailedResult Cursor::Impl_LoadFromMemory_BGRA(const IGLOContext& context, Extent2D extent, const uint32_t* pixels, IntPoint hotspot)
+	DetailedResult Cursor::Impl_LoadFromMemory_BGRA(Extent2D extent, const uint32_t* pixels, IntPoint hotspot)
 	{
 		Display* display = context.GetX11WindowDisplay();
 
@@ -499,12 +498,6 @@ namespace ig
 
 	void IGLOContext::SetCursor(const Cursor& cursor) const
 	{
-		if (!cursor.IsLoaded())
-		{
-			Log(LogType::Error, "Failed to set cursor. Reason: Invalid cursor.");
-			return;
-		}
-
 		currentCursor = &cursor;
 
 		XDefineCursor(window.display, window.handle, cursor.GetX11CursorHandle());
@@ -778,26 +771,38 @@ namespace ig
 		}
 	}
 
-	void IGLOContext::Impl_UnloadWindow()
+	void IGLOContext::Impl_DestroyWindow()
 	{
-		// Cleanup X11
 		if (window.display)
 		{
-			if (window.defaultCursor) XFreeCursor(window.display, window.defaultCursor);
-			if (window.xic) XDestroyIC(window.xic);
-			if (window.xim) XCloseIM(window.xim);
+			if (window.defaultCursor)
+			{
+				XFreeCursor(window.display, window.defaultCursor);
+				window.defaultCursor = 0;
+			}
+			if (window.xic)
+			{
+				XDestroyIC(window.xic);
+				window.xic = 0;
+			}
+			if (window.xim)
+			{
+				XCloseIM(window.xim);
+				window.xim = 0;
+			}
 			if (window.handle)
 			{
 				XFreeColormap(window.display, window.attributes.colormap);
 				XDestroyWindow(window.display, window.handle);
+				window.handle = 0;
 			}
+			XSync(window.display, False);
 			XCloseDisplay(window.display);
+			window.display = nullptr;
 		}
-
-		window = Impl_WindowData();
 	}
 
-	DetailedResult IGLOContext::Impl_LoadWindow(const WindowSettings& windowSettings)
+	DetailedResult IGLOContext::Impl_InitWindow(const WindowSettings& windowSettings)
 	{
 		// X11 window creation code from public domain source:
 		// https://github.com/gamedevtech/X11OpenGLWindow

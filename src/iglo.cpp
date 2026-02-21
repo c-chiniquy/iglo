@@ -138,6 +138,7 @@ namespace ig
 	{
 		logCallback = logFunc;
 	}
+
 	void Log(LogType type, const std::string& message)
 	{
 		if (logCallback)
@@ -273,6 +274,81 @@ namespace ig
 		return out;
 	}
 
+	const char* GetFormatName(Format format)
+	{
+		switch (format)
+		{
+		case Format::None: return "None";
+		case Format::BYTE: return "BYTE";
+		case Format::BYTE_BYTE: return "BYTE_BYTE";
+		case Format::BYTE_BYTE_BYTE_BYTE: return "BYTE_BYTE_BYTE_BYTE";
+		case Format::INT8: return "INT8";
+		case Format::INT8_INT8: return "INT8_INT8";
+		case Format::INT8_INT8_INT8_INT8: return "INT8_INT8_INT8_INT8";
+		case Format::UINT16: return "UINT16";
+		case Format::UINT16_UINT16: return "UINT16_UINT16";
+		case Format::UINT16_UINT16_UINT16_UINT16: return "UINT16_UINT16_UINT16_UINT16";
+		case Format::INT16: return "INT16";
+		case Format::INT16_INT16: return "INT16_INT16";
+		case Format::INT16_INT16_INT16_INT16: return "INT16_INT16_INT16_INT16";
+		case Format::FLOAT16: return "FLOAT16";
+		case Format::FLOAT16_FLOAT16: return "FLOAT16_FLOAT16";
+		case Format::FLOAT16_FLOAT16_FLOAT16_FLOAT16: return "FLOAT16_FLOAT16_FLOAT16_FLOAT16";
+		case Format::FLOAT: return "FLOAT";
+		case Format::FLOAT_FLOAT: return "FLOAT_FLOAT";
+		case Format::FLOAT_FLOAT_FLOAT: return "FLOAT_FLOAT_FLOAT";
+		case Format::FLOAT_FLOAT_FLOAT_FLOAT: return "FLOAT_FLOAT_FLOAT_FLOAT";
+		case Format::UINT10_UINT10_UINT10_UINT2: return "UINT10_UINT10_UINT10_UINT2";
+		case Format::UINT10_UINT10_UINT10_UINT2_NotNormalized: return "UINT10_UINT10_UINT10_UINT2_NotNormalized";
+		case Format::UFLOAT11_UFLOAT11_UFLOAT10: return "UFLOAT11_UFLOAT11_UFLOAT10";
+		case Format::UFLOAT9_UFLOAT9_UFLOAT9_UFLOAT5: return "UFLOAT9_UFLOAT9_UFLOAT9_UFLOAT5";
+		case Format::BYTE_BYTE_BYTE_BYTE_sRGB: return "BYTE_BYTE_BYTE_BYTE_sRGB";
+		case Format::BYTE_BYTE_BYTE_BYTE_BGRA: return "BYTE_BYTE_BYTE_BYTE_BGRA";
+		case Format::BYTE_BYTE_BYTE_BYTE_BGRA_sRGB: return "BYTE_BYTE_BYTE_BYTE_BGRA_sRGB";
+		case Format::BYTE_BYTE_BYTE_BYTE_NotNormalized: return "BYTE_BYTE_BYTE_BYTE_NotNormalized";
+		case Format::BYTE_BYTE_NotNormalized: return "BYTE_BYTE_NotNormalized";
+		case Format::BYTE_NotNormalized: return "BYTE_NotNormalized";
+		case Format::INT8_NotNormalized: return "INT8_NotNormalized";
+		case Format::INT8_INT8_NotNormalized: return "INT8_INT8_NotNormalized";
+		case Format::INT8_INT8_INT8_INT8_NotNormalized: return "INT8_INT8_INT8_INT8_NotNormalized";
+		case Format::UINT16_NotNormalized: return "UINT16_NotNormalized";
+		case Format::UINT16_UINT16_NotNormalized: return "UINT16_UINT16_NotNormalized";
+		case Format::UINT16_UINT16_UINT16_UINT16_NotNormalized: return "UINT16_UINT16_UINT16_UINT16_NotNormalized";
+		case Format::INT16_NotNormalized: return "INT16_NotNormalized";
+		case Format::INT16_INT16_NotNormalized: return "INT16_INT16_NotNormalized";
+		case Format::INT16_INT16_INT16_INT16_NotNormalized: return "INT16_INT16_INT16_INT16_NotNormalized";
+		case Format::UINT32_NotNormalized: return "UINT32_NotNormalized";
+		case Format::UINT32_UINT32_NotNormalized: return "UINT32_UINT32_NotNormalized";
+		case Format::UINT32_UINT32_UINT32_NotNormalized: return "UINT32_UINT32_UINT32_NotNormalized";
+		case Format::UINT32_UINT32_UINT32_UINT32_NotNormalized: return "UINT32_UINT32_UINT32_UINT32_NotNormalized";
+		case Format::INT32_NotNormalized: return "INT32_NotNormalized";
+		case Format::INT32_INT32_NotNormalized: return "INT32_INT32_NotNormalized";
+		case Format::INT32_INT32_INT32_NotNormalized: return "INT32_INT32_INT32_NotNormalized";
+		case Format::INT32_INT32_INT32_INT32_NotNormalized: return "INT32_INT32_INT32_INT32_NotNormalized";
+		case Format::BC1: return "BC1";
+		case Format::BC1_sRGB: return "BC1_sRGB";
+		case Format::BC2: return "BC2";
+		case Format::BC2_sRGB: return "BC2_sRGB";
+		case Format::BC3: return "BC3";
+		case Format::BC3_sRGB: return "BC3_sRGB";
+		case Format::BC4_UNSIGNED: return "BC4_UNSIGNED";
+		case Format::BC4_SIGNED: return "BC4_SIGNED";
+		case Format::BC5_UNSIGNED: return "BC5_UNSIGNED";
+		case Format::BC5_SIGNED: return "BC5_SIGNED";
+		case Format::BC6H_UFLOAT16: return "BC6H_UFLOAT16";
+		case Format::BC6H_SFLOAT16: return "BC6H_SFLOAT16";
+		case Format::BC7: return "BC7";
+		case Format::BC7_sRGB: return "BC7_sRGB";
+		case Format::DEPTHFORMAT_UINT16: return "DEPTHFORMAT_UINT16";
+		case Format::DEPTHFORMAT_UINT24_BYTE: return "DEPTHFORMAT_UINT24_BYTE";
+		case Format::DEPTHFORMAT_FLOAT: return "DEPTHFORMAT_FLOAT";
+		case Format::DEPTHFORMAT_FLOAT_BYTE: return "DEPTHFORMAT_FLOAT_BYTE";
+
+		default:
+			return "Unknown";
+		};
+	}
+
 	std::string ConvertKeyToString(Key key)
 	{
 		switch (key)
@@ -339,14 +415,12 @@ namespace ig
 
 	bool IGLOContext::IsMouseButtonDown(MouseButton button) const
 	{
-		if (!isLoaded) return false;
 		if (button == MouseButton::None) return false;
 		return mouseButtonIsDown.GetAt((uint64_t)button);
 	}
 
 	bool IGLOContext::IsKeyDown(Key key) const
 	{
-		if (!isLoaded) return false;
 		if (key == Key::Unknown) return false;
 		return keyIsDown.GetAt((uint64_t)key);
 	}
@@ -421,25 +495,25 @@ namespace ig
 		FormatInfo info = GetFormatInfo(icon.GetFormat());
 		uint32_t bitsPerPixel = info.bytesPerPixel * 8;
 		uint32_t numChannels = info.elementCount;
-		if (bitsPerPixel != 32 || numChannels != 4 || !icon.IsLoaded())
+		if (bitsPerPixel != 32 || numChannels != 4)
 		{
 			Log(LogType::Error, "Failed to set window icon. Reason: Icon must have 4 color channels and be 32 bits per pixel.");
 			return;
 		}
 
 		// Convert RGBA to BGRA if needed
-		Image iconBGRA;
+		std::unique_ptr<Image> iconBGRA;
 		if (icon.GetFormat() == Format::BYTE_BYTE_BYTE_BYTE ||
 			icon.GetFormat() == Format::BYTE_BYTE_BYTE_BYTE_sRGB)
 		{
-			iconBGRA.Load(icon.GetDesc());
-			memcpy(iconBGRA.GetPixels(), icon.GetPixels(), icon.GetSize());
-			iconBGRA.SwapRedBlue();
+			iconBGRA = Image::Create(icon.GetDesc());
+			memcpy(iconBGRA->GetPixels(), icon.GetPixels(), icon.GetSize());
+			iconBGRA->SwapRedBlue();
 		}
 
-		const uint32_t* pixels = iconBGRA.IsLoaded() ?
-			(uint32_t*)iconBGRA.GetPixels() :
-			(uint32_t*)icon.GetPixels();
+		const uint32_t* pixels = iconBGRA
+			? (uint32_t*)iconBGRA->GetPixels()
+			: (uint32_t*)icon.GetPixels();
 		Impl_SetWindowIconFromImage_BGRA(icon.GetExtent(), pixels);
 	}
 
@@ -455,83 +529,65 @@ namespace ig
 		}
 	}
 
-	void Pipeline::Unload()
+	Pipeline::~Pipeline()
 	{
-		Impl_Unload();
-
-		isLoaded = false;
-		context = nullptr;
-		isComputePipeline = false;
-		primitiveTopology = PrimitiveTopology::Undefined;
+		Impl_Destroy();
 	}
 
-	bool Pipeline::Load(const IGLOContext& context, const PipelineDesc& desc)
+	std::unique_ptr<Pipeline> Pipeline::CreateGraphics(const IGLOContext& context, const PipelineDesc& desc)
 	{
-		Unload();
-
 		const char* errStr = "Failed to create graphics pipeline state. Reason: ";
 
 		if (desc.blendStates.size() > MAX_SIMULTANEOUS_RENDER_TARGETS)
 		{
 			Log(LogType::Error, ToString(errStr, "Too many blend states provided."));
-			return false;
+			return nullptr;
 		}
 
 		if (desc.renderTargetDesc.colorFormats.size() > MAX_SIMULTANEOUS_RENDER_TARGETS)
 		{
 			Log(LogType::Error, ToString(errStr, "Too many color formats provided in the render target description."));
-			return false;
+			return nullptr;
 		}
 
-		this->context = &context;
-		this->isComputePipeline = false;
-		this->primitiveTopology = desc.primitiveTopology;
+		std::unique_ptr<Pipeline> out = std::unique_ptr<Pipeline>(new Pipeline(context, desc.primitiveTopology, false));
 
-		DetailedResult result = Impl_Load(context, desc);
+		DetailedResult result = out->Impl_CreateGraphics(desc);
 		if (!result)
 		{
 			Log(LogType::Error, errStr + result.errorMessage);
-			Unload();
-			return false;
+			return nullptr;
 		}
 
-		this->isLoaded = true;
-		return true;
+		return out;
 	}
 
-	bool Pipeline::LoadAsCompute(const IGLOContext& context, const Shader& CS)
+	std::unique_ptr<Pipeline> Pipeline::CreateCompute(const IGLOContext& context, const Shader& CS)
 	{
-		Unload();
+		std::unique_ptr<Pipeline> out = std::unique_ptr<Pipeline>(new Pipeline(context, PrimitiveTopology::Undefined, true));
 
-		this->context = &context;
-		this->isComputePipeline = true;
-		this->primitiveTopology = PrimitiveTopology::Undefined;
-
-		DetailedResult result = Impl_LoadAsCompute(context, CS);
+		DetailedResult result = out->Impl_CreateCompute(CS);
 		if (!result)
 		{
 			Log(LogType::Error, "Failed to create compute pipeline state. Reason: " + result.errorMessage);
-			Unload();
-			return false;
+			return nullptr;
 		}
 
-		this->isLoaded = true;
-		return true;
+		return out;
 	}
 
-	bool Pipeline::LoadFromFile(const IGLOContext& context, const std::string& filepathVS, const std::string& entryPointNameVS,
-		const std::string filepathPS, const std::string& entryPointNamePS, const RenderTargetDesc& renderTargetDesc,
-		const std::vector<VertexElement>& vertexLayout, PrimitiveTopology primitiveTopology, DepthDesc depth,
-		RasterizerDesc rasterizer, const std::vector<BlendDesc>& blend)
+	std::unique_ptr<Pipeline> Pipeline::LoadFromFile(const IGLOContext& context,
+		const std::string& filepathVS, const std::string& entryPointNameVS,
+		const std::string filepathPS, const std::string& entryPointNamePS,
+		const RenderTargetDesc& renderTargetDesc, const std::vector<VertexElement>& vertexLayout,
+		PrimitiveTopology primitiveTopology, DepthDesc depth, RasterizerDesc rasterizer, const std::vector<BlendDesc>& blend)
 	{
-		Unload();
-
 		const char* errStr = "Failed to create graphics pipeline state. Reason: ";
 
 		if (filepathVS.empty() || filepathPS.empty())
 		{
 			Log(LogType::Error, ToString(errStr, "Couldn't read shader bytecode from file because empty filepath was provided."));
-			return false;
+			return nullptr;
 		}
 
 		// Vertex shader
@@ -539,7 +595,7 @@ namespace ig
 		if (!VS.success)
 		{
 			Log(LogType::Error, ToString(errStr, "Failed to read shader bytecode from file '", filepathVS, "'."));
-			return false;
+			return nullptr;
 		}
 
 		// Pixel shader
@@ -547,29 +603,33 @@ namespace ig
 		if (!PS.success)
 		{
 			Log(LogType::Error, ToString(errStr, "Failed to read shader bytecode from file '", filepathPS, "'."));
-			return false;
+			return nullptr;
 		}
 
-		return Load(context,
+		return CreateGraphics(context,
 			Shader(VS.fileContent, entryPointNameVS),
 			Shader(PS.fileContent, entryPointNamePS),
-			renderTargetDesc, vertexLayout, primitiveTopology, depth, rasterizer, blend);
+			renderTargetDesc, vertexLayout,
+			primitiveTopology, depth, rasterizer, blend);
 	}
 
-	bool Pipeline::Load(const IGLOContext& context, const Shader& VS, const Shader& PS,
+	std::unique_ptr<Pipeline> Pipeline::CreateGraphics(const IGLOContext& context,
+		const Shader& VS, const Shader& PS,
 		const RenderTargetDesc& renderTargetDesc, const std::vector<VertexElement>& vertexLayout,
 		PrimitiveTopology primitiveTopology, DepthDesc depth, RasterizerDesc rasterizer, const std::vector<BlendDesc>& blend)
 	{
-		PipelineDesc desc;
-		desc.VS = VS;
-		desc.PS = PS;
-		desc.vertexLayout = vertexLayout;
-		desc.primitiveTopology = primitiveTopology;
-		desc.depthState = depth;
-		desc.rasterizerState = rasterizer;
-		desc.blendStates = blend;
-		desc.renderTargetDesc = renderTargetDesc;
-		return Load(context, desc);
+		PipelineDesc desc =
+		{
+			.VS = VS,
+			.PS = PS,
+			.blendStates = blend,
+			.rasterizerState = rasterizer,
+			.depthState = depth,
+			.vertexLayout = vertexLayout,
+			.primitiveTopology = primitiveTopology,
+			.renderTargetDesc = renderTargetDesc,
+		};
+		return CreateGraphics(context, desc);
 	}
 
 	void DescriptorHeap::PersistentIndexAllocator::Reset(uint32_t maxIndices)
@@ -665,88 +725,57 @@ namespace ig
 		allocationCount = 0;
 	}
 
-	void DescriptorHeap::Unload()
+	DescriptorHeap::~DescriptorHeap()
 	{
-		if (isLoaded)
+		if (persResourceIndices.GetAllocationCount() > 0)
 		{
-			if (persResourceIndices.GetAllocationCount() > 0)
-			{
-				Log(LogType::Warning, ToString(persResourceIndices.GetAllocationCount(),
-					" unfreed persistent resource descriptor(s) detected."));
-			}
-			if (persSamplerIndices.GetAllocationCount() > 0)
-			{
-				Log(LogType::Warning, ToString(persSamplerIndices.GetAllocationCount(),
-					" unfreed sampler descriptor(s) detected."));
-			}
+			Log(LogType::Warning, ToString(persResourceIndices.GetAllocationCount(),
+				" unfreed persistent resource descriptor(s) detected."));
+		}
+		if (persSamplerIndices.GetAllocationCount() > 0)
+		{
+			Log(LogType::Warning, ToString(persSamplerIndices.GetAllocationCount(),
+				" unfreed sampler descriptor(s) detected."));
 		}
 
-		Impl_Unload();
-
-		isLoaded = false;
-		context = nullptr;
-		frameIndex = 0;
-		numFrames = 0;
-
-		persResourceIndices.Clear();
-		persSamplerIndices.Clear();
-		tempResourceIndices.clear();
-		tempResourceIndices.shrink_to_fit();
-		lastFrameStats = Stats();
+		Impl_Destroy();
 	}
 
-	bool DescriptorHeap::LogErrorIfNotLoaded() const
+	uint32_t DescriptorHeap::CalcTotalResDescriptors(uint32_t maxPersistent, uint32_t maxTempPerFrame, uint32_t maxFramesInFlight)
 	{
-		if (!isLoaded)
-		{
-			Log(LogType::Error, "You can't use a descriptor heap that isn't loaded!");
-			return true;
-		}
-		return false;
+		return maxPersistent + (maxTempPerFrame * maxFramesInFlight);
 	}
 
-	uint32_t DescriptorHeap::CalcTotalResDescriptors(uint32_t maxPersistent, uint32_t maxTempPerFrame, uint32_t numFramesInFlight)
+	std::pair<std::unique_ptr<DescriptorHeap>, DetailedResult> DescriptorHeap::Create(const IGLOContext& context,
+		uint32_t maxPersistentResources, uint32_t maxTempResourcesPerFrame, uint32_t maxSamplers, uint32_t maxFramesInFlight)
 	{
-		return maxPersistent + (maxTempPerFrame * numFramesInFlight);
-	}
-
-	DetailedResult DescriptorHeap::Load(const IGLOContext& context, uint32_t maxPersistentResources,
-		uint32_t maxTempResourcesPerFrame, uint32_t maxSamplers, uint32_t numFramesInFlight)
-	{
-		Unload();
-
-		this->context = &context;
-		this->numFrames = numFramesInFlight;
+		std::unique_ptr<DescriptorHeap> out = std::unique_ptr<DescriptorHeap>(new DescriptorHeap(context, maxFramesInFlight));
 
 		// Resource descriptor indices are partitioned like this:
 		// [maxPersistent][maxTemporaryPerFrame frame 0][maxTemporaryPerFrame frame 1][maxTemporaryPerFrame frame N...]
-		this->persResourceIndices.Reset(maxPersistentResources);
-		this->persSamplerIndices.Reset(maxSamplers);
-		this->tempResourceIndices.resize(numFrames);
-		for (uint32_t i = 0; i < numFrames; i++)
+		out->persResourceIndices.Reset(maxPersistentResources);
+		out->persSamplerIndices.Reset(maxSamplers);
+		out->tempResourceIndices.resize(maxFramesInFlight);
+		for (uint32_t i = 0; i < maxFramesInFlight; i++)
 		{
 			uint32_t offset = maxPersistentResources + (i * maxTempResourcesPerFrame);
-			this->tempResourceIndices[i].Reset(maxTempResourcesPerFrame, offset);
+			out->tempResourceIndices[i].Reset(maxTempResourcesPerFrame, offset);
 		}
 
-		DetailedResult result = Impl_Load(context, maxPersistentResources, maxTempResourcesPerFrame, maxSamplers, numFramesInFlight);
+		DetailedResult result = out->Impl_Create(maxPersistentResources, maxTempResourcesPerFrame, maxSamplers);
 		if (!result)
 		{
-			Unload();
-			return result;
+			return { nullptr, result };
 		}
 
-		this->isLoaded = true;
-		return DetailedResult::Success();
+		return { std::move(out), DetailedResult::Success() };
 	}
 
 	void DescriptorHeap::NextFrame()
 	{
-		if (LogErrorIfNotLoaded()) return;
-
 		lastFrameStats = GetCurrentStats();
 
-		frameIndex = (frameIndex + 1) % numFrames;
+		frameIndex = (frameIndex + 1) % maxFramesInFlight;
 
 		assert(frameIndex < tempResourceIndices.size());
 		tempResourceIndices[frameIndex].FreeAllIndices();
@@ -756,8 +785,6 @@ namespace ig
 
 	void DescriptorHeap::FreeAllTempResources()
 	{
-		if (LogErrorIfNotLoaded()) return;
-
 		for (size_t i = 0; i < tempResourceIndices.size(); i++)
 		{
 			tempResourceIndices[i].FreeAllIndices();
@@ -768,8 +795,6 @@ namespace ig
 
 	DescriptorHeap::Stats DescriptorHeap::GetCurrentStats() const
 	{
-		if (LogErrorIfNotLoaded()) return Stats();
-
 		assert(frameIndex < tempResourceIndices.size());
 
 		Stats out;
@@ -784,8 +809,6 @@ namespace ig
 
 	Descriptor DescriptorHeap::AllocatePersistent(DescriptorType descriptorType)
 	{
-		if (LogErrorIfNotLoaded()) return Descriptor();
-
 		PersistentIndexAllocator& allocator = (descriptorType == DescriptorType::Sampler) ? persSamplerIndices : persResourceIndices;
 
 		std::optional<uint32_t> out = allocator.Allocate();
@@ -802,7 +825,6 @@ namespace ig
 
 	Descriptor DescriptorHeap::AllocateTemp(DescriptorType descriptorType)
 	{
-		if (LogErrorIfNotLoaded()) return Descriptor();
 		if (descriptorType == DescriptorType::Sampler)
 		{
 			Log(LogType::Error, ToString("Failed to allocate temporary descriptor. Reason: Temporary samplers are not supported."));
@@ -826,13 +848,7 @@ namespace ig
 
 	void DescriptorHeap::FreePersistent(Descriptor descriptor)
 	{
-		if (LogErrorIfNotLoaded()) return;
-
-		if (descriptor.IsNull())
-		{
-			Log(LogType::Error, "Unable to free descriptor. Reason: Descriptor is already null.");
-			return;
-		}
+		assert(descriptor);
 
 		if (descriptor.type == DescriptorType::Sampler)
 		{
@@ -844,62 +860,37 @@ namespace ig
 		}
 	}
 
-	void CommandList::Unload()
+	CommandList::~CommandList()
 	{
-		Impl_Unload();
-
-		isLoaded = false;
-		context = nullptr;
-		numFrames = 0;
-		frameIndex = 0;
-		commandListType = CommandListType::Graphics;
+		Impl_Destroy();
 	}
 
-	bool CommandList::Load(const IGLOContext& context, CommandListType commandListType)
+	std::unique_ptr<CommandList> CommandList::Create(const IGLOContext& context, CommandListType commandListType)
 	{
-		Unload();
+		uint32_t maxFrames = context.GetMaxFramesInFlight();
 
-		uint32_t numFrames = context.GetMaxFramesInFlight();
+		std::unique_ptr<CommandList> out = std::unique_ptr<CommandList>(new CommandList(context, commandListType, maxFrames));
 
-		this->context = &context;
-		this->numFrames = numFrames;
-		this->commandListType = commandListType;
-		this->frameIndex = 0;
-
-		DetailedResult result = Impl_Load(context, commandListType);
+		DetailedResult result = out->Impl_Create();
 		if (!result)
 		{
 			Log(LogType::Error, "Failed to create command list. Reason: " + result.errorMessage);
-			Unload();
-			return false;
+			return nullptr;
 		}
 
-		this->isLoaded = true;
-		return true;
+		return out;
 	}
 
 	void CommandList::Begin()
 	{
-		if (!isLoaded)
-		{
-			Log(LogType::Error, "Failed recording commands. Reason: Command list isn't loaded.");
-			return;
-		}
-
 		// Advance to next frame
-		frameIndex = (frameIndex + 1) % numFrames;
+		frameIndex = (frameIndex + 1) % maxFrames;
 
 		Impl_Begin();
 	}
 
 	void CommandList::End()
 	{
-		if (!isLoaded)
-		{
-			Log(LogType::Error, "Failed to stop recording commands. Reason: Command list isn't loaded.");
-			return;
-		}
-
 		Impl_End();
 	}
 
@@ -1116,34 +1107,16 @@ namespace ig
 
 	void CommandList::ClearUnorderedAccessBufferUInt32(const Buffer& buffer, const uint32_t value)
 	{
-		if (!buffer.IsLoaded() || !buffer.GetUnorderedAccessDescriptor())
-		{
-			Log(LogType::Error, "Failed to clear unordered access buffer. Reason: Buffer has no unordered access descriptor.");
-			return;
-		}
-
 		Impl_ClearUnorderedAccessBufferUInt32(buffer, value);
 	}
 
 	void CommandList::ClearUnorderedAccessTextureFloat(const Texture& texture, const float values[4])
 	{
-		if (!texture.IsLoaded() || !texture.GetUnorderedAccessDescriptor())
-		{
-			Log(LogType::Error, "Failed to clear unordered access texture. Reason: Texture has no unordered access descriptor.");
-			return;
-		}
-
 		Impl_ClearUnorderedAccessTextureFloat(texture, values);
 	}
 
 	void CommandList::ClearUnorderedAccessTextureUInt32(const Texture& texture, const uint32_t values[4])
 	{
-		if (!texture.IsLoaded() || !texture.GetUnorderedAccessDescriptor())
-		{
-			Log(LogType::Error, "Failed to clear unordered access texture. Reason: Texture has no unordered access descriptor.");
-			return;
-		}
-
 		Impl_ClearUnorderedAccessTextureUInt32(texture, values);
 	}
 
@@ -1218,9 +1191,9 @@ namespace ig
 			return;
 		}
 
-		TempBuffer vb = context->GetTempBufferAllocator().AllocateTempBuffer(sizeInBytes,
-			context->GetGraphicsSpecs().bufferPlacementAlignments.vertexOrIndexBuffer);
-		if (vb.IsNull())
+		TempBuffer vb = context.GetTempBufferAllocator().AllocateTempBuffer(sizeInBytes,
+			context.GetGraphicsSpecs().bufferPlacementAlignments.vertexOrIndexBuffer);
+		if (!vb)
 		{
 			Log(LogType::Error, "Failed setting temporary vertex buffer. Reason: Failed to allocate temporary buffer.");
 			return;
@@ -1287,7 +1260,6 @@ namespace ig
 		}
 		if (destination.GetUsage() == TextureUsage::Readable)
 		{
-			//TODO: implement this
 			Log(LogType::Error, "Failed to issue a copy texture subresource command."
 				" Reason: The ability to copy a texture subresource to a readable texture subresource is not yet implemented.");
 			return;
@@ -1298,9 +1270,7 @@ namespace ig
 
 	void CommandList::CopyTextureToReadableTexture(const Texture& source, const Texture& destination)
 	{
-		if (!source.IsLoaded() ||
-			!destination.IsLoaded() ||
-			source.GetUsage() == TextureUsage::Readable ||
+		if (source.GetUsage() == TextureUsage::Readable ||
 			destination.GetUsage() != TextureUsage::Readable)
 		{
 			Log(LogType::Error, "Unable to copy texture to readable texture."
@@ -1319,43 +1289,31 @@ namespace ig
 		sizeInBytes = 0;
 	}
 
-	void TempBufferAllocator::Unload()
+	TempBufferAllocator::~TempBufferAllocator()
 	{
-		if (perFrame.size() > 0 && !context) throw std::runtime_error("This should be impossible.");
-
 		for (size_t i = 0; i < perFrame.size(); i++)
 		{
 			// Free large pages
 			for (Page& page : perFrame[i].largePages)
 			{
-				if (!page.IsNull()) page.Free(*context);
+				if (!page.IsNull()) page.Free(context);
 			}
 
 			// Free linear pages
 			for (Page& page : perFrame[i].linearPages)
 			{
-				if (!page.IsNull()) page.Free(*context);
+				if (!page.IsNull()) page.Free(context);
 			}
 		}
 
 		perFrame.clear();
-		perFrame.shrink_to_fit();
-
-		isLoaded = false;
-		context = nullptr;
-		frameIndex = 0;
-		numFrames = 0;
-		linearPageSize = 0;
-		lastFrameStats = Stats();
 	}
 
-	DetailedResult TempBufferAllocator::Load(const IGLOContext& context, uint64_t linearPageSize, uint32_t numFramesInFlight)
+	std::pair<std::unique_ptr<TempBufferAllocator>, DetailedResult> TempBufferAllocator::Create(
+		const IGLOContext& context, uint64_t linearPageSize, uint32_t numFramesInFlight)
 	{
-		Unload();
-
-		this->perFrame.clear();
-		this->perFrame.shrink_to_fit();
-		this->context = &context;
+		std::unique_ptr<TempBufferAllocator> out = std::unique_ptr<TempBufferAllocator>(new TempBufferAllocator(
+			context, linearPageSize, numFramesInFlight));
 
 		// Each frame has a set number of persistent pages, and a changing number of temporary pages placed ontop.
 		// The temporary pages are created as needed when the persistent pages run out of space.
@@ -1372,51 +1330,33 @@ namespace ig
 				Page page = Page::Create(context, linearPageSize);
 				if (page.IsNull())
 				{
-					Unload();
-					return DetailedResult::Fail("The buffer allocator failed to allocate memory.");
+					return { nullptr, DetailedResult::Fail("The buffer allocator failed to allocate memory.") };
 				}
 				frame.linearPages.push_back(page);
 			}
 
-			this->perFrame.push_back(frame);
+			out->perFrame.push_back(frame);
 		}
 
-		this->isLoaded = true;
-		this->frameIndex = 0;
-		this->numFrames = numFramesInFlight;
-		this->linearPageSize = linearPageSize;
-		return DetailedResult::Success();
-	}
-
-	bool TempBufferAllocator::LogErrorIfNotLoaded()
-	{
-		if (!isLoaded)
-		{
-			Log(LogType::Error, "You can't use a buffer allocator that isn't loaded!");
-			return true;
-		}
-		return false;
+		out->frameIndex = 0;
+		return { std::move(out), DetailedResult::Success() };
 	}
 
 	void TempBufferAllocator::NextFrame()
 	{
-		if (LogErrorIfNotLoaded()) return;
-
 		lastFrameStats = GetCurrentStats();
 
-		frameIndex = (frameIndex + 1) % numFrames;
+		frameIndex = (frameIndex + 1) % numFramesInFlight;
 
 		assert(frameIndex < perFrame.size());
-		FreeTempPagesAtFrame(*context, perFrame[frameIndex]);
+		FreeTempPagesAtFrame(context, perFrame[frameIndex]);
 	}
 
 	void TempBufferAllocator::FreeAllTempPages()
 	{
-		if (LogErrorIfNotLoaded()) return;
-
 		for (size_t i = 0; i < perFrame.size(); i++)
 		{
-			FreeTempPagesAtFrame(*context, perFrame[i]);
+			FreeTempPagesAtFrame(context, perFrame[i]);
 		}
 	}
 
@@ -1442,8 +1382,6 @@ namespace ig
 
 	TempBuffer TempBufferAllocator::AllocateTempBuffer(uint64_t sizeInBytes, uint32_t alignment)
 	{
-		if (LogErrorIfNotLoaded()) return TempBuffer();
-
 		assert(frameIndex < perFrame.size());
 		PerFrame& current = perFrame[frameIndex];
 
@@ -1453,7 +1391,7 @@ namespace ig
 		// New large page
 		if (alignedSize > linearPageSize)
 		{
-			Page large = Page::Create(*context, alignedSize);
+			Page large = Page::Create(context, alignedSize);
 			if (large.IsNull())
 			{
 				Log(LogType::Error, ToString("Failed to allocate a temporary buffer of size ", sizeInBytes, "."));
@@ -1471,7 +1409,7 @@ namespace ig
 		// New linear page
 		if (alignedStart + alignedSize > linearPageSize)
 		{
-			Page page = Page::Create(*context, linearPageSize);
+			Page page = Page::Create(context, linearPageSize);
 			if (page.IsNull())
 			{
 				Log(LogType::Error, ToString("Failed to allocate a temporary buffer of size ", sizeInBytes, "."));
@@ -1508,17 +1446,14 @@ namespace ig
 
 	TempBufferAllocator::Stats TempBufferAllocator::GetCurrentStats() const
 	{
-		if (!isLoaded) return Stats();
-
 		static_assert(numPersistentPages > 0);
-		assert(frameIndex < perFrame.size());
-		if (perFrame[frameIndex].linearPages.size() == 0) throw std::runtime_error("This should be impossible.");
+		if (perFrame.at(frameIndex).linearPages.size() == 0) throw std::runtime_error("This should be impossible.");
 
 		Stats out;
 
 		// Num overflow pages
 		{
-			const PerFrame& current = perFrame[frameIndex];
+			const PerFrame& current = perFrame.at(frameIndex);
 			out.overflowAllocations = current.largePages.size() + current.linearPages.size() - numPersistentPages;
 		}
 
@@ -1541,7 +1476,7 @@ namespace ig
 
 		// Capacity
 		{
-			const PerFrame& current = perFrame[frameIndex];
+			const PerFrame& current = perFrame.at(frameIndex);
 			const Page& page = current.linearPages.back();
 			uint64_t memMax = page.sizeInBytes;
 			uint64_t memUsed = current.linearNextByte;
@@ -1551,106 +1486,62 @@ namespace ig
 		return out;
 	}
 
-	void Cursor::Unload()
+	Cursor::~Cursor()
 	{
-		Impl_Unload();
-
-		isLoaded = false;
-		context = nullptr;
+		Impl_Destroy();
 	}
 
-	Cursor::Cursor(Cursor&& other) noexcept
+	std::unique_ptr<Cursor> Cursor::LoadFromSystem(const IGLOContext& context, SystemCursor systemCursor)
 	{
-		*this = std::move(other);
-	}
-	Cursor& Cursor::operator=(Cursor&& other) noexcept
-	{
-		Unload();
-
-		std::swap(this->isLoaded, other.isLoaded);
-		std::swap(this->context, other.context);
-		std::swap(this->impl, other.impl);
-
-		return *this;
-	}
-
-	bool Cursor::LoadFromSystem(const IGLOContext& context, SystemCursor systemCursor)
-	{
-		Unload();
-
 		const char* errStr = "Failed to load system cursor. Reason: ";
 
-		if (!context.IsLoaded())
-		{
-			Log(LogType::Error, ToString(errStr, "IGLOContext must be loaded first."));
-			return false;
-		}
+		std::unique_ptr<Cursor> out = std::unique_ptr<Cursor>(new Cursor(context));
 
-		this->context = &context;
-
-		DetailedResult result = Impl_LoadFromSystem(context, systemCursor);
+		DetailedResult result = out->Impl_LoadFromSystem(systemCursor);
 		if (!result)
 		{
 			Log(LogType::Error, errStr + result.errorMessage);
-			Unload();
-			return false;
+			return out;
 		}
 
-		this->isLoaded = true;
-		return true;
+		return out;
 	}
 
-	bool Cursor::LoadFromFile(const IGLOContext& context, const std::string& filename, IntPoint hotspot)
+	std::unique_ptr<Cursor> Cursor::LoadFromFile(const IGLOContext& context, const std::string& filename, IntPoint hotspot)
 	{
-		Unload();
-
 		const char* errStr = "Failed to load cursor from file. Reason: ";
-
-		if (!context.IsLoaded())
-		{
-			Log(LogType::Error, ToString(errStr, "IGLOContext must be loaded first."));
-			return false;
-		}
 
 		ReadFileResult file = ReadFile(filename);
 		if (!file.success)
 		{
 			Log(LogType::Error, ToString(errStr, "Couldn't open '" + filename + "'."));
-			return false;
+			return nullptr;
 		}
 		if (file.fileContent.size() == 0)
 		{
 			Log(LogType::Error, ToString(errStr, "File '" + filename + "' is empty."));
-			return false;
+			return nullptr;
 		}
-		Image image;
-		if (!image.LoadFromMemory(file.fileContent.data(), file.fileContent.size()))
+		std::unique_ptr<Image> image = Image::LoadFromMemory(file.fileContent.data(), file.fileContent.size());
+		if (!image)
 		{
 			Log(LogType::Error, ToString(errStr, "Image loading failed."));
-			return false;
+			return nullptr;
 		}
-		return LoadFromMemory(context, image, hotspot);
+		return LoadFromMemory(context, *image, hotspot);
 	}
 
-	bool Cursor::LoadFromMemory(const IGLOContext& context, const Image& cursorImage, IntPoint hotspot)
+	std::unique_ptr<Cursor> Cursor::LoadFromMemory(const IGLOContext& context, const Image& cursorImage, IntPoint hotspot)
 	{
-		Unload();
-
 		const char* errStr = "Failed to load cursor from image. Reason: ";
-
-		if (!context.IsLoaded())
-		{
-			Log(LogType::Error, ToString(errStr, "IGLOContext must be loaded first."));
-			return false;
-		}
 
 		FormatInfo info = GetFormatInfo(cursorImage.GetFormat());
 		uint32_t bitsPerPixel = info.bytesPerPixel * 8;
 		uint32_t numChannels = info.elementCount;
-		if (bitsPerPixel != 32 || numChannels != 4 || !cursorImage.IsLoaded())
+		if (bitsPerPixel != 32 || numChannels != 4)
 		{
 			Log(LogType::Error, ToString(errStr, "Image must have 4 color channels and be 32 bits per pixel."));
-			return false;
+			return nullptr;
 		}
 
 		if (hotspot.x < 0 ||
@@ -1659,35 +1550,33 @@ namespace ig
 			hotspot.y >= (int32_t)cursorImage.GetHeight())
 		{
 			Log(LogType::Error, ToString(errStr, "Invalid hotspot."));
-			return false;
+			return nullptr;
 		}
 
 		// Convert RGBA to BGRA if needed
-		Image imageBGRA;
+		std::unique_ptr<Image> imageBGRA;
 		if (cursorImage.GetFormat() == Format::BYTE_BYTE_BYTE_BYTE ||
 			cursorImage.GetFormat() == Format::BYTE_BYTE_BYTE_BYTE_sRGB)
 		{
-			imageBGRA.Load(cursorImage.GetDesc());
-			memcpy(imageBGRA.GetPixels(), cursorImage.GetPixels(), cursorImage.GetSize());
-			imageBGRA.SwapRedBlue();
+			imageBGRA = Image::Create(cursorImage.GetDesc());
+			memcpy(imageBGRA->GetPixels(), cursorImage.GetPixels(), cursorImage.GetSize());
+			imageBGRA->SwapRedBlue();
 		}
 
-		const uint32_t* pixels = imageBGRA.IsLoaded() ?
-			(uint32_t*)imageBGRA.GetPixels() :
-			(uint32_t*)cursorImage.GetPixels();
+		const uint32_t* pixels = imageBGRA
+			? (uint32_t*)imageBGRA->GetPixels()
+			: (uint32_t*)cursorImage.GetPixels();
 
-		this->context = &context;
+		std::unique_ptr<Cursor> out = std::unique_ptr<Cursor>(new Cursor(context));
 
-		DetailedResult result = Impl_LoadFromMemory_BGRA(context, cursorImage.GetExtent(), pixels, hotspot);
+		DetailedResult result = out->Impl_LoadFromMemory_BGRA(cursorImage.GetExtent(), pixels, hotspot);
 		if (!result)
 		{
 			Log(LogType::Error, errStr + result.errorMessage);
-			Unload();
-			return false;
+			return nullptr;
 		}
 
-		this->isLoaded = true;
-		return true;
+		return out;
 	}
 
 	void IGLOContext::SetFrameBuffering(uint32_t numFramesInFlight, uint32_t numBackBuffers)
@@ -1725,7 +1614,8 @@ namespace ig
 		this->endOfFrame.resize(numFramesInFlight);
 
 		// Recreate the temp buffer allocator with new number of frames in flight
-		this->tempBufferAllocator.Load(*this, this->tempBufferAllocator.GetLinearPageSize(), numFramesInFlight);
+		const uint64_t linearPageSize = this->tempBufferAllocator->GetLinearPageSize();
+		this->tempBufferAllocator = TempBufferAllocator::Create(*this, linearPageSize, numFramesInFlight).first;
 
 		// The descriptor heap manager can't be recreated here with a new number of frames in flight,
 		// because it contains persistent descriptors which we don't want to destroy.
@@ -1742,19 +1632,13 @@ namespace ig
 			numFramesInFlight, swapChain.presentMode);
 		if (!result)
 		{
-			Log(LogType::Error, ToString("Failed to recreate swapchain with iglo format: ",
-				(int)format, " Reason: ", result.errorMessage));
+			Log(LogType::Error, ToString("Failed to recreate swapchain with iglo format ", GetFormatName(format),
+				". Reason: ", result.errorMessage));
 		}
 	}
 
 	MSAA IGLOContext::GetMaxMultiSampleCount(Format textureFormat) const
 	{
-		if (!isLoaded)
-		{
-			Log(LogType::Error, "Failed to get max multisample count. Reason: IGLOContext must be loaded first.");
-			return MSAA::Disabled;
-		}
-
 		constexpr uint32_t MaxIgloFormats = 256; // An arbitrary safe upper bound.
 
 		uint32_t formatIndex = (uint32_t)textureFormat;
@@ -1819,117 +1703,99 @@ namespace ig
 		if (popupMessage) PopupMessage(message, window.title, this);
 	}
 
-	bool IGLOContext::Load(WindowSettings windowSettings, RenderSettings renderSettings, bool showPopupIfFailed)
+	std::unique_ptr<IGLOContext> IGLOContext::CreateContext(WindowSettings windowSettings, RenderSettings renderSettings, bool showPopupIfFailed)
 	{
-		if (isLoaded)
-		{
-			Log(LogType::Warning, "You are attempting to load an already loaded IGLOContext."
-				" The existing context will be replaced with a new one.");
-		}
-
-		// Unload previous context if there is one
-		Unload();
+		std::unique_ptr<IGLOContext> out = std::unique_ptr<IGLOContext>(new IGLOContext(renderSettings.maxFramesInFlight));
 
 		if (renderSettings.maxFramesInFlight > renderSettings.numBackBuffers)
 		{
-			Log(LogType::Error, "Failed to load IGLOContext. Reason:"
-				" You can't have more frames in flight than the number of back buffers!");
-			return false;
+			out->OnFatalError("Failed to create IGLOContext. Reason: "
+				"You can't have more frames in flight than the number of back buffers!", showPopupIfFailed);
+			return nullptr;
 		}
 
-		DetailedResult windowResult = LoadWindow(windowSettings);
+		DetailedResult windowResult = out->InitWindow(windowSettings);
 		if (!windowResult)
 		{
-			OnFatalError("Failed to initialize window. Reason: " + windowResult.errorMessage, showPopupIfFailed);
-			Unload();
-			return false;
+			out->OnFatalError("Failed to initialize window. Reason: " + windowResult.errorMessage, showPopupIfFailed);
+			return nullptr;
 		}
+		out->isWindowInitialized = true;
 
-		DetailedResult graphicsResult = LoadGraphicsDevice(renderSettings, windowedMode.size);
+		DetailedResult graphicsResult = out->InitGraphicsDevice(renderSettings, out->windowedMode.size);
 		if (!graphicsResult)
 		{
-			OnFatalError("Failed to initialize " IGLO_GRAPHICS_API_STRING ". Reason: " + graphicsResult.errorMessage, showPopupIfFailed);
-			Unload();
-			return false;
+			out->OnFatalError("Failed to initialize " IGLO_GRAPHICS_API_STRING ". Reason: " + graphicsResult.errorMessage, showPopupIfFailed);
+			return nullptr;
 		}
+		out->isGraphicsDeviceInitialized = true;
 
-		PrepareWindowPostGraphics(windowSettings);
+		out->PrepareWindowPostGraphics(windowSettings);
+		return out;
+	}
 
-		// Window and graphics device has loaded successfully
-		isLoaded = true;
-		return true;
-		}
-
-	void IGLOContext::Unload()
+	IGLOContext::~IGLOContext()
 	{
-		if (commandQueue.IsLoaded()) commandQueue.WaitForIdle();
+		if (commandQueue) commandQueue->WaitForIdle();
 #ifdef IGLO_VULKAN
-		if (isLoaded) vkDeviceWaitIdle(graphics.device);
+		if (graphics.device) vkDeviceWaitIdle(graphics.device);
 #endif
 
-		isLoaded = false;
-
 #ifdef __linux__
-		// You are required to unload the X11 display before unloading the vulkan device.
-		// Otherwise you may get a segfault.
-		UnloadWindow();
-		UnloadGraphicsDevice();
+		// To prevent a segfault on Linux/X11 with NVIDIA drivers,
+		// we need to destroy the swapchain and surface first, then window, then vulkan device and instance.
+		if (graphics.device)
+		{
+			if (graphics.swapChain)
+			{
+				vkDestroySwapchainKHR(graphics.device, graphics.swapChain, nullptr);
+				graphics.swapChain = VK_NULL_HANDLE;
+			}
+		}
+		if (graphics.instance)
+		{
+			if (graphics.surface)
+			{
+				vkDestroySurfaceKHR(graphics.instance, graphics.surface, nullptr);
+				graphics.surface = VK_NULL_HANDLE;
+			}
+		}
+
+		DestroyWindow();
+		DestroyGraphicsDevice();
 #else
-		UnloadGraphicsDevice();
-		UnloadWindow();
+		DestroyGraphicsDevice();
+		DestroyWindow();
 #endif
 	}
 
-	void IGLOContext::UnloadWindow()
+	void IGLOContext::DestroyWindow()
 	{
-		eventQueue = {};
-
-		windowedMode = WindowState();
-		windowResizeConstraints = WindowResizeConstraints();
-
-		callbackModalLoop = nullptr;
-		insideModalLoopCallback = false;
-
-		mousePosition = IntPoint();
-		mouseButtonIsDown.Clear();
-		keyIsDown.Clear();
+		isWindowInitialized = false;
 
 		currentCursor = nullptr;
 
-		Impl_UnloadWindow();
+		Impl_DestroyWindow();
 	}
 
-	void IGLOContext::UnloadGraphicsDevice()
+	void IGLOContext::DestroyGraphicsDevice()
 	{
-		DestroySwapChainResources();
+		isGraphicsDeviceInitialized = false;
 
 		endOfFrame.clear();
-		endOfFrame.shrink_to_fit();
 
-		graphicsSpecs = GraphicsSpecs();
+		genMipsPipeline = nullptr;
+		bilinearClampSampler = nullptr;
 
-		displayMode = DisplayMode::Windowed;
+		descriptorHeap = nullptr;
+		tempBufferAllocator = nullptr;
+		commandQueue = nullptr;
 
-		maxFramesInFlight = 0;
-		numFramesInFlight = 0;
-		frameIndex = 0;
+		DestroySwapChainResources();
+		Impl_DestroyGraphicsDevice();
+		}
 
-		generateMipmapsPipeline.Unload();
-		bilinearClampSampler.Unload();
-
-		descriptorHeap.Unload();
-		tempBufferAllocator.Unload();
-		commandQueue.Unload();
-
-		callbackOnDeviceRemoved = nullptr;
-
-		Impl_UnloadGraphicsDevice();
-
-		maxMSAAPerFormat.clear();
-		maxMSAAPerFormat.shrink_to_fit();
-	}
-
-	DetailedResult IGLOContext::LoadWindow(const WindowSettings& windowSettings)
+	DetailedResult IGLOContext::InitWindow(const WindowSettings& windowSettings)
 	{
 		mousePosition = IntPoint(0, 0);
 		mouseButtonIsDown.Clear();
@@ -1945,52 +1811,51 @@ namespace ig
 
 		window.title = windowSettings.title;
 
-		return Impl_LoadWindow(windowSettings);
+		return Impl_InitWindow(windowSettings);
 	}
 
-	DetailedResult IGLOContext::LoadGraphicsDevice(const RenderSettings& renderSettings, Extent2D backBufferSize)
+	DetailedResult IGLOContext::InitGraphicsDevice(const RenderSettings& renderSettings, Extent2D backBufferSize)
 	{
-		maxFramesInFlight = renderSettings.maxFramesInFlight;
-		numFramesInFlight = renderSettings.maxFramesInFlight;
 		frameIndex = 0;
-
-		endOfFrame.clear();
-		endOfFrame.shrink_to_fit();
+		numFramesInFlight = renderSettings.maxFramesInFlight;
 		endOfFrame.resize(renderSettings.maxFramesInFlight);
 
-		// Load graphics device
+		// Graphics device
 		{
-			DetailedResult result = Impl_LoadGraphicsDevice();
+			DetailedResult result = Impl_InitGraphicsDevice();
 			if (!result) return result;
 		}
 
-		// Load command queue manager
+		// Command queue manager
 		{
-			DetailedResult result = commandQueue.Load(*this,
+			auto result = CommandQueue::Create(*this,
 				renderSettings.maxFramesInFlight,
 				renderSettings.numBackBuffers);
-			if (!result) return result;
+			if (!result.second) return result.second;
+			commandQueue = std::move(result.first);
 		}
 
-		// Load buffer allocation manager
+		// Temp buffer allocator
 		{
-			DetailedResult result = tempBufferAllocator.Load(*this,
+			auto result = TempBufferAllocator::Create(*this,
 				renderSettings.tempBufferAllocatorLinearPageSize,
-				renderSettings.maxFramesInFlight);
-			if (!result) return result;
+				numFramesInFlight);
+			if (!result.second) return result.second;
+			tempBufferAllocator = std::move(result.first);
 		}
 
-		// Load descriptor heap manager
+		// Descriptor heap manager
 		{
-			DetailedResult result = descriptorHeap.Load(*this,
+			auto result = DescriptorHeap::Create(*this,
 				renderSettings.maxPersistentResourceDescriptors,
 				renderSettings.maxTemporaryResourceDescriptorsPerFrame,
 				renderSettings.maxSamplerDescriptors,
 				renderSettings.maxFramesInFlight);
-			if (!result) return result;
+			if (!result.second) return result.second;
+			descriptorHeap = std::move(result.first);
 		}
 
-		// Create Swap Chain
+		// Swap Chain
 		{
 			DetailedResult result = CreateSwapChain(backBufferSize,
 				renderSettings.backBufferFormat,
@@ -2000,11 +1865,12 @@ namespace ig
 			if (!result) return result;
 		}
 
-		// Load mipmap generation compute pipeline
+		// Mipmap gen compute pipeline
 		{
-			if (!generateMipmapsPipeline.LoadAsCompute(*this, Shader(g_CS_GenerateMipmaps, sizeof(g_CS_GenerateMipmaps), "CSMain")))
+			genMipsPipeline = Pipeline::CreateCompute(*this, Shader(g_CS_GenerateMipmaps, sizeof(g_CS_GenerateMipmaps), "CSMain"));
+			if (!genMipsPipeline)
 			{
-				Log(LogType::Warning, "Failed to load mipmap generation compute pipeline.");
+				Log(LogType::Warning, "Failed to create mipmap generation compute pipeline.");
 			}
 
 			SamplerDesc samplerDesc;
@@ -2012,38 +1878,34 @@ namespace ig
 			samplerDesc.wrapU = TextureWrapMode::Clamp;
 			samplerDesc.wrapV = TextureWrapMode::Clamp;
 			samplerDesc.wrapW = TextureWrapMode::Clamp;
-			if (!bilinearClampSampler.Load(*this, samplerDesc))
+
+			bilinearClampSampler = Sampler::Create(*this, samplerDesc);
+			if (!bilinearClampSampler)
 			{
-				Log(LogType::Warning, "Failed to load mipmap generation sampler.");
+				Log(LogType::Warning, "Failed to create mipmap generation sampler.");
 			}
 		}
 
 		return DetailedResult::Success();
 	}
 
-	void CommandQueue::Unload()
+	CommandQueue::~CommandQueue()
 	{
-		Impl_Unload();
-
-		isLoaded = false;
-		context = nullptr;
+		Impl_Destroy();
 	}
 
-	DetailedResult CommandQueue::Load(const IGLOContext& context, uint32_t numFramesInFlight, uint32_t numBackBuffers)
+	std::pair<std::unique_ptr<CommandQueue>, DetailedResult> CommandQueue::Create(const IGLOContext& context,
+		uint32_t maxFramesInFlight, uint32_t numBackBuffers)
 	{
-		Unload();
+		std::unique_ptr<CommandQueue> out = std::unique_ptr<CommandQueue>(new CommandQueue(context, maxFramesInFlight, numBackBuffers));
 
-		this->context = &context;
-
-		DetailedResult result = Impl_Load(context, numFramesInFlight, numBackBuffers);
+		DetailedResult result = out->Impl_Create();
 		if (!result)
 		{
-			Unload();
-			return result;
+			return { nullptr, result };
 		}
 
-		this->isLoaded = true;
-		return DetailedResult::Success();
+		return { std::move(out), DetailedResult::Success() };
 	}
 
 	Receipt CommandQueue::SubmitCommands(const CommandList& commandList)
@@ -2071,11 +1933,6 @@ namespace ig
 
 		for (uint32_t i = 0; i < numCommandLists; i++)
 		{
-			if (!commandLists[i]->IsLoaded())
-			{
-				Log(LogType::Error, ToString(errStr, "Atleast one specified command list isn't loaded."));
-				return Receipt();
-			}
 			if (commandLists[i]->GetCommandListType() != cmdType)
 			{
 				Log(LogType::Error, ToString(errStr, "The provided command lists must share the same command list type."));
@@ -2101,39 +1958,13 @@ namespace ig
 		Impl_WaitForCompletion(receipt);
 	}
 
-	void Image::Unload()
+	Image::~Image()
 	{
-		if (mustFreeSTBI && pixelsPtr) // Release stb_image data
+		if (ownership == PixelOwnership::OwnedSTBI && pixelsPtr)
 		{
 			stbi_image_free((void*)pixelsPtr);
 		}
-		mustFreeSTBI = false;
 		pixelsPtr = nullptr;
-
-		ownedBuffer.clear();
-		ownedBuffer.shrink_to_fit();
-
-		size = 0;
-
-		desc = ImageDesc();
-	}
-
-	Image::Image(Image&& other) noexcept
-	{
-		*this = std::move(other);
-	}
-	Image& Image::operator=(Image&& other) noexcept
-	{
-		Unload();
-
-		std::swap(this->desc, other.desc);
-		std::swap(this->size, other.size);
-		std::swap(this->pixelsPtr, other.pixelsPtr);
-		std::swap(this->mustFreeSTBI, other.mustFreeSTBI);
-
-		this->ownedBuffer.swap(other.ownedBuffer);
-
-		return *this;
 	}
 
 	DetailedResult ImageDesc::Validate() const
@@ -2167,51 +1998,45 @@ namespace ig
 		return DetailedResult::Success();
 	}
 
-	bool Image::Load(uint32_t width, uint32_t height, Format format)
+	std::unique_ptr<Image> Image::Create(uint32_t width, uint32_t height, Format format)
 	{
 		ImageDesc imageDesc;
 		imageDesc.extent = Extent2D(width, height);
 		imageDesc.format = format;
-		return Load(imageDesc);
+		return Create(imageDesc);
 	}
 
-	bool Image::Load(const ImageDesc& desc)
+	std::unique_ptr<Image> Image::Create(const ImageDesc& desc)
 	{
-		Unload();
-
 		DetailedResult result = desc.Validate();
 		if (!result)
 		{
 			Log(LogType::Error, "Failed to create image. Reason: " + result.errorMessage);
-			return false;
+			return nullptr;
 		}
 
-		this->desc = desc;
-		this->mustFreeSTBI = false;
-		this->size = CalculateTotalSize(desc.extent, desc.format, desc.mipLevels, desc.numFaces);
-		this->ownedBuffer.resize(this->size, 0);
-		this->pixelsPtr = this->ownedBuffer.data();
-		return true;
+		std::unique_ptr<Image> out = std::unique_ptr<Image>(new Image(desc));
+		out->size = CalculateTotalSize(desc.extent, desc.format, desc.mipLevels, desc.numFaces);
+		out->ownership = PixelOwnership::OwnedBuffer;
+		out->ownedBuffer.resize(out->size, 0);
+		out->pixelsPtr = out->ownedBuffer.data();
+		return out;
 	}
 
-	bool Image::LoadAsPointer(const void* pixels, const ImageDesc& desc)
+	std::unique_ptr<Image> Image::CreateWrapped(const void* pixels, const ImageDesc& desc)
 	{
-		Unload();
-
 		DetailedResult result = desc.Validate();
 		if (!result)
 		{
-			Log(LogType::Error, "Failed to load image as pointer. Reason: " + result.errorMessage);
-			return false;
+			Log(LogType::Error, "Failed to create wrapped image. Reason: " + result.errorMessage);
+			return nullptr;
 		}
 
-		this->desc = desc;
-		this->mustFreeSTBI = false;
-		this->size = CalculateTotalSize(desc.extent, desc.format, desc.mipLevels, desc.numFaces);
-		this->ownedBuffer.clear();
-		this->ownedBuffer.shrink_to_fit();
-		this->pixelsPtr = (byte*)pixels; // Store pointer
-		return true;
+		std::unique_ptr<Image> out = std::unique_ptr<Image>(new Image(desc));
+		out->size = CalculateTotalSize(desc.extent, desc.format, desc.mipLevels, desc.numFaces);
+		out->ownership = PixelOwnership::Wrapped;
+		out->pixelsPtr = (byte*)pixels;
+		return out;
 	}
 
 	size_t Image::GetMipSize(uint32_t mipIndex) const
@@ -2290,8 +2115,6 @@ namespace ig
 
 	void* Image::GetMipPixels(uint32_t faceIndex, uint32_t mipIndex) const
 	{
-		if (!IsLoaded()) return nullptr;
-
 		byte* out = pixelsPtr;
 		for (uint32_t f = 0; f < desc.numFaces; f++)
 		{
@@ -2304,38 +2127,35 @@ namespace ig
 		return (void*)out;
 	}
 
-	bool Image::LoadFromFile(const std::string& filename)
+	std::unique_ptr<Image> Image::LoadFromFile(const std::string& filename)
 	{
-		Unload();
+		const char* errStr = "Failed to load image from file. Reason: ";
+
 		ReadFileResult file = ReadFile(filename);
 		if (!file.success)
 		{
-			Log(LogType::Error, "Failed to load image from file. Reason: Couldn't open '" + filename + "'.");
-			return false;
+			Log(LogType::Error, ToString(errStr, "Couldn't open '" + filename + "'."));
+			return nullptr;
 		}
 		if (file.fileContent.size() == 0)
 		{
-			Log(LogType::Error, "Failed to load image from file. Reason: File '" + filename + "' is empty.");
-			return false;
+			Log(LogType::Error, ToString(errStr, "File '" + filename + "' is empty."));
+			return nullptr;
 		}
-		if (LoadFromMemory(file.fileContent.data(), file.fileContent.size(), false))
-		{
-			bool ownsThePixelData = false;
-			if (this->ownedBuffer.size() > 0) ownsThePixelData = true;
-			if (this->mustFreeSTBI) ownsThePixelData = true;
 
-			// The file data will be stored in this image if image depends on it for its pixel data.
-			if (!ownsThePixelData)
-			{
-				this->ownedBuffer.swap(file.fileContent);
-			}
-			return true;
-		}
-		else
+		// An optimization that lets us skip a memcpy for most DDS files
+		const bool guaranteeOwnership = false;
+
+		std::unique_ptr<Image> out = LoadFromMemory(file.fileContent.data(), file.fileContent.size(), guaranteeOwnership);
+		if (!out) return nullptr;
+
+		if (out->IsWrapped())
 		{
-			Unload();
-			return false;
+			// Transfer ownership of the filedata to the image without using memcpy.
+			out->ownedBuffer.swap(file.fileContent);
+			out->ownership = PixelOwnership::OwnedBuffer;
 		}
+		return out;
 	}
 
 	bool Image::FileIsOfTypeDDS(const byte* fileData, size_t numBytes)
@@ -2418,17 +2238,15 @@ namespace ig
 #define DDSCAPS2_CUBEMAP_NEGATIVEZ	0x00008000
 #define DDSCAPS2_VOLUME				0x00200000
 
-	// Code in this function is taken from public domain source SOIL: https://github.com/littlstar/soil/blob/master/src/soil.c
-	bool Image::LoadFromDDS(const byte* fileData, size_t numBytes, bool guaranteeOwnership)
+	// Code from public domain source SOIL: https://github.com/littlstar/soil/blob/master/src/soil.c
+	std::unique_ptr<Image> Image::LoadFromDDS(const byte* fileData, size_t numBytes, bool guaranteeOwnership)
 	{
-		Unload();
-
 		const char* errStr = "Failed to load image from file data. Reason: ";
 
 		if (numBytes < sizeof(DDS_header))
 		{
 			Log(LogType::Error, ToString(errStr, "The DDS file is corrupted (too small for expected header)."));
-			return false;
+			return nullptr;
 		}
 		DDS_header* header = (DDS_header*)fileData;
 		size_t buffer_index = 0;
@@ -2454,7 +2272,7 @@ namespace ig
 		if (failed)
 		{
 			Log(LogType::Error, ToString(errStr, "The DDS file is either corrupted or unsupported."));
-			return false;
+			return nullptr;
 		}
 
 		/*	OK, validated the header, let's load the image data	*/
@@ -2479,7 +2297,7 @@ namespace ig
 		if (volume)
 		{
 			Log(LogType::Error, ToString(errStr, "The DDS file contains an unsupported format (3D volume texture)."));
-			return false;
+			return nullptr;
 		}
 
 		int32_t uncompressed = 1 - (header->sPixelFormat.dwFlags & DDPF_FOURCC) / DDPF_FOURCC;
@@ -2504,7 +2322,7 @@ namespace ig
 			else if (header->sPixelFormat.dwRGBBitCount == 16)
 			{
 				Log(LogType::Error, ToString(errStr, "The DDS file contains an unsupported format (16-bits per pixel uncompressed)."));
-				return false;
+				return nullptr;
 			}
 			else if (header->sPixelFormat.dwRGBBitCount == 8)
 			{
@@ -2513,7 +2331,7 @@ namespace ig
 			else
 			{
 				Log(LogType::Error, ToString(errStr, "The DDS file contains an unknown format."));
-				return false;
+				return nullptr;
 			}
 		}
 		else
@@ -2538,30 +2356,24 @@ namespace ig
 		}
 
 		byte* ddsPixels = (byte*)&fileData[buffer_index];
-		failed = false;
+		std::unique_ptr<Image> out;
 		if (mustConvertBGRToBGRA || guaranteeOwnership)
 		{
 			// If we must convert to different format, then this image must create its own pixel buffer first
-			if (!Load(tempDesc))
-			{
-				failed = true;
-			}
+			out = Create(tempDesc);
 		}
 		else
 		{
 			// Store pointer to existing pixel data
-			if (!LoadAsPointer(ddsPixels, tempDesc))
-			{
-				failed = true;
-			}
+			out = CreateWrapped(ddsPixels, tempDesc);
 		}
-		if (failed)
+		if (!out)
 		{
-			Log(LogType::Error, ToString(errStr, "Unable to create the image. This error should be impossible."));
-			return false;
+			Log(LogType::Error, ToString(errStr, "Unable to create image. This error should be impossible."));
+			return nullptr;
 		}
 
-		size_t expected = this->size;
+		size_t expected = out->size;
 		if (mustConvertBGRToBGRA)
 		{
 			expected -= (expected / 4); // BGRA -> BGR is 1/4 smaller
@@ -2569,9 +2381,8 @@ namespace ig
 		size_t remaining = numBytes - buffer_index;
 		if (remaining < expected)
 		{
-			Unload();
 			Log(LogType::Error, ToString(errStr, "The DDS file is corrupted (it is smaller than expected)."));
-			return false;
+			return nullptr;
 		}
 		else if (remaining > expected)
 		{
@@ -2581,12 +2392,12 @@ namespace ig
 		if (mustConvertBGRToBGRA)
 		{
 			size_t i = 0;
-			for (size_t j = 0; j < this->size; j += 4)
+			for (size_t j = 0; j < out->size; j += 4)
 			{
-				this->pixelsPtr[j] = ddsPixels[i];
-				this->pixelsPtr[j + 1] = ddsPixels[i + 1];
-				this->pixelsPtr[j + 2] = ddsPixels[i + 2];
-				this->pixelsPtr[j + 3] = 255; // Add an alpha channel to RGB pixels
+				out->pixelsPtr[j] = ddsPixels[i];
+				out->pixelsPtr[j + 1] = ddsPixels[i + 1];
+				out->pixelsPtr[j + 2] = ddsPixels[i + 2];
+				out->pixelsPtr[j + 3] = 255; // Add an alpha channel to RGB pixels
 				i += 3;
 			}
 		}
@@ -2595,22 +2406,20 @@ namespace ig
 			if (guaranteeOwnership)
 			{
 				// Copy pixel data from DDS file to this image
-				memcpy(this->pixelsPtr, ddsPixels, this->size);
+				memcpy(out->pixelsPtr, ddsPixels, out->size);
 			}
 		}
-		return true;
+		return out;
 	}
 
-	bool Image::LoadFromMemory(const byte* fileData, size_t numBytes, bool guaranteeOwnership)
+	std::unique_ptr<Image> Image::LoadFromMemory(const byte* fileData, size_t numBytes, bool guaranteeOwnership)
 	{
-		Unload();
-
 		const char* errStr = "Failed to load image from file data. Reason: ";
 
 		if (numBytes == 0 || fileData == nullptr)
 		{
 			Log(LogType::Error, ToString(errStr, "No data provided."));
-			return false;
+			return nullptr;
 		}
 
 		if (FileIsOfTypeDDS(fileData, numBytes)) // .DDS
@@ -2637,7 +2446,7 @@ namespace ig
 		{
 			const char* stbErrorStr = stbi_failure_reason();
 			Log(LogType::Error, ToString(errStr, "stb_image returned error: ", stbErrorStr, "."));
-			return false;
+			return nullptr;
 		}
 
 		// Graphics API's don't like triple channel texture formats. Force 4 channels if 3 channels detected.
@@ -2661,7 +2470,7 @@ namespace ig
 		{
 			const char* stbErrorStr = stbi_failure_reason();
 			Log(LogType::Error, ToString(errStr, "stb_image returned error: ", stbErrorStr, "."));
-			return false;
+			return nullptr;
 		}
 
 		if (forceChannels != 0) channels = forceChannels;
@@ -2671,7 +2480,7 @@ namespace ig
 		{
 			Log(LogType::Error, ToString(errStr, "0 color channels detected."));
 			stbi_image_free(stbiPixels);
-			return false;
+			return nullptr;
 		}
 		else if (channels == 1)
 		{
@@ -2690,7 +2499,7 @@ namespace ig
 			Log(LogType::Error, ToString(errStr, "stb_image failed forcing 4 color channels for triple channel texture."
 				" This error should be impossible."));
 			stbi_image_free(stbiPixels);
-			return false;
+			return nullptr;
 		}
 		else if (channels == 4)
 		{
@@ -2702,51 +2511,48 @@ namespace ig
 		{
 			Log(LogType::Error, ToString(errStr, "Color channels must not exceed 4. Color channels detected: ", channels, "."));
 			stbi_image_free(stbiPixels);
-			return false;
+			return nullptr;
 		}
 
 		if (tempFormat == Format::None)
 		{
-			Log(LogType::Error, ToString(errStr, "Unable to figure out which iglo format to use. This error should be impossible."));
+			Log(LogType::Error, ToString(errStr, "Unable to figure out which iglo format to use. This should be impossible."));
 			stbi_image_free(stbiPixels);
-			return false;
+			return nullptr;
 		}
 
 		// Store a pointer to the pixel data stb_image created
 		ImageDesc pointerImageDesc;
 		pointerImageDesc.extent = Extent2D(w, h);
 		pointerImageDesc.format = tempFormat;
-		if (!LoadAsPointer(stbiPixels, pointerImageDesc))
+		std::unique_ptr<Image> out = CreateWrapped(stbiPixels, pointerImageDesc);
+		if (!out)
 		{
-			Log(LogType::Error, ToString(errStr, "Unable to load as pointer. This error should be impossible."));
+			Log(LogType::Error, ToString(errStr, "Unable to create wrapped image. This error should be impossible."));
 			stbi_image_free(stbiPixels);
-			return false;
+			return nullptr;
 		}
 
-		// At this point, 'pixelsPtr' points to the pixel data stb_image created.
-		// It must be freed with stbi_image_free() in Unload() later.
-		this->mustFreeSTBI = true;
+		// The image now points to the pixel data stb_image created.
+		// It must be freed with stbi_image_free() later.
+		out->ownership = PixelOwnership::OwnedSTBI;
 
-		return true;
+		return out;
 	}
 
 	bool Image::SaveToFile(const std::string& filename) const
 	{
-		if (!IsLoaded())
-		{
-			Log(LogType::Error, "Failed to save image to file '" + filename + "'. Reason: Image is not loaded with any data.");
-			return false;
-		}
+		const char* errStr = "Failed to save image to file. Reason: ";
+
 		if (filename.size() == 0)
 		{
-			Log(LogType::Error, "Failed to save image to file. Reason: No filename provided.");
+			Log(LogType::Error, ToString(errStr, "No filename provided."));
 			return false;
 		}
 		FormatInfo info = GetFormatInfo(desc.format);
 		if (info.blockSize > 0)
 		{
-			Log(LogType::Error, "Failed to save image to file '" + filename +
-				"'. Reason: Image uses block-compression format, which is not supported being saved to file.");
+			Log(LogType::Error, ToString(errStr, "Image uses block-compression format, which is not supported being saved to file."));
 			return false;
 		}
 
@@ -2823,12 +2629,12 @@ namespace ig
 		}
 		if (!validExtension)
 		{
-			Log(LogType::Error, "Failed to save image to file. Reason: Unsupported format or file extension.");
+			Log(LogType::Error, ToString(errStr, "Unsupported format or file extension."));
 			return false;
 		}
 		else
 		{
-			Log(LogType::Error, "Failed to save image to file. Reason: stbi failed to write image.");
+			Log(LogType::Error, ToString(errStr, "stbi failed to write image."));
 			return false;
 		}
 	}
@@ -2852,8 +2658,6 @@ namespace ig
 
 	bool Image::ReplaceColors(Color32 colorA, Color32 colorB)
 	{
-		if (!IsLoaded()) return false;
-
 		bool formatIsSupported = (
 			desc.format == Format::BYTE_BYTE_BYTE_BYTE ||
 			desc.format == Format::BYTE_BYTE_BYTE_BYTE_sRGB ||
@@ -2863,7 +2667,7 @@ namespace ig
 
 		if (!formatIsSupported)
 		{
-			Log(LogType::Error, "Failed to replace colors in image. Reason: Image format does not support this operation.");
+			Log(LogType::Error, "Failed to replace colors in image. Reason: Expected a format with 4 channels and 32 bits per pixel.");
 			return false;
 		}
 
@@ -2891,8 +2695,6 @@ namespace ig
 
 	bool Image::SwapRedBlue()
 	{
-		if (!IsLoaded()) return false;
-
 		bool formatIsSupported = (
 			desc.format == Format::BYTE_BYTE_BYTE_BYTE ||
 			desc.format == Format::BYTE_BYTE_BYTE_BYTE_sRGB ||
@@ -2926,28 +2728,6 @@ namespace ig
 		}
 
 		return true;
-	}
-
-	void IGLOContext::SetModalLoopCallback(CallbackModalLoop callbackModalLoop)
-	{
-		if (!isLoaded)
-		{
-			Log(LogType::Error, "Failed to set modal loop callback. Reason: IGLOContext must be loaded!");
-			return;
-		}
-
-		this->callbackModalLoop = callbackModalLoop;
-	}
-
-	void IGLOContext::SetOnDeviceRemovedCallback(CallbackOnDeviceRemoved callbackOnDeviceRemoved)
-	{
-		if (!isLoaded)
-		{
-			Log(LogType::Error, "Failed to set OnDeviceRemoved callback. Reason: IGLOContext must be loaded!");
-			return;
-		}
-
-		this->callbackOnDeviceRemoved = callbackOnDeviceRemoved;
 	}
 
 	void IGLOContext::Present()
@@ -2991,8 +2771,8 @@ namespace ig
 				}
 				Log(LogType::Error, "Device removal detected! Reason: " + reasonStr);
 				if (callbackOnDeviceRemoved) callbackOnDeviceRemoved(reasonStr);
-				}
 			}
+		}
 
 		// Wait until the swap chain is ready to present the next frame.
 		// This ensures that the value passed to SetMaximumFrameLatency() is respected.
@@ -3006,15 +2786,15 @@ namespace ig
 #ifdef IGLO_VULKAN
 		if (graphics.validSwapChain)
 		{
-			VkResult result = commandQueue.Present(graphics.swapChain);
+			VkResult result = commandQueue->Present(graphics.swapChain);
 			HandleVulkanSwapChainResult(result, "presentation");
 		}
 #endif
 
-		endOfFrame[frameIndex].graphicsReceipt = commandQueue.SubmitSignal(CommandListType::Graphics);
+		endOfFrame.at(frameIndex).graphicsReceipt = commandQueue->SubmitSignal(CommandListType::Graphics);
 
 		MoveToNextFrame();
-		}
+	}
 
 	Receipt IGLOContext::Submit(const CommandList& commandList)
 	{
@@ -3024,7 +2804,7 @@ namespace ig
 
 	Receipt IGLOContext::Submit(const CommandList* const* commandLists, uint32_t numCommandLists)
 	{
-		Receipt out = commandQueue.SubmitCommands(commandLists, numCommandLists);
+		Receipt out = commandQueue->SubmitCommands(commandLists, numCommandLists);
 		if (!out.IsNull())
 		{
 			switch (commandLists[0]->GetCommandListType())
@@ -3040,21 +2820,21 @@ namespace ig
 				break;
 			default:
 				throw std::runtime_error("This should be impossible.");
-			}
-		}
+	}
+	}
 		return out;
 	}
 
 	bool IGLOContext::IsComplete(Receipt receipt) const
 	{
-		return commandQueue.IsComplete(receipt);
+		return commandQueue->IsComplete(receipt);
 	}
 
 	void IGLOContext::WaitForCompletion(Receipt receipt)
 	{
-		commandQueue.WaitForCompletion(receipt);
+		commandQueue->WaitForCompletion(receipt);
 
-		if (commandQueue.IsIdle())
+		if (commandQueue->IsIdle())
 		{
 			// We can safely free all temp resources when GPU is idle.
 			FreeAllTempResources();
@@ -3063,7 +2843,7 @@ namespace ig
 
 	void IGLOContext::WaitForIdleDevice()
 	{
-		commandQueue.WaitForIdle();
+		commandQueue->WaitForIdle();
 
 		// We can safely free all temp resources when GPU is idle.
 		FreeAllTempResources();
@@ -3071,11 +2851,12 @@ namespace ig
 
 	void IGLOContext::FreeAllTempResources()
 	{
-		descriptorHeap.FreeAllTempResources();
-		tempBufferAllocator.FreeAllTempPages();
+		descriptorHeap->FreeAllTempResources();
+		tempBufferAllocator->FreeAllTempPages();
 		for (size_t i = 0; i < endOfFrame.size(); i++)
 		{
-			endOfFrame[i].delayedUnloadTextures.clear();
+			endOfFrame[i].delayedDestroyTextures.clear();
+			endOfFrame[i].delayedDestroyBuffers.clear();
 		}
 	}
 
@@ -3088,20 +2869,21 @@ namespace ig
 		if (frameIndex >= endOfFrame.size()) throw std::runtime_error("This should be impossible.");
 
 		EndOfFrame& currentFrame = endOfFrame[frameIndex];
-		commandQueue.WaitForCompletion(currentFrame.graphicsReceipt);
-		commandQueue.WaitForCompletion(currentFrame.computeReceipt);
-		commandQueue.WaitForCompletion(currentFrame.copyReceipt);
+		commandQueue->WaitForCompletion(currentFrame.graphicsReceipt);
+		commandQueue->WaitForCompletion(currentFrame.computeReceipt);
+		commandQueue->WaitForCompletion(currentFrame.copyReceipt);
 
-		// The delayed unload textures are held for max 1 full frame cycle
-		currentFrame.delayedUnloadTextures.clear();
+		// The delayed destroy resources are held for max 1 full frame cycle
+		currentFrame.delayedDestroyTextures.clear();
+		currentFrame.delayedDestroyBuffers.clear();
 
-		descriptorHeap.NextFrame();
-		tempBufferAllocator.NextFrame();
+		descriptorHeap->NextFrame();
+		tempBufferAllocator->NextFrame();
 
 #ifdef IGLO_VULKAN
 		if (graphics.validSwapChain)
 		{
-			VkResult result = commandQueue.AcquireNextVulkanSwapChainImage(graphics.device, graphics.swapChain,
+			VkResult result = commandQueue->AcquireNextVulkanSwapChainImage(graphics.device, graphics.swapChain,
 				graphics.swapChainUsesMinImageCount ? 0 : UINT64_MAX);
 			HandleVulkanSwapChainResult(result, "image acquisition");
 		}
@@ -3119,24 +2901,30 @@ namespace ig
 #endif
 	}
 
-	void IGLOContext::DelayedTextureUnload(std::shared_ptr<Texture> texture) const
+	void IGLOContext::DelayedDestroyTexture(std::unique_ptr<Texture> texture) const
 	{
-		endOfFrame[frameIndex].delayedUnloadTextures.push_back(texture);
+		if (!texture) return;
+		endOfFrame[frameIndex].delayedDestroyTextures.push_back(std::move(texture));
+	}
+	void IGLOContext::DelayedDestroyBuffer(std::unique_ptr<Buffer> buffer) const
+	{
+		if (!buffer) return;
+		endOfFrame[frameIndex].delayedDestroyBuffers.push_back(std::move(buffer));
 	}
 
 	Descriptor IGLOContext::CreateTempConstant(const void* data, uint64_t numBytes) const
 	{
 		const char* errStr = "Failed to create temporary shader constant. Reason: ";
 
-		Descriptor outDescriptor = descriptorHeap.AllocateTemp(DescriptorType::ConstantBuffer_CBV);
-		if (outDescriptor.IsNull())
+		Descriptor outDescriptor = descriptorHeap->AllocateTemp(DescriptorType::ConstantBuffer_CBV);
+		if (!outDescriptor)
 		{
 			Log(LogType::Error, ToString(errStr, "Failed to allocate temporary resource descriptor."));
 			return Descriptor();
-		}
+}
 
-		TempBuffer tempBuffer = tempBufferAllocator.AllocateTempBuffer(numBytes, GetGraphicsSpecs().bufferPlacementAlignments.constant);
-		if (tempBuffer.IsNull())
+		TempBuffer tempBuffer = tempBufferAllocator->AllocateTempBuffer(numBytes, GetGraphicsSpecs().bufferPlacementAlignments.constant);
+		if (!tempBuffer)
 		{
 			Log(LogType::Error, ToString(errStr, "Failed to allocate temporary buffer."));
 			return Descriptor();
@@ -3148,10 +2936,10 @@ namespace ig
 		D3D12_CONSTANT_BUFFER_VIEW_DESC desc = {};
 		desc.BufferLocation = tempBuffer.impl.resource->GetGPUVirtualAddress() + tempBuffer.offset;
 		desc.SizeInBytes = (UINT)AlignUp(numBytes, GetGraphicsSpecs().bufferPlacementAlignments.constant);
-		graphics.device->CreateConstantBufferView(&desc, descriptorHeap.GetD3D12CPUHandle(outDescriptor));
+		graphics.device->CreateConstantBufferView(&desc, descriptorHeap->GetD3D12CPUHandle(outDescriptor));
 #endif
 #ifdef IGLO_VULKAN
-		descriptorHeap.WriteBufferDescriptor(outDescriptor, tempBuffer.impl.buffer, tempBuffer.offset, numBytes);
+		descriptorHeap->WriteBufferDescriptor(outDescriptor, tempBuffer.impl.buffer, tempBuffer.offset, numBytes);
 #endif
 
 		return outDescriptor;
@@ -3169,8 +2957,8 @@ namespace ig
 			return Descriptor();
 		}
 
-		Descriptor outDescriptor = descriptorHeap.AllocateTemp(DescriptorType::RawOrStructuredBuffer_SRV_UAV);
-		if (outDescriptor.IsNull())
+		Descriptor outDescriptor = descriptorHeap->AllocateTemp(DescriptorType::RawOrStructuredBuffer_SRV_UAV);
+		if (!outDescriptor)
 		{
 			Log(LogType::Error, ToString(errStr, "Failed to allocate temporary resource descriptor."));
 			return Descriptor();
@@ -3179,9 +2967,9 @@ namespace ig
 #ifdef IGLO_D3D12
 		// In D3D12, structured buffers need a special non-power of 2 element stride alignment,
 		// which is why we allocate 1 extra element here.
-		TempBuffer tempBuffer = tempBufferAllocator.AllocateTempBuffer(numBytes + elementStride,
+		TempBuffer tempBuffer = tempBufferAllocator->AllocateTempBuffer(numBytes + elementStride,
 			GetGraphicsSpecs().bufferPlacementAlignments.rawOrStructuredBuffer);
-		if (tempBuffer.IsNull())
+		if (!tempBuffer)
 		{
 			Log(LogType::Error, ToString(errStr, "Failed to allocate temporary buffer."));
 			return Descriptor();
@@ -3203,19 +2991,19 @@ namespace ig
 		srv.Buffer.StructureByteStride = elementStride;
 		srv.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
 
-		graphics.device->CreateShaderResourceView(tempBuffer.impl.resource, &srv, descriptorHeap.GetD3D12CPUHandle(outDescriptor));
+		graphics.device->CreateShaderResourceView(tempBuffer.impl.resource, &srv, descriptorHeap->GetD3D12CPUHandle(outDescriptor));
 #endif
 #ifdef IGLO_VULKAN
-		TempBuffer tempBuffer = tempBufferAllocator.AllocateTempBuffer(numBytes,
+		TempBuffer tempBuffer = tempBufferAllocator->AllocateTempBuffer(numBytes,
 			GetGraphicsSpecs().bufferPlacementAlignments.rawOrStructuredBuffer);
-		if (tempBuffer.IsNull())
+		if (!tempBuffer)
 		{
 			Log(LogType::Error, ToString(errStr, "Failed to allocate temporary buffer."));
 			return Descriptor();
 		}
 
 		memcpy(tempBuffer.data, data, numBytes);
-		descriptorHeap.WriteBufferDescriptor(outDescriptor, tempBuffer.impl.buffer, tempBuffer.offset, numBytes);
+		descriptorHeap->WriteBufferDescriptor(outDescriptor, tempBuffer.impl.buffer, tempBuffer.offset, numBytes);
 #endif
 
 		return outDescriptor;
@@ -3236,20 +3024,20 @@ namespace ig
 			return Descriptor();
 		}
 
-		Descriptor outDescriptor = descriptorHeap.AllocateTemp(DescriptorType::RawOrStructuredBuffer_SRV_UAV);
-		if (outDescriptor.IsNull())
+		Descriptor outDescriptor = descriptorHeap->AllocateTemp(DescriptorType::RawOrStructuredBuffer_SRV_UAV);
+		if (!outDescriptor)
 		{
 			Log(LogType::Error, ToString(errStr, "Failed to allocate temporary resource descriptor."));
 			return Descriptor();
 		}
 
-		TempBuffer tempBuffer = tempBufferAllocator.AllocateTempBuffer(numBytes,
+		TempBuffer tempBuffer = tempBufferAllocator->AllocateTempBuffer(numBytes,
 			GetGraphicsSpecs().bufferPlacementAlignments.rawOrStructuredBuffer);
-		if (tempBuffer.IsNull())
+		if (!tempBuffer)
 		{
 			Log(LogType::Error, ToString(errStr, "Failed to allocate temporary buffer."));
 			return Descriptor();
-	}
+		}
 
 		memcpy(tempBuffer.data, data, numBytes);
 
@@ -3263,98 +3051,60 @@ namespace ig
 		srv.Buffer.StructureByteStride = 0;
 		srv.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_RAW;
 
-		graphics.device->CreateShaderResourceView(tempBuffer.impl.resource, &srv, descriptorHeap.GetD3D12CPUHandle(outDescriptor));
+		graphics.device->CreateShaderResourceView(tempBuffer.impl.resource, &srv, descriptorHeap->GetD3D12CPUHandle(outDescriptor));
 #endif
 #ifdef IGLO_VULKAN
-		descriptorHeap.WriteBufferDescriptor(outDescriptor, tempBuffer.impl.buffer, tempBuffer.offset, numBytes);
+		descriptorHeap->WriteBufferDescriptor(outDescriptor, tempBuffer.impl.buffer, tempBuffer.offset, numBytes);
 #endif
 
 		return outDescriptor;
-	}
+		}
 
-	void Buffer::Unload()
+	Buffer::~Buffer()
 	{
-		Impl_Unload();
+		Impl_Destroy();
 
 		for (Descriptor d : descriptor_SRV_or_CBV)
 		{
-			if (!d.IsNull()) context->GetDescriptorHeap().FreePersistent(d);
+			if (d) context.GetDescriptorHeap().FreePersistent(d);
 		}
 		descriptor_SRV_or_CBV.clear();
-		descriptor_SRV_or_CBV.shrink_to_fit();
 
-		if (!descriptor_UAV.IsNull()) context->GetDescriptorHeap().FreePersistent(descriptor_UAV);
-		descriptor_UAV.SetToNull();
-
-		isLoaded = false;
-		context = nullptr;
-		type = BufferType::VertexBuffer;
-		usage = BufferUsage::Default;
-		size = 0;
-		stride = 0;
-		numElements = 0;
-		dynamicSetCounter = 0;
-
-		mapped.clear();
-		mapped.shrink_to_fit();
-
+		if (descriptor_UAV)
+		{
+			context.GetDescriptorHeap().FreePersistent(descriptor_UAV);
+			descriptor_UAV.SetToNull();
+		}
 	}
 
-	Buffer::Buffer(Buffer&& other) noexcept
+	Descriptor Buffer::GetDescriptor() const
 	{
-		*this = std::move(other);
-	}
-	Buffer& Buffer::operator=(Buffer&& other) noexcept
-	{
-		Unload();
+		if (desc.usage == BufferUsage::Readable) throw std::runtime_error("Invalid usage.");
 
-		std::swap(this->isLoaded, other.isLoaded);
-		std::swap(this->context, other.context);
-		std::swap(this->type, other.type);
-		std::swap(this->usage, other.usage);
-		std::swap(this->size, other.size);
-		std::swap(this->stride, other.stride);
-		std::swap(this->numElements, other.numElements);
-		std::swap(this->descriptor_SRV_or_CBV, other.descriptor_SRV_or_CBV);
-		std::swap(this->descriptor_UAV, other.descriptor_UAV);
-		std::swap(this->mapped, other.mapped);
-		std::swap(this->dynamicSetCounter, other.dynamicSetCounter);
-
-		std::swap(this->impl, other.impl);
-
-		return *this;
-	}
-
-	const Descriptor* Buffer::GetDescriptor() const
-	{
-		if (!isLoaded) return nullptr;
-		if (usage == BufferUsage::Readable) return nullptr;
-		switch (type)
+		switch (desc.type)
 		{
 		case BufferType::StructuredBuffer:
 		case BufferType::RawBuffer:
 		case BufferType::ShaderConstant:
-			if (usage == BufferUsage::Dynamic) return &descriptor_SRV_or_CBV[dynamicSetCounter];
-			return &descriptor_SRV_or_CBV[0];
+			if (desc.usage == BufferUsage::Dynamic) return descriptor_SRV_or_CBV[dynamicSetCounter];
+			return descriptor_SRV_or_CBV[0];
+
 		default:
-			return nullptr;
+			throw std::runtime_error("Invalid type.");
 		}
 	}
 
-	const Descriptor* Buffer::GetUnorderedAccessDescriptor() const
+	Descriptor Buffer::GetUnorderedAccessDescriptor() const
 	{
-		if (!isLoaded) return nullptr;
-		if (descriptor_UAV.IsNull()) return nullptr;
-		return &descriptor_UAV;
+		if (!descriptor_UAV) throw std::runtime_error("Has no UAV.");
+		return descriptor_UAV;
 	}
 
-	bool Buffer::InternalLoad(const IGLOContext& context, uint64_t size, uint32_t stride, uint32_t numElements, BufferUsage usage, BufferType type)
+	std::unique_ptr<Buffer> Buffer::InternalCreate(const IGLOContext& context, const BufferDesc& desc)
 	{
-		Unload();
-
 		const char* errStr = nullptr;
 
-		switch (type)
+		switch (desc.type)
 		{
 		case BufferType::VertexBuffer:	   errStr = "Failed to create vertex buffer. Reason: "; break;
 		case BufferType::IndexBuffer:	   errStr = "Failed to create index buffer. Reason: "; break;
@@ -3365,64 +3115,66 @@ namespace ig
 			throw std::invalid_argument("This should be impossible.");
 		}
 
-		if (size == 0)
+		if (desc.size == 0)
 		{
 			Log(LogType::Error, ToString(errStr, "Size of buffer can't be zero."));
-			return false;
+			return nullptr;
 		}
-		if (usage == BufferUsage::UnorderedAccess)
+		if (desc.usage == BufferUsage::UnorderedAccess)
 		{
-			if (type != BufferType::RawBuffer &&
-				type != BufferType::StructuredBuffer)
+			if (desc.type != BufferType::RawBuffer &&
+				desc.type != BufferType::StructuredBuffer)
 			{
 				Log(LogType::Error, ToString(errStr, "Unordered access buffer usage is only supported for raw and structured buffers."));
-				return false;
+				return nullptr;
 			}
 		}
-		if (type == BufferType::VertexBuffer || type == BufferType::RawBuffer)
+		if (desc.type == BufferType::VertexBuffer ||
+			desc.type == BufferType::RawBuffer)
 		{
-			if (size % 4 != 0)
+			if (desc.size % 4 != 0)
 			{
 				Log(LogType::Error, ToString(errStr, "The size of this type of buffer must be a multiple of 4."));
-				return false;
+				return nullptr;
 			}
-			if (stride != 0)
+			if (desc.stride != 0)
 			{
-				if (stride % 4 != 0)
+				if (desc.stride % 4 != 0)
 				{
 					Log(LogType::Error, ToString(errStr, "The stride of this type of buffer must be a multiple of 4."));
-					return false;
+					return nullptr;
 				}
 			}
 		}
 
-		this->context = &context;
-		this->type = type;
-		this->usage = usage;
-		this->size = size;
-		this->stride = stride;
-		this->numElements = numElements;
+		std::unique_ptr<Buffer> out = std::unique_ptr<Buffer>(new Buffer(context, desc));
 
-		DetailedResult result = Impl_InternalLoad(context, size, stride, numElements, usage, type);
+		DetailedResult result = out->Impl_Create();
 		if (!result)
 		{
 			Log(LogType::Error, ToString(errStr, result.errorMessage));
-			Unload();
-			return false;
+			return nullptr;
 		}
 
-		this->isLoaded = true;
-		return true;
+		return out;
 	}
 
-	bool Buffer::LoadAsVertexBuffer(const IGLOContext& context, uint32_t vertexStride, uint32_t numVertices, BufferUsage usage)
+	std::unique_ptr<Buffer> Buffer::CreateVertexBuffer(const IGLOContext& context, uint32_t vertexStride, uint32_t numVertices, BufferUsage usage)
 	{
-		return InternalLoad(context, uint64_t(vertexStride) * uint64_t(numVertices), vertexStride, numVertices, usage, BufferType::VertexBuffer);
+		BufferDesc desc =
+		{
+			.type = BufferType::VertexBuffer,
+			.usage = usage,
+			.size = uint64_t(vertexStride) * uint64_t(numVertices),
+			.stride = vertexStride,
+			.numElements = numVertices,
+		};
+		return InternalCreate(context, desc);
 	}
-	bool Buffer::LoadAsIndexBuffer(const IGLOContext& context, IndexFormat format, uint32_t numIndices, BufferUsage usage)
+
+	std::unique_ptr<Buffer> Buffer::CreateIndexBuffer(const IGLOContext& context, IndexFormat format, uint32_t numIndices, BufferUsage usage)
 	{
 		uint32_t indexStride = 0;
-
 		if (format == IndexFormat::UINT16)
 		{
 			indexStride = 2;
@@ -3434,134 +3186,145 @@ namespace ig
 		else
 		{
 			Log(LogType::Error, "Failed to create index buffer. Reason: Invalid format.");
-			return false;
+			return nullptr;
 		}
 
-		return InternalLoad(context, uint64_t(indexStride) * uint64_t(numIndices), indexStride, numIndices, usage, BufferType::IndexBuffer);
+		BufferDesc desc =
+		{
+			.type = BufferType::IndexBuffer,
+			.usage = usage,
+			.size = uint64_t(indexStride) * uint64_t(numIndices),
+			.stride = indexStride,
+			.numElements = numIndices,
+		};
+
+		return InternalCreate(context, desc);
 	}
-	bool Buffer::LoadAsStructuredBuffer(const IGLOContext& context, uint32_t elementStride, uint32_t numElements, BufferUsage usage)
+
+	std::unique_ptr<Buffer> Buffer::CreateStructuredBuffer(const IGLOContext& context,
+		uint32_t elementStride, uint32_t numElements, BufferUsage usage)
 	{
-		return InternalLoad(context, uint64_t(elementStride) * uint64_t(numElements), elementStride, numElements, usage, BufferType::StructuredBuffer);
+		BufferDesc desc =
+		{
+			.type = BufferType::StructuredBuffer,
+			.usage = usage,
+			.size = uint64_t(elementStride) * uint64_t(numElements),
+			.stride = elementStride,
+			.numElements = numElements,
+		};
+		return InternalCreate(context, desc);
 	}
-	bool Buffer::LoadAsRawBuffer(const IGLOContext& context, uint64_t numBytes, BufferUsage usage)
+
+	std::unique_ptr<Buffer> Buffer::CreateRawBuffer(const IGLOContext& context, uint64_t numBytes, BufferUsage usage)
 	{
-		return InternalLoad(context, numBytes, 0, 0, usage, BufferType::RawBuffer);
+		BufferDesc desc =
+		{
+			.type = BufferType::RawBuffer,
+			.usage = usage,
+			.size = numBytes,
+			.stride = 0,
+			.numElements = 0,
+		};
+		return InternalCreate(context, desc);
 	}
-	bool Buffer::LoadAsShaderConstant(const IGLOContext& context, uint64_t numBytes, BufferUsage usage)
+
+	std::unique_ptr<Buffer> Buffer::CreateShaderConstant(const IGLOContext& context, uint64_t numBytes, BufferUsage usage)
 	{
-		return InternalLoad(context, numBytes, 0, 0, usage, BufferType::ShaderConstant);
+		BufferDesc desc =
+		{
+			.type = BufferType::ShaderConstant,
+			.usage = usage,
+			.size = numBytes,
+			.stride = 0,
+			.numElements = 0,
+		};
+		return InternalCreate(context, desc);
 	}
 
 	void Buffer::SetData(CommandList& cmd, void* srcData)
 	{
-		bool usageOK = (usage == BufferUsage::Default || usage == BufferUsage::UnorderedAccess);
-		if (!isLoaded || !usageOK)
+		if (desc.usage != BufferUsage::Default &&
+			desc.usage != BufferUsage::UnorderedAccess)
 		{
 			Log(LogType::Error, "Failed to set buffer data. Reason: Buffer must be created with Default or UnorderedAccess usage.");
 			return;
 		}
 
-		TempBuffer tempBuffer = context->GetTempBufferAllocator().AllocateTempBuffer(size, 1);
-		if (tempBuffer.IsNull())
+		TempBuffer tempBuffer = context.GetTempBufferAllocator().AllocateTempBuffer(desc.size, 1);
+		if (!tempBuffer)
 		{
 			Log(LogType::Error, "Failed to set buffer data. Reason: Failed to allocate temporary buffer.");
 			return;
 		}
 
-		memcpy(tempBuffer.data, srcData, size);
+		memcpy(tempBuffer.data, srcData, desc.size);
 
 		cmd.CopyTempBufferToBuffer(tempBuffer, *this);
 	}
 
 	void Buffer::SetDynamicData(void* srcData)
 	{
-		if (!isLoaded || usage != BufferUsage::Dynamic)
+		if (desc.usage != BufferUsage::Dynamic)
 		{
 			Log(LogType::Error, "Failed to set dynamic buffer data. Reason: Buffer must be created with Dynamic usage.");
 			return;
 		}
 
-		dynamicSetCounter = (dynamicSetCounter + 1) % context->GetMaxFramesInFlight();
+		dynamicSetCounter = (dynamicSetCounter + 1) % context.GetMaxFramesInFlight();
 
 		assert(dynamicSetCounter < mapped.size());
-		if (!mapped[dynamicSetCounter]) throw std::runtime_error("This should be impossible.");
+		assert(mapped[dynamicSetCounter] != nullptr);
 
-		memcpy(mapped[dynamicSetCounter], srcData, size);
+		memcpy(mapped[dynamicSetCounter], srcData, desc.size);
 	}
 
 	void Buffer::ReadData(void* destData)
 	{
-		if (!isLoaded || usage != BufferUsage::Readable)
+		if (desc.usage != BufferUsage::Readable)
 		{
 			Log(LogType::Error, "Failed to read buffer data. Reason: Buffer must be created with Readable usage.");
 			return;
 		}
 
-		uint32_t frameIndex = context->GetFrameIndex();
+		uint32_t frameIndex = context.GetFrameIndex();
+
 		assert(frameIndex < mapped.size());
-		if (!mapped[frameIndex]) throw std::runtime_error("This should be impossible.");
+		assert(mapped[frameIndex] != nullptr);
 
-		memcpy(destData, mapped[frameIndex], size);
+		memcpy(destData, mapped[frameIndex], desc.size);
 	}
 
-	void Texture::Unload()
+	Texture::~Texture()
 	{
-		Impl_Unload();
+		if (isWrapped) return;
 
-		if (!isWrapped)
+		Impl_Destroy();
+
+		if (srvDescriptor)
 		{
-			if (!srvDescriptor.IsNull()) context->GetDescriptorHeap().FreePersistent(srvDescriptor);
-			if (!uavDescriptor.IsNull()) context->GetDescriptorHeap().FreePersistent(uavDescriptor);
+			context.GetDescriptorHeap().FreePersistent(srvDescriptor);
+			srvDescriptor.SetToNull();
 		}
-		srvDescriptor.SetToNull();
-		uavDescriptor.SetToNull();
-
-		isLoaded = false;
-		context = nullptr;
-		desc = TextureDesc();
-
-		readMapped.clear();
-		readMapped.shrink_to_fit();
-
-		isWrapped = false;
+		if (uavDescriptor)
+		{
+			context.GetDescriptorHeap().FreePersistent(uavDescriptor);
+			uavDescriptor.SetToNull();
+		}
 	}
 
-	Texture::Texture(Texture&& other) noexcept
+	Descriptor Texture::GetDescriptor() const
 	{
-		*this = std::move(other);
+		if (!srvDescriptor) throw std::runtime_error("No SRV.");
+		return srvDescriptor;
 	}
-	Texture& Texture::operator=(Texture&& other) noexcept
+
+	Descriptor Texture::GetUnorderedAccessDescriptor() const
 	{
-		Unload();
-
-		std::swap(this->isLoaded, other.isLoaded);
-		std::swap(this->context, other.context);
-		std::swap(this->desc, other.desc);
-		std::swap(this->srvDescriptor, other.srvDescriptor);
-		std::swap(this->uavDescriptor, other.uavDescriptor);
-		std::swap(this->readMapped, other.readMapped);
-		std::swap(this->isWrapped, other.isWrapped);
-
-		std::swap(this->impl, other.impl);
-
-		return *this;
+		if (!uavDescriptor) throw std::runtime_error("No UAV.");
+		return uavDescriptor;
 	}
 
-	const Descriptor* Texture::GetDescriptor() const
-	{
-		if (!isLoaded) return nullptr;
-		if (srvDescriptor.IsNull()) return nullptr;
-		return &srvDescriptor;
-	}
-
-	const Descriptor* Texture::GetUnorderedAccessDescriptor() const
-	{
-		if (!isLoaded) return nullptr;
-		if (uavDescriptor.IsNull()) return nullptr;
-		return &uavDescriptor;
-	}
-
-	bool Texture::Load(const IGLOContext& context, uint32_t width, uint32_t height, Format format,
+	std::unique_ptr<Texture> Texture::Create(const IGLOContext& context, uint32_t width, uint32_t height, Format format,
 		TextureUsage usage, MSAA msaa, ClearValue optimizedClearValue)
 	{
 		TextureDesc desc;
@@ -3570,13 +3333,11 @@ namespace ig
 		desc.usage = usage;
 		desc.msaa = msaa;
 		desc.optimizedClearValue = optimizedClearValue;
-		return Load(context, desc);
+		return Texture::Create(context, desc);
 	}
 
-	bool Texture::Load(const IGLOContext& context, const TextureDesc& desc)
+	std::unique_ptr<Texture> Texture::Create(const IGLOContext& context, const TextureDesc& desc)
 	{
-		Unload();
-
 		const char* errStr = "Failed to create texture. Reason: ";
 
 		switch (desc.usage)
@@ -3594,45 +3355,39 @@ namespace ig
 		if (desc.extent.width == 0 || desc.extent.height == 0)
 		{
 			Log(LogType::Error, ToString(errStr, "Texture dimensions must be atleast 1x1."));
-			return false;
+			return nullptr;
 		}
 		if (desc.numFaces == 0 || desc.mipLevels == 0)
 		{
 			Log(LogType::Error, ToString(errStr, "Texture must have atleast 1 face and 1 mip level."));
-			return false;
+			return nullptr;
 		}
 		if (desc.format == Format::None)
 		{
 			Log(LogType::Error, ToString(errStr, "Invalid texture format."));
-			return false;
+			return nullptr;
 		}
 		if (desc.isCubemap && desc.numFaces % 6 != 0)
 		{
 			Log(LogType::Error, ToString(errStr, "For cubemap textures, number of faces must be a multiple of 6."));
-			return false;
+			return nullptr;
 		}
 
-		this->context = &context;
-		this->desc = desc;
-		this->isWrapped = false;
+		std::unique_ptr<Texture> out = std::unique_ptr<Texture>(new Texture(context, desc, false));
 
-		DetailedResult result = Impl_Load(context, desc);
+		DetailedResult result = out->Impl_Create();
 		if (!result)
 		{
 			Log(LogType::Error, ToString(errStr, result.errorMessage));
-			Unload();
-			return false;
+			return nullptr;
 		}
 
-		this->isLoaded = true;
-		return true;
+		return out;
 	}
 
-	bool Texture::LoadAsWrapped(const IGLOContext& context, const WrappedTextureDesc& desc)
+	std::unique_ptr<Texture> Texture::CreateWrapped(const IGLOContext& context, const WrappedTextureDesc& desc)
 	{
-		Unload();
-
-		const char* errStr = "Failed to load wrapped texture. Reason: ";
+		const char* errStr = "Failed to create wrapped texture. Reason: ";
 
 		size_t expectedResources = 1;
 		size_t expectedMemories = 1;
@@ -3659,65 +3414,55 @@ namespace ig
 			expectedMappedPtrs != providedMappedPtrs)
 		{
 			Log(LogType::Error, ToString(errStr, "Unexpected vector size for impl.resource, impl.image, impl.memory or readMapped."));
-			return false;
+			return nullptr;
 		}
 
-		this->isLoaded = true;
-		this->context = &context;
-		this->desc = desc.textureDesc;
-		this->srvDescriptor = desc.srvDescriptor;
-		this->uavDescriptor = desc.uavDescriptor;
-		this->readMapped = desc.readMapped;
-		this->isWrapped = true;
-		this->impl = desc.impl;
-		return true;
-}
+		std::unique_ptr<Texture> out = std::unique_ptr<Texture>(new Texture(context, desc.textureDesc, true));
+		out->srvDescriptor = desc.srvDescriptor;
+		out->uavDescriptor = desc.uavDescriptor;
+		out->readMapped = desc.readMapped;
+		out->impl = desc.impl;
+		return out;
+	}
 
-	bool Texture::LoadFromFile(const IGLOContext& context, CommandList& cmd, const std::string& filename, bool generateMipmaps, bool sRGB)
+	std::unique_ptr<Texture> Texture::LoadFromFile(const IGLOContext& context, CommandList& cmd,
+		const std::string& filename, bool generateMipmaps, bool sRGB)
 	{
-		Unload();
 		ReadFileResult file = ReadFile(filename);
 		if (!file.success)
 		{
 			Log(LogType::Error, "Failed to load texture from file. Reason: Couldn't open '" + filename + "'.");
-			return false;
+			return nullptr;
 		}
 		if (file.fileContent.size() == 0)
 		{
 			Log(LogType::Error, "Failed to load texture from file. Reason: File '" + filename + "' is empty.");
-			return false;
+			return nullptr;
 		}
 		return LoadFromMemory(context, cmd, file.fileContent.data(), file.fileContent.size(), generateMipmaps, sRGB);
 	}
 
-	bool Texture::LoadFromMemory(const IGLOContext& context, CommandList& cmd, const byte* fileData, size_t numBytes, bool generateMipmaps, bool sRGB)
+	std::unique_ptr<Texture> Texture::LoadFromMemory(const IGLOContext& context, CommandList& cmd,
+		const byte* fileData, size_t numBytes, bool generateMipmaps, bool sRGB)
 	{
-		Unload();
-		Image image;
-		if (!image.LoadFromMemory(fileData, numBytes, false)) return false;
-		if (sRGB) // User requests sRGB format
+		std::unique_ptr<Image> image = Image::LoadFromMemory(fileData, numBytes, false);
+		if (!image) return nullptr;
+		if (sRGB) // User requested sRGB format
 		{
-			image.SetSRGB(true);
-			if (!image.IsSRGB())
+			image->SetSRGB(true);
+			if (!image->IsSRGB())
 			{
-				Log(LogType::Warning, ToString("A texture was unable to use an sRGB format as requested,"
-					" because no sRGB equivalent was found for this iglo format: ", (uint32_t)image.GetFormat(), "."));
+				Log(LogType::Warning, ToString("Unable to use an sRGB format for texture as requested,"
+					" because no sRGB equivalent was found for this iglo format: ", GetFormatName(image->GetFormat())));
 			}
 		}
-		return LoadFromMemory(context, cmd, image, generateMipmaps);
+		return LoadFromMemory(context, cmd, *image, generateMipmaps);
 	}
 
-	bool Texture::LoadFromMemory(const IGLOContext& context, CommandList& cmd, const Image& image, bool generateMipmaps)
+	std::unique_ptr<Texture> Texture::LoadFromMemory(const IGLOContext& context, CommandList& cmd,
+		const Image& image, bool generateMipmaps)
 	{
-		Unload();
-
-		const char* errStr = "Failed to load texture from image. Reason: ";
-
-		if (!image.IsLoaded())
-		{
-			Log(LogType::Error, ToString(errStr, "The provided image is not loaded."));
-			return false;
-		}
+		const char* errStr = "Failed to create texture from image. Reason: ";
 
 		// Should we generate mips?
 		uint32_t fullMipLevels = Image::CalculateNumMips(image.GetExtent());
@@ -3734,7 +3479,6 @@ namespace ig
 			}
 		}
 
-		// Load with appropriate mip level count
 		TextureDesc selfDesc;
 		selfDesc.extent = Extent2D(image.GetWidth(), image.GetHeight());
 		selfDesc.format = image.GetFormat();
@@ -3743,45 +3487,42 @@ namespace ig
 		selfDesc.isCubemap = image.IsCubemap();
 		selfDesc.numFaces = image.GetNumFaces();
 		selfDesc.mipLevels = proceedWithMipGen ? fullMipLevels : image.GetMipLevels();
-		if (!Load(context, selfDesc))
+
+		std::unique_ptr<Texture> out = Create(context, selfDesc);
+		if (!out)
 		{
-			// Load() will have already unloaded the texture and logged an error message if it failed.
-			return false;
+			// Create() will have already logged an error message if it failed.
+			return nullptr;
 		}
 
 		if (proceedWithMipGen)
 		{
-			DetailedResult result = GenerateMips(cmd, image);
+			DetailedResult result = out->GenerateMips(cmd, image);
 			if (!result)
 			{
 				Log(LogType::Error, ToString(errStr, result.errorMessage));
-				Unload();
-				return false;
+				return nullptr;
 			}
 		}
 		else
 		{
-			cmd.AddTextureBarrier(*this, SimpleBarrier::Discard, SimpleBarrier::CopyDest);
+			cmd.AddTextureBarrier(*out, SimpleBarrier::Discard, SimpleBarrier::CopyDest);
 			cmd.FlushBarriers();
 
-			SetPixels(cmd, image);
+			out->SetPixels(cmd, image);
 
 			if (cmd.GetCommandListType() != CommandListType::Copy)
 			{
-				cmd.AddTextureBarrier(*this, SimpleBarrier::CopyDest, SimpleBarrier::PixelShaderResource);
+				cmd.AddTextureBarrier(*out, SimpleBarrier::CopyDest, SimpleBarrier::PixelShaderResource);
 				cmd.FlushBarriers();
 			}
 		}
 
-		return true;
+		return out;
 	}
 
 	DetailedResult Texture::ValidateMipGeneration(CommandListType cmdListType, const Image& image)
 	{
-		if (!image.IsLoaded())
-		{
-			return DetailedResult::Fail("The provided image isn't loaded.");
-		}
 		if (GetFormatInfo(image.GetFormat()).blockSize != 0)
 		{
 			return DetailedResult::Fail("Mipmap generation is not supported for block compression formats.");
@@ -3804,7 +3545,7 @@ namespace ig
 
 	DetailedResult Texture::GenerateMips(CommandList& cmd, const Image& image)
 	{
-		if (!isLoaded || desc.mipLevels <= 1 || !image.IsLoaded() || image.GetExtent() != desc.extent)
+		if (desc.mipLevels <= 1 || image.GetExtent() != desc.extent)
 		{
 			throw std::runtime_error("This should be impossible.");
 		}
@@ -3814,7 +3555,6 @@ namespace ig
 		Format format_non_sRGB = formatInfo.is_sRGB ? formatInfo.sRGB_opposite : desc.format;
 
 		// Create an unordered access texture with one less miplevel
-		std::shared_ptr<Texture> unordered = std::make_shared<Texture>();
 		TextureDesc unorderedDesc;
 		unorderedDesc.extent = nextMipExtent;
 		unorderedDesc.format = format_non_sRGB;
@@ -3824,13 +3564,13 @@ namespace ig
 		unorderedDesc.numFaces = desc.numFaces;
 		unorderedDesc.mipLevels = desc.mipLevels - 1;
 		unorderedDesc.createDescriptors = false;
-		if (!unordered->Load(*context, unorderedDesc))
+		std::unique_ptr<Texture> unorderedTexture = Texture::Create(context, unorderedDesc);
+		if (!unorderedTexture)
 		{
 			return DetailedResult::Fail("Failed to create unordered access texture for mipmap generation.");
 		}
-
-		// To give the GPU enough time to use this texture, we will keep it alive past this function.
-		context->DelayedTextureUnload(unordered);
+		const Texture& unorderedRef = *unorderedTexture;
+		context.DelayedDestroyTexture(std::move(unorderedTexture));
 
 		cmd.AddTextureBarrierAtSubresource(*this, SimpleBarrier::Discard, SimpleBarrier::CopyDest, 0, 0);
 		cmd.FlushBarriers();
@@ -3847,16 +3587,16 @@ namespace ig
 			Vector2 inverseDestTextureSize;
 		};
 		MipmapGenPushConstants pushConstants;
-		pushConstants.bilinearClampSamplerIndex = context->GetBilinearClampSamplerDescriptor()->heapIndex;
+		pushConstants.bilinearClampSamplerIndex = context.GetBilinearClampSamplerDescriptor().heapIndex;
 		pushConstants.is_sRGB = formatInfo.is_sRGB;
 
 		for (uint32_t i = 0; i < desc.mipLevels - 1; i++)
 		{
-			DescriptorHeap& heap = context->GetDescriptorHeap();
+			DescriptorHeap& heap = context.GetDescriptorHeap();
 
 			Descriptor srv = heap.AllocateTemp(DescriptorType::Texture_SRV);
 			Descriptor uav = heap.AllocateTemp(DescriptorType::Texture_UAV);
-			if (srv.IsNull() || uav.IsNull())
+			if (!srv || !uav)
 			{
 				return DetailedResult::Fail("Failed to allocate temporary resource descriptors for mipmap generation.");
 			}
@@ -3867,7 +3607,7 @@ namespace ig
 			pushConstants.inverseDestTextureSize = Vector2(1.0f / (float)destDimensions.width, 1.0f / (float)destDimensions.height);
 
 #ifdef IGLO_D3D12
-			auto device = context->GetD3D12Device();
+			auto device = context.GetD3D12Device();
 
 			// SRV
 			D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
@@ -3883,10 +3623,10 @@ namespace ig
 			uavDesc.Format = GetFormatInfoDXGI(format_non_sRGB).dxgiFormat;
 			uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
 			uavDesc.Texture2D.MipSlice = i;
-			device->CreateUnorderedAccessView(unordered->GetD3D12Resource(), nullptr, &uavDesc, heap.GetD3D12CPUHandle(uav));
+			device->CreateUnorderedAccessView(unorderedRef.GetD3D12Resource(), nullptr, &uavDesc, heap.GetD3D12CPUHandle(uav));
 #endif
 #ifdef IGLO_VULKAN
-			VkDevice device = context->GetVulkanDevice();
+			VkDevice device = context.GetVulkanDevice();
 
 			// SRV
 			VkImageViewCreateInfo srcViewInfo = {};
@@ -3912,7 +3652,7 @@ namespace ig
 
 			// UAV
 			VkImageViewCreateInfo destViewInfo = srcViewInfo;
-			destViewInfo.image = unordered->GetVulkanImage();
+			destViewInfo.image = unorderedRef.GetVulkanImage();
 			destViewInfo.format = ToVulkanFormat(format_non_sRGB);
 			VkImageView destImageView = VK_NULL_HANDLE;
 			if (heap.CreateTempVulkanImageView(device, &destViewInfo, nullptr, &destImageView) != VK_SUCCESS)
@@ -3924,10 +3664,10 @@ namespace ig
 #endif
 
 			cmd.AddTextureBarrierAtSubresource(*this, SimpleBarrier::CopyDest, SimpleBarrier::ComputeShaderResource, 0, i);
-			cmd.AddTextureBarrierAtSubresource(*unordered, SimpleBarrier::Discard, SimpleBarrier::ComputeShaderUnorderedAccess, 0, i);
+			cmd.AddTextureBarrierAtSubresource(unorderedRef, SimpleBarrier::Discard, SimpleBarrier::ComputeShaderUnorderedAccess, 0, i);
 			cmd.FlushBarriers();
 
-			cmd.SetPipeline(context->GetMipmapGenerationPipeline());
+			cmd.SetPipeline(context.GetMipmapGenerationPipeline());
 			cmd.SetComputePushConstants(&pushConstants, sizeof(pushConstants));
 			cmd.DispatchCompute(
 				std::max(destDimensions.width / 8, 1U),
@@ -3936,22 +3676,23 @@ namespace ig
 
 			cmd.AddTextureBarrierAtSubresource(*this, SimpleBarrier::ComputeShaderResource, SimpleBarrier::PixelShaderResource, 0, i);
 			cmd.AddTextureBarrierAtSubresource(*this, SimpleBarrier::Discard, SimpleBarrier::CopyDest, 0, i + 1);
-			cmd.AddTextureBarrierAtSubresource(*unordered, SimpleBarrier::ComputeShaderUnorderedAccess, SimpleBarrier::CopySource, 0, i);
+			cmd.AddTextureBarrierAtSubresource(unorderedRef, SimpleBarrier::ComputeShaderUnorderedAccess, SimpleBarrier::CopySource, 0, i);
 			cmd.FlushBarriers();
 
-			cmd.CopyTextureSubresource(*unordered, 0, i, *this, 0, i + 1);
+			cmd.CopyTextureSubresource(unorderedRef, 0, i, *this, 0, i + 1);
 		}
 
 		cmd.AddTextureBarrierAtSubresource(*this, SimpleBarrier::CopyDest, SimpleBarrier::PixelShaderResource, 0, desc.mipLevels - 1);
 		cmd.FlushBarriers();
 
 		return DetailedResult::Success();
-	}
+			}
 
 	void Texture::SetPixels(CommandList& cmd, const Image& srcImage)
 	{
 		const char* errStr = "Failed to set texture pixels. Reason: ";
-		if (!isLoaded || desc.usage == TextureUsage::Readable)
+
+		if (desc.usage == TextureUsage::Readable)
 		{
 			Log(LogType::Error, ToString(errStr, "Texture must be created with non-readable texture usage."));
 			return;
@@ -3961,8 +3702,7 @@ namespace ig
 			Log(LogType::Error, ToString(errStr, "Texture is multisampled."));
 			return;
 		}
-		if (!srcImage.IsLoaded() ||
-			srcImage.GetExtent() != desc.extent ||
+		if (srcImage.GetExtent() != desc.extent ||
 			srcImage.GetFormat() != desc.format ||
 			srcImage.GetNumFaces() != desc.numFaces ||
 			srcImage.GetMipLevels() != desc.mipLevels)
@@ -3975,17 +3715,17 @@ namespace ig
 		uint64_t requiredUploadBufferSize = 0;
 		{
 			D3D12_RESOURCE_DESC resDesc = impl.resource[0]->GetDesc();
-			context->GetD3D12Device()->GetCopyableFootprints(&resDesc, 0, desc.numFaces * desc.mipLevels, 0,
+			context.GetD3D12Device()->GetCopyableFootprints(&resDesc, 0, desc.numFaces * desc.mipLevels, 0,
 				nullptr, nullptr, nullptr, &requiredUploadBufferSize);
 		}
 #endif
 #ifdef IGLO_VULKAN
-		uint64_t requiredUploadBufferSize = GetRequiredUploadBufferSize(srcImage, context->GetGraphicsSpecs().bufferPlacementAlignments);
+		uint64_t requiredUploadBufferSize = GetRequiredUploadBufferSize(srcImage, context.GetGraphicsSpecs().bufferPlacementAlignments);
 #endif
 
-		TempBuffer tempBuffer = context->GetTempBufferAllocator().AllocateTempBuffer(requiredUploadBufferSize,
-			context->GetGraphicsSpecs().bufferPlacementAlignments.texture);
-		if (tempBuffer.IsNull())
+		TempBuffer tempBuffer = context.GetTempBufferAllocator().AllocateTempBuffer(requiredUploadBufferSize,
+			context.GetGraphicsSpecs().bufferPlacementAlignments.texture);
+		if (!tempBuffer)
 		{
 			Log(LogType::Error, ToString(errStr, "Failed to allocate temporary buffer."));
 			return;
@@ -3998,7 +3738,7 @@ namespace ig
 			for (uint32_t mipIndex = 0; mipIndex < srcImage.GetMipLevels(); mipIndex++)
 			{
 				size_t srcRowPitch = srcImage.GetMipRowPitch(mipIndex);
-				uint64_t destRowPitch = AlignUp(srcRowPitch, context->GetGraphicsSpecs().bufferPlacementAlignments.textureRowPitch);
+				uint64_t destRowPitch = AlignUp(srcRowPitch, context.GetGraphicsSpecs().bufferPlacementAlignments.textureRowPitch);
 				for (uint64_t srcProgress = 0; srcProgress < srcImage.GetMipSize(mipIndex); srcProgress += srcRowPitch)
 				{
 					memcpy(destPtr, srcPtr, srcRowPitch);
@@ -4012,7 +3752,7 @@ namespace ig
 		}
 
 		cmd.CopyTempBufferToTexture(tempBuffer, *this);
-		}
+	}
 
 	void Texture::SetPixels(CommandList& cmd, const void* pixelData)
 	{
@@ -4029,16 +3769,16 @@ namespace ig
 		imageDesc.numFaces = desc.numFaces;
 		imageDesc.isCubemap = desc.isCubemap;
 
-		Image image;
-		image.LoadAsPointer((byte*)pixelData, imageDesc);
+		std::unique_ptr<Image> image = Image::CreateWrapped((byte*)pixelData, imageDesc);
 
-		SetPixels(cmd, image);
+		SetPixels(cmd, *image);
 	}
 
 	void Texture::SetPixelsAtSubresource(CommandList& cmd, const Image& srcImage, uint32_t destFaceIndex, uint32_t destMipIndex)
 	{
 		const char* errStr = "Failed to set texture pixels at subresource. Reason: ";
-		if (!isLoaded || desc.usage == TextureUsage::Readable)
+
+		if (desc.usage == TextureUsage::Readable)
 		{
 			Log(LogType::Error, ToString(errStr, "Texture must be created with non-readable texture usage."));
 			return;
@@ -4049,8 +3789,7 @@ namespace ig
 			return;
 		}
 		Extent2D subResDimensions = Image::CalculateMipExtent(desc.extent, destMipIndex);
-		if (!srcImage.IsLoaded() ||
-			srcImage.GetExtent() != subResDimensions ||
+		if (srcImage.GetExtent() != subResDimensions ||
 			srcImage.GetFormat() != desc.format ||
 			srcImage.GetNumFaces() != 1 ||
 			srcImage.GetMipLevels() != 1)
@@ -4065,16 +3804,16 @@ namespace ig
 		uint64_t requiredUploadBufferSize = 0;
 		{
 			D3D12_RESOURCE_DESC resDesc = impl.resource[0]->GetDesc();
-			context->GetD3D12Device()->GetCopyableFootprints(&resDesc, subResourceIndex, 1, 0, nullptr, nullptr, nullptr, &requiredUploadBufferSize);
+			context.GetD3D12Device()->GetCopyableFootprints(&resDesc, subResourceIndex, 1, 0, nullptr, nullptr, nullptr, &requiredUploadBufferSize);
 		}
 #endif
 #ifdef IGLO_VULKAN
-		uint64_t requiredUploadBufferSize = GetRequiredUploadBufferSize(srcImage, context->GetGraphicsSpecs().bufferPlacementAlignments);
+		uint64_t requiredUploadBufferSize = GetRequiredUploadBufferSize(srcImage, context.GetGraphicsSpecs().bufferPlacementAlignments);
 #endif
 
-		TempBuffer tempBuffer = context->GetTempBufferAllocator().AllocateTempBuffer(requiredUploadBufferSize,
-			context->GetGraphicsSpecs().bufferPlacementAlignments.texture);
-		if (tempBuffer.IsNull())
+		TempBuffer tempBuffer = context.GetTempBufferAllocator().AllocateTempBuffer(requiredUploadBufferSize,
+			context.GetGraphicsSpecs().bufferPlacementAlignments.texture);
+		if (!tempBuffer)
 		{
 			Log(LogType::Error, "Failed to set texture pixels. Reason: Failed to allocate temporary buffer.");
 			return;
@@ -4083,7 +3822,7 @@ namespace ig
 		byte* destPtr = (byte*)tempBuffer.data;
 		byte* srcPtr = (byte*)srcImage.GetPixels();
 		size_t srcRowPitch = srcImage.GetMipRowPitch(0);
-		uint64_t destRowPitch = AlignUp(srcRowPitch, context->GetGraphicsSpecs().bufferPlacementAlignments.textureRowPitch);
+		uint64_t destRowPitch = AlignUp(srcRowPitch, context.GetGraphicsSpecs().bufferPlacementAlignments.textureRowPitch);
 		for (uint64_t srcProgress = 0; srcProgress < srcImage.GetMipSize(0); srcProgress += srcRowPitch)
 		{
 			memcpy(destPtr, srcPtr, srcRowPitch);
@@ -4109,44 +3848,44 @@ namespace ig
 		imageDesc.extent = Image::CalculateMipExtent(desc.extent, destMipIndex);
 		imageDesc.format = desc.format;
 
-		Image image;
-		image.LoadAsPointer((byte*)pixelData, imageDesc);
+		std::unique_ptr<Image> image = Image::CreateWrapped((byte*)pixelData, imageDesc);
 
-		SetPixelsAtSubresource(cmd, image, destFaceIndex, destMipIndex);
+		SetPixelsAtSubresource(cmd, *image, destFaceIndex, destMipIndex);
 	}
 
 	void Texture::ReadPixels(Image& destImage)
 	{
-		if (!isLoaded || desc.usage != TextureUsage::Readable)
+		const char* errStr = "Failed to read texture pixels. Reason: ";
+
+		if (desc.usage != TextureUsage::Readable)
 		{
-			Log(LogType::Error, "Failed to read texture pixels. Reason: Texture must be created with Readable usage.");
+			Log(LogType::Error, ToString(errStr, "Texture must be created with Readable usage."));
 			return;
 		}
 		if (desc.msaa != MSAA::Disabled)
 		{
-			Log(LogType::Error, "Failed to read texture pixels. Reason: Texture is multisampled.");
+			Log(LogType::Error, ToString(errStr, "Texture is multisampled."));
 			return;
 		}
-		if (!destImage.IsLoaded() ||
-			destImage.GetExtent() != desc.extent ||
+		if (destImage.GetExtent() != desc.extent ||
 			destImage.GetFormat() != desc.format ||
 			destImage.GetNumFaces() != desc.numFaces ||
 			destImage.GetMipLevels() != desc.mipLevels)
 		{
-			Log(LogType::Error, "Failed to read texture pixels. Reason: Image dimension must match texture.");
+			Log(LogType::Error, ToString(errStr, "Image dimension must match texture."));
 			return;
 		}
 
-		if (readMapped.size() != context->GetMaxFramesInFlight()) throw std::runtime_error("This should be impossible.");
+		if (readMapped.size() != context.GetMaxFramesInFlight()) throw std::runtime_error("This should be impossible.");
 
 		byte* destPtr = (byte*)destImage.GetPixels();
-		byte* srcPtr = (byte*)readMapped[context->GetFrameIndex()];
+		byte* srcPtr = (byte*)readMapped[context.GetFrameIndex()];
 		for (uint32_t faceIndex = 0; faceIndex < desc.numFaces; faceIndex++)
 		{
 			for (uint32_t mipIndex = 0; mipIndex < desc.mipLevels; mipIndex++)
 			{
 				size_t srcRowPitch = AlignUp(Image::CalculateMipRowPitch(desc.extent, desc.format, mipIndex),
-					context->GetGraphicsSpecs().bufferPlacementAlignments.textureRowPitch);
+					context.GetGraphicsSpecs().bufferPlacementAlignments.textureRowPitch);
 				size_t destRowPitch = destImage.GetMipRowPitch(mipIndex);
 				for (uint64_t destProgress = 0; destProgress < destImage.GetMipSize(mipIndex); destProgress += destRowPitch)
 				{
@@ -4162,64 +3901,65 @@ namespace ig
 
 	}
 
-	Image Texture::ReadPixels()
+	std::unique_ptr<Image> Texture::ReadPixels()
 	{
-		ImageDesc imageDesc;
-		imageDesc.extent = desc.extent;
-		imageDesc.format = desc.format;
-		imageDesc.mipLevels = desc.mipLevels;
-		imageDesc.numFaces = desc.numFaces;
-		imageDesc.isCubemap = desc.isCubemap;
+		ImageDesc imageDesc =
+		{
+			.extent = desc.extent,
+			.format = desc.format,
+			.mipLevels = desc.mipLevels,
+			.numFaces = desc.numFaces,
+			.isCubemap = desc.isCubemap,
+		};
 
-		Image image;
-		if (!image.Load(imageDesc))
+		std::unique_ptr<Image> image = Image::Create(imageDesc);
+		if (!image)
 		{
 			Log(LogType::Error, "Failed to read texture pixels to image. Reason: Failed to create image.");
-			return image;
+			return nullptr;
 		}
 
-		ReadPixels(image);
+		ReadPixels(*image);
 		return image;
 	}
 
-	void Sampler::Unload()
+	Sampler::~Sampler()
 	{
 #ifdef IGLO_VULKAN
-		if (vkSampler) vkDestroySampler(context->GetVulkanDevice(), vkSampler, nullptr);
-		vkSampler = VK_NULL_HANDLE;
+		if (vkSampler)
+		{
+			vkDestroySampler(context.GetVulkanDevice(), vkSampler, nullptr);
+			vkSampler = VK_NULL_HANDLE;
+		}
 #endif
 
-		if (!descriptor.IsNull()) context->GetDescriptorHeap().FreePersistent(descriptor);
-		descriptor.SetToNull();
-
-		isLoaded = false;
-		context = nullptr;
+		if (descriptor)
+		{
+			context.GetDescriptorHeap().FreePersistent(descriptor);
+			descriptor.SetToNull();
+		}
 	}
 
-	const Descriptor* Sampler::GetDescriptor() const
+	std::unique_ptr<Sampler> Sampler::Create(const IGLOContext& context, const SamplerDesc& desc)
 	{
-		if (!isLoaded) return nullptr;
-		if (descriptor.IsNull()) throw std::runtime_error("This should be impossible.");
-		return &descriptor;
-	}
+		const char* errStr = "Failed to create sampler state. Reason: ";
 
-	bool Sampler::Load(const IGLOContext& context, const SamplerDesc& desc)
-	{
-		Unload();
+		std::unique_ptr<Sampler> out = std::unique_ptr<Sampler>(new Sampler(context));
 
-		this->context = &context;
-
-		DetailedResult result = Impl_Load(context, desc);
+		DetailedResult result = out->Impl_Create(desc);
 		if (!result)
 		{
-			Log(LogType::Error, "Failed to create sampler state. Reason: " + result.errorMessage);
-			Unload();
-			return false;
+			Log(LogType::Error, ToString(errStr, result.errorMessage));
+			return nullptr;
 		}
 
-		this->isLoaded = true;
-		return true;
+		return out;
 	}
 
+	Descriptor Sampler::GetDescriptor() const
+	{
+		assert(descriptor);
+		return descriptor;
+	}
 
-	} //end of namespace ig
+		} //end of namespace ig
