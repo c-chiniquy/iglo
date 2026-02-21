@@ -25,6 +25,8 @@
     - Added GetFormatName()
     - MouseEvent::scrollWheel is now a float
     - Now compatible with Agility SDK 1.717.1-preview
+    - Renamed ConvertKeyToString() to GetKeyName()
+    - Fixed a typo in ig::Key
   - IGLOContext
     - Added GetMouseButtonState()
     - Added GetKeyState()
