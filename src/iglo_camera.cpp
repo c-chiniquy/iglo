@@ -63,17 +63,17 @@ namespace ig
 		this->roll += roll;
 	}
 
-	ig::Vector3 BaseCamera::GetOriginalLeft()
+	Vector3 BaseCamera::GetOriginalLeft()
 	{
-		return ig::Vector3(-1, 0, 0);
+		return Vector3(-1, 0, 0);
 	}
-	ig::Vector3 BaseCamera::GetOriginalUp()
+	Vector3 BaseCamera::GetOriginalUp()
 	{
-		return ig::Vector3(0, 1, 0);
+		return Vector3(0, 1, 0);
 	}
-	ig::Vector3 BaseCamera::GetOriginalForward()
+	Vector3 BaseCamera::GetOriginalForward()
 	{
-		return ig::Vector3(0, 0, 1);
+		return Vector3(0, 0, 1);
 	}
 
 	float BaseCamera::CapPitch(float pitch)
@@ -84,7 +84,7 @@ namespace ig
 		return out;
 	}
 
-	void BaseCamera::SetPosition(ig::Vector3 position)
+	void BaseCamera::SetPosition(Vector3 position)
 	{
 		dirtyMatrices = true;
 		this->position = position;
@@ -93,10 +93,10 @@ namespace ig
 	void BaseCamera::SetPosition(float x, float y, float z)
 	{
 		dirtyMatrices = true;
-		position = ig::Vector3(x, y, z);
+		position = Vector3(x, y, z);
 	}
 
-	void BaseCamera::Move(ig::Vector3 movement)
+	void BaseCamera::Move(Vector3 movement)
 	{
 		dirtyMatrices = true;
 		position += movement;
@@ -145,48 +145,48 @@ namespace ig
 		return roll;
 	}
 
-	ig::Vector3 BaseCamera::GetPosition()
+	Vector3 BaseCamera::GetPosition()
 	{
 		return position;
 	}
 
-	ig::Vector3 BaseCamera::GetUp()
+	Vector3 BaseCamera::GetUp()
 	{
 		if (dirtyVectors) UpdateVectors();
 		return up;
 	}
 
-	ig::Vector3 BaseCamera::GetForward()
+	Vector3 BaseCamera::GetForward()
 	{
 		if (dirtyVectors) UpdateVectors();
 		return forward;
 	}
 
-	ig::Vector3 BaseCamera::GetForwardXZPlane()
+	Vector3 BaseCamera::GetForwardXZPlane()
 	{
 		if (dirtyVectors) UpdateVectors();
 		return forwardXZPlane;
 	}
 
-	ig::Matrix4x4 BaseCamera::GetViewMatrix()
+	Matrix4x4 BaseCamera::GetViewMatrix()
 	{
 		if (dirtyMatrices) UpdateMatrices();
 		return view;
 	}
 
-	ig::Matrix4x4 BaseCamera::GetProjectionMatrix()
+	Matrix4x4 BaseCamera::GetProjectionMatrix()
 	{
 		if (dirtyMatrices) UpdateMatrices();
 		return proj;
 	}
 
-	ig::Matrix4x4 BaseCamera::GetViewProjMatrix()
+	Matrix4x4 BaseCamera::GetViewProjMatrix()
 	{
 		if (dirtyMatrices) UpdateMatrices();
 		return viewProj;
 	}
 
-	ig::Vector3 BaseCamera::GetLeft()
+	Vector3 BaseCamera::GetLeft()
 	{
 		if (dirtyVectors) UpdateVectors();
 		return left;
@@ -194,20 +194,20 @@ namespace ig
 
 	void BaseCamera::UpdateVectors()
 	{
-		ig::Matrix4x4 rot;
-		rot = (ig::Matrix4x4::RotationY(yaw) * ig::Matrix4x4::RotationX(pitch)) * ig::Matrix4x4::RotationZ(roll);
-		forwardXZPlane = ig::Vector3::TransformCoord(GetOriginalForward(), ig::Matrix4x4::RotationY(yaw));
-		forward = ig::Vector3::TransformCoord(GetOriginalForward(), rot);
-		up = ig::Vector3::TransformCoord(GetOriginalUp(), rot);
-		left = ig::Vector3::TransformCoord(GetOriginalLeft(), rot);
+		Matrix4x4 rot;
+		rot = (Matrix4x4::RotationY(yaw) * Matrix4x4::RotationX(pitch)) * Matrix4x4::RotationZ(roll);
+		forwardXZPlane = Vector3::TransformCoord(GetOriginalForward(), Matrix4x4::RotationY(yaw));
+		forward = Vector3::TransformCoord(GetOriginalForward(), rot);
+		up = Vector3::TransformCoord(GetOriginalUp(), rot);
+		left = Vector3::TransformCoord(GetOriginalLeft(), rot);
 		dirtyVectors = false;
 	}
 
 	void BaseCamera::UpdateMatrices()
 	{
 		if (dirtyVectors) UpdateVectors();
-		view = ig::Matrix4x4::LookToLH(position, forward, up);
-		proj = ig::Matrix4x4::PerspectiveFovLH(aspectRatio, fovInDegrees, zNear, zFar);
+		view = Matrix4x4::LookToLH(position, forward, up);
+		proj = Matrix4x4::PerspectiveFovLH(aspectRatio, fovInDegrees, zNear, zFar);
 		viewProj = proj * view;
 		dirtyMatrices = false;
 	}
