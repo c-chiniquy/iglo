@@ -13,7 +13,7 @@
   - Added SimpleBarrier::ClearInactiveRenderTarget
 - Bug fixes:
   - Fixed segfault caused by NVIDIA drivers on Linux/Vulkan backend that would appear when closing the window
-- Minor improvements/changes:
+- Minor changes:
   - iglo utility
     - Added FloatRect::GetExpanded()
     - Added FloatRect::CroppedTo()
