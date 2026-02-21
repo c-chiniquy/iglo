@@ -1,5 +1,5 @@
 
-This document contains my personal thoughts behind various design decisions i had to make during development, as well as the coding style and some other info relevant to iglo development.
+This document contains my personal thoughts behind various design decisions I had to make during development, as well as the coding style and some other info relevant to iglo development.
 
 # Design decisions
 
