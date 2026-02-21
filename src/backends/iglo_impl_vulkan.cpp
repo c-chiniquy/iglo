@@ -531,7 +531,7 @@ namespace ig
 				for (uint64_t srcProgress = 0; srcProgress < (uint64_t)image.GetMipSize(mip); srcProgress += srcRowPitch)
 				{
 					size += destRowPitch;
-#ifdef _DEBUG
+#ifndef NDEBUG
 					if (srcProgress + srcRowPitch > (uint64_t)image.GetMipSize(mip)) throw std::runtime_error("Something is wrong here.");
 #endif
 				}
@@ -3270,7 +3270,7 @@ namespace ig
 #ifdef __linux__
 			VK_KHR_XLIB_SURFACE_EXTENSION_NAME,
 #endif
-#ifdef _DEBUG
+#ifndef NDEBUG
 			VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
 #endif
 		};
@@ -3341,7 +3341,7 @@ namespace ig
 			instanceInfo.ppEnabledExtensionNames = instanceExtensions.data();
 		}
 
-#ifdef _DEBUG
+#ifndef NDEBUG
 		// Debug messenger
 		VkDebugUtilsMessengerCreateInfoEXT debugInfo = {};
 		debugInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
@@ -3391,7 +3391,7 @@ namespace ig
 			return DetailedResult::Fail(VulkanErrorMsg("vkCreateInstance", result));
 		}
 
-#ifdef _DEBUG
+#ifndef NDEBUG
 		// Create debug messenger
 		result = CreateDebugUtilsMessengerEXT(graphics.instance, &debugInfo, nullptr, &graphics.debugMessenger);
 		if (result != VK_SUCCESS)
@@ -3693,7 +3693,7 @@ namespace ig
 				graphics.surface = VK_NULL_HANDLE;
 			}
 
-#ifdef _DEBUG
+#ifndef NDEBUG
 			if (graphics.debugMessenger)
 			{
 				DestroyDebugUtilsMessengerEXT(graphics.instance, graphics.debugMessenger, nullptr);

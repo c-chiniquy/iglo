@@ -642,7 +642,7 @@ namespace ig
 		this->freed.shrink_to_fit();
 		this->freed.reserve(maxIndices);
 
-#ifdef _DEBUG
+#ifndef NDEBUG
 		this->isAllocated.Clear();
 		this->isAllocated.Resize(maxIndices, false);
 #endif
@@ -656,7 +656,7 @@ namespace ig
 		freed.clear();
 		freed.shrink_to_fit();
 
-#ifdef _DEBUG
+#ifndef NDEBUG
 		isAllocated.Clear();
 #endif
 	}
@@ -677,7 +677,7 @@ namespace ig
 		}
 		allocationCount++;
 
-#ifdef _DEBUG
+#ifndef NDEBUG
 		if (isAllocated.GetAt(index)) throw std::runtime_error("The newly allocated index was already allocated!");
 		isAllocated.SetTrue(index);
 #endif
@@ -689,7 +689,7 @@ namespace ig
 	{
 		if (index >= maxIndices) throw std::out_of_range("Index out of range.");
 
-#ifdef _DEBUG
+#ifndef NDEBUG
 		if (!isAllocated.GetAt(index)) throw std::runtime_error("Double free or invalid free detected.");
 		isAllocated.SetFalse(index);
 		if (allocationCount == 0) throw std::runtime_error("Something is wrong here.");
@@ -3745,7 +3745,7 @@ namespace ig
 					memcpy(destPtr, srcPtr, srcRowPitch);
 					srcPtr += srcRowPitch;
 					destPtr += destRowPitch;
-#ifdef _DEBUG
+#ifndef NDEBUG
 					if (srcProgress + srcRowPitch > srcImage.GetMipSize(mipIndex)) throw std::runtime_error("Something is wrong here.");
 #endif
 				}
@@ -3829,7 +3829,7 @@ namespace ig
 			memcpy(destPtr, srcPtr, srcRowPitch);
 			srcPtr += srcRowPitch;
 			destPtr += destRowPitch;
-#ifdef _DEBUG
+#ifndef NDEBUG
 			if (srcProgress + srcRowPitch > srcImage.GetMipSize(0)) throw std::runtime_error("Something is wrong here.");
 #endif
 		}
@@ -3893,7 +3893,7 @@ namespace ig
 					memcpy(destPtr, srcPtr, destRowPitch);
 					srcPtr += srcRowPitch;
 					destPtr += destRowPitch;
-#ifdef _DEBUG
+#ifndef NDEBUG
 					if (destProgress + destRowPitch > destImage.GetMipSize(mipIndex)) throw std::runtime_error("Something is wrong here.");
 #endif
 				}

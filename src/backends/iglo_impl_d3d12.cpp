@@ -2053,7 +2053,7 @@ namespace ig
 		HRESULT hr = 0;
 		UINT factoryFlags = 0;
 
-#ifdef _DEBUG
+#ifndef NDEBUG
 		{
 			ComPtr<ID3D12Debug> debugInterface;
 			hr = D3D12GetDebugInterface(IID_PPV_ARGS(&debugInterface));

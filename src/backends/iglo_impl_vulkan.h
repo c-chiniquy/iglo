@@ -23,7 +23,7 @@ namespace ig
 		bool swapChainUsesMinImageCount = false;
 		bool validSwapChain = false;
 		bool usesMemoryBudgetExt = false;
-#ifdef _DEBUG
+#ifndef NDEBUG
 		VkDebugUtilsMessengerEXT debugMessenger = VK_NULL_HANDLE;
 #endif
 	};

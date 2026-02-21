@@ -1555,7 +1555,7 @@ namespace ig
 			uint32_t maxIndices = 0;
 			uint32_t allocationCount = 0;
 			std::vector<uint32_t> freed; // Grows every time you free an index. Shrinks when you allocate them back.
-#ifdef _DEBUG
+#ifndef NDEBUG
 			PackedBoolArray isAllocated;
 #endif
 		};

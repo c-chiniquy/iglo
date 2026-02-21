@@ -60,6 +60,7 @@ namespace ig
 
 	PackedBoolArray& PackedBoolArray::operator = (const PackedBoolArray& a)
 	{
+		if (this == &a) return *this;
 		if (a.booleanCount == 0)
 		{
 			this->Clear();
@@ -216,7 +217,7 @@ namespace ig
 
 	uint64_t PackedBoolArray::GetElementCount(uint64_t numBooleans, uint32_t sizeOfEachElement)
 	{
-		return uint64_t(numBooleans / sizeOfEachElement) + 1;
+		return (numBooleans + sizeOfEachElement - 1) / sizeOfEachElement;
 	};
 
 	void Timer::Reset()
@@ -427,7 +428,7 @@ namespace ig
 		norm.x = x;
 		norm.y = y;
 		norm.z = z;
-		norm.w = z;
+		norm.w = w;
 		float length = GetMagnitude();
 		if (length > 0)
 		{
@@ -698,14 +699,14 @@ namespace ig
 
 	Matrix4x4 Matrix4x4::LookToRH(const Vector3& eyePosition, const Vector3& toDirection, const Vector3& up)
 	{
-		Vector3 zaxis = toDirection.GetNormalized();
+		Vector3 zaxis = (-toDirection).GetNormalized();
 		Vector3 xaxis = Vector3::CrossProduct(up, zaxis).GetNormalized();
 		Vector3 yaxis = Vector3::CrossProduct(zaxis, xaxis).GetNormalized();
 		return Matrix4x4(
-			-xaxis.x, yaxis.x, -zaxis.x, 0,
-			-xaxis.y, yaxis.y, -zaxis.y, 0,
-			-xaxis.z, yaxis.z, -zaxis.z, 0,
-			Vector3::DotProduct(xaxis, eyePosition), -Vector3::DotProduct(yaxis, eyePosition), Vector3::DotProduct(zaxis, eyePosition), 1);
+			xaxis.x, yaxis.x, zaxis.x, 0,
+			xaxis.y, yaxis.y, zaxis.y, 0,
+			xaxis.z, yaxis.z, zaxis.z, 0,
+			-Vector3::DotProduct(xaxis, eyePosition), -Vector3::DotProduct(yaxis, eyePosition), -Vector3::DotProduct(zaxis, eyePosition), 1);
 	}
 
 	Matrix4x4 Matrix4x4::OrthoLH(float width, float height, float zNear, float zFar)
@@ -962,20 +963,22 @@ namespace ig
 		static int schedulerPeriodMs = 0;
 		static INT64 qpcPerSecond = 0;
 
-		if (timerHandle == NULL)
-		{
-			// Initialization
-			timerHandle = CreateWaitableTimerExW(NULL, NULL, CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, TIMER_ALL_ACCESS);
-			TIMECAPS caps;
-			timeGetDevCaps(&caps, sizeof caps);
-			timeBeginPeriod(caps.wPeriodMin);
-			schedulerPeriodMs = (int)caps.wPeriodMin;
-			LARGE_INTEGER qpf;
-			QueryPerformanceFrequency(&qpf);
-			qpcPerSecond = qpf.QuadPart;
+		static std::once_flag initFlag; // Thread safety
+		std::call_once(initFlag, []()
+			{
+				// Initialization
+				timerHandle = CreateWaitableTimerExW(NULL, NULL, CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, TIMER_ALL_ACCESS);
+				if (timerHandle == NULL) throw std::exception(); // This shouldn't happen
 
-			if (timerHandle == NULL) throw std::exception(); // This shouldn't happen
-		}
+				TIMECAPS caps;
+				timeGetDevCaps(&caps, sizeof caps);
+				timeBeginPeriod(caps.wPeriodMin);
+				schedulerPeriodMs = (int)caps.wPeriodMin;
+
+				LARGE_INTEGER qpf;
+				QueryPerformanceFrequency(&qpf);
+				qpcPerSecond = qpf.QuadPart;
+			});
 
 		LARGE_INTEGER qpc;
 		QueryPerformanceCounter(&qpc);
@@ -1085,6 +1088,9 @@ namespace ig
 	{
 		// Rewritten from public domain source: https://github.com/sheredom/utf8.h/blob/master/utf8.h
 
+		if (out_stepForward) *out_stepForward = 0;
+		if (length == 0) return false;
+
 		if (0xf0 == (0xf8 & ((byte)utf8[0])))
 		{
 			if (length < 4) return false; // ensure that there's 4 bytes or more remaining
@@ -1093,10 +1099,11 @@ namespace ig
 				(0x80 != (0xc0 & ((byte)utf8[2]))) ||
 				(0x80 != (0xc0 & ((byte)utf8[3])))) return false;
 
-			if (0x80 == (0xc0 & ((byte)utf8[4]))) return false;
-
 			if ((0 == (0x07 & ((byte)utf8[0]))) &&
 				(0 == (0x30 & ((byte)utf8[1])))) return false;
+
+			// Reject above U+10FFFF
+			if ((0xf4 < (byte)utf8[0]) || ((0xf4 == (byte)utf8[0]) && (0x8f < (byte)utf8[1]))) return false;
 
 			if (out_stepForward) *out_stepForward = 4; // 4-byte utf8 code point
 		}
@@ -1107,10 +1114,11 @@ namespace ig
 			if ((0x80 != (0xc0 & ((byte)utf8[1]))) ||
 				(0x80 != (0xc0 & ((byte)utf8[2])))) return false;
 
-			if (0x80 == (0xc0 & ((byte)utf8[3]))) return false;
-
 			if ((0 == (0x0f & ((byte)utf8[0]))) &&
 				(0 == (0x20 & ((byte)utf8[1])))) return false;
+
+			// Reject U+D800..U+DFFF (surrogates)
+			if ((0xed == (byte)utf8[0]) && (0xa0 <= (byte)utf8[1])) return false;
 
 			if (out_stepForward) *out_stepForward = 3; // 3-byte utf8 code point
 		}
@@ -1119,7 +1127,7 @@ namespace ig
 			if (length < 2) return false; // ensure that there's 2 bytes or more remained
 
 			if (0x80 != (0xc0 & ((byte)utf8[1]))) return false;
-			if (0x80 == (0xc0 & ((byte)utf8[2]))) return false;
+
 			if (0 == (0x1e & ((byte)utf8[0]))) return false;
 
 			if (out_stepForward) *out_stepForward = 2; // 2-byte utf8 code point
@@ -1213,7 +1221,7 @@ namespace ig
 
 		for (size_t i = startIndex; i < endIndex;)
 		{
-			byte c = (byte)utf8[i]; 
+			byte c = (byte)utf8[i];
 
 			if (c < 0x80)
 			{
@@ -1233,7 +1241,7 @@ namespace ig
 					if (out_location)*out_location = i + 2;
 					return true;
 				}
-				// Invalid
+					// Invalid
 				if (out_codepoint) *out_codepoint = replacementChar;
 				if (out_location) *out_location = i + 1;
 				return true;
@@ -1251,7 +1259,7 @@ namespace ig
 					if (out_location) *out_location = i + 3;
 					return true;
 				}
-				// Invalid
+					// Invalid
 				if (out_codepoint) *out_codepoint = replacementChar;
 				if (out_location) *out_location = i + 1;
 				return true;
@@ -1270,7 +1278,7 @@ namespace ig
 					if (out_location)*out_location = i + 4;
 					return true;
 				}
-				// Invalid
+					// Invalid
 				if (out_codepoint) *out_codepoint = replacementChar;
 				if (out_location) *out_location = i + 1;
 				return true;
@@ -1309,7 +1317,7 @@ namespace ig
 				out.push_back(((codepoint >> 6) & 0x3F) | 0x80);
 				out.push_back((codepoint & 0x3F) | 0x80);
 			}
-			else if (codepoint <= 0x110000)
+			else if (codepoint < 0x110000)
 			{
 				out.push_back((codepoint >> 18) | 0xF0);
 				out.push_back(((codepoint >> 12) & 0x3F) | 0x80);
@@ -2034,7 +2042,7 @@ namespace ig
 				return ByteOrderMark::UTF8;
 			}
 		}
-		if (numBytes > 2)
+		if (numBytes >= 2)
 		{
 			// UTF-16 LE
 			if (fileContents[0] == 0xFF &&
@@ -2051,6 +2059,7 @@ namespace ig
 		}
 		return ByteOrderMark::None;
 	}
+
 	uint32_t GetByteOrderMarkLength(ByteOrderMark bom)
 	{
 		if (bom == ByteOrderMark::UTF8) return 3;
@@ -2314,7 +2323,7 @@ namespace ig
 #else
 		OutputDebugStringW(text);
 #endif
-	}
+}
 	void Print(const std::wstringstream& text)
 	{
 #ifdef IGLO_WIN32_FORCE_CONSOLE_OUTPUT
@@ -2378,7 +2387,8 @@ namespace ig
 	{
 		int32_t NextInt32(int32_t min, int32_t max)
 		{
-			return (rand() % ((max - min) + 1)) + min;
+			uint32_t range = (uint32_t)max - (uint32_t)min + 1;
+			return (int32_t)((uint32_t)min + (rand() % range));
 		}
 
 		uint32_t NextUInt32()
@@ -2450,4 +2460,4 @@ namespace ig
 		return a + (b - a) * t;
 	}
 
-} // namespace ig
+	} // namespace ig

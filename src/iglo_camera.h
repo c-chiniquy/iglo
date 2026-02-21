@@ -25,11 +25,11 @@ namespace ig
 		void ApplyYaw(float yaw);
 		void ApplyPitch(float pitch);
 		void ApplyRoll(float roll);
-		void SetPosition(ig::Vector3 position);
+		void SetPosition(Vector3 position);
 		void SetPosition(float x, float y, float z);
 
 		// Moves relative to world
-		void Move(ig::Vector3 movement);
+		void Move(Vector3 movement);
 		void Move(float x, float y, float z);
 
 		float GetFOV();
@@ -39,32 +39,32 @@ namespace ig
 		float GetYaw();
 		float GetPitch();
 		float GetRoll();
-		ig::Vector3 GetPosition();
-		ig::Vector3 GetUp();
-		ig::Vector3 GetForward();
-		ig::Vector3 GetForwardXZPlane();
-		ig::Vector3 GetLeft();
-		ig::Matrix4x4 GetViewMatrix();
-		ig::Matrix4x4 GetProjectionMatrix();
-		ig::Matrix4x4 GetViewProjMatrix();
+		Vector3 GetPosition();
+		Vector3 GetUp();
+		Vector3 GetForward();
+		Vector3 GetForwardXZPlane();
+		Vector3 GetLeft();
+		Matrix4x4 GetViewMatrix();
+		Matrix4x4 GetProjectionMatrix();
+		Matrix4x4 GetViewProjMatrix();
 
 	private:
 		static float CapPitch(float pitch);
 
-		ig::Vector3 GetOriginalLeft();
-		ig::Vector3 GetOriginalUp();
-		ig::Vector3 GetOriginalForward();
+		Vector3 GetOriginalLeft();
+		Vector3 GetOriginalUp();
+		Vector3 GetOriginalForward();
 		void UpdateVectors();
 		void UpdateMatrices();
 
-		ig::Matrix4x4 view;
-		ig::Matrix4x4 proj;
-		ig::Matrix4x4 viewProj;
-		ig::Vector3 position;
-		ig::Vector3 forward;
-		ig::Vector3 forwardXZPlane;
-		ig::Vector3 left;
-		ig::Vector3 up;
+		Matrix4x4 view;
+		Matrix4x4 proj;
+		Matrix4x4 viewProj;
+		Vector3 position;
+		Vector3 forward;
+		Vector3 forwardXZPlane;
+		Vector3 left;
+		Vector3 up;
 
 		bool dirtyVectors = true;
 		bool dirtyMatrices = true;
