@@ -22,10 +22,10 @@
     - The utf16 functions now use u16string instead of wstring
     - Made some timer functions const
   - iglo
+    - Now compatible with Agility SDK 1.717.1-preview
     - Added GetFormatName()
     - Renamed ConvertKeyToString() to GetKeyName()
     - MouseEvent::scrollWheel is now a float
-    - Now compatible with Agility SDK 1.717.1-preview
     - Fixed a typo in ig::Key
     - Fixed bug in Image::CalculateNumMips()
   - IGLOContext
