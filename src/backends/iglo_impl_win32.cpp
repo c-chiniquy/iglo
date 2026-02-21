@@ -1116,7 +1116,7 @@ namespace ig
 			case VK_SLEEP: event_out.key = Key::Sleep; break;
 			case VK_MULTIPLY: event_out.key = Key::Multiply; break;
 			case VK_ADD: event_out.key = Key::Add; break;
-			case VK_SEPARATOR: event_out.key = Key::Seperator; break;
+			case VK_SEPARATOR: event_out.key = Key::Separator; break;
 			case VK_SUBTRACT: event_out.key = Key::Subtract; break;
 			case VK_DECIMAL: event_out.key = Key::Decimal; break;
 			case VK_DIVIDE: event_out.key = Key::Divide; break;

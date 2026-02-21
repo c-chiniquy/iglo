@@ -2254,7 +2254,7 @@ namespace ig
 		LeftSystem, RightSystem, // The windows keys
 		Backspace, Tab, Clear, Enter, Pause, CapsLock, Escape, Space, PageUp, PageDown, End, Home,
 		Left, Up, Right, Down, PrintScreen, Insert, Delete,
-		Sleep, Multiply, Add, Seperator, Subtract, Decimal, Divide,
+		Sleep, Multiply, Add, Separator, Subtract, Decimal, Divide,
 		NumLock, ScrollLock,
 		Apps, // Next to right ctrl key. Shows a context menu when pressed.
 		VolumeMute, VolumeDown, VolumeUp, MediaNextTrack, MediaPrevTrack, MediaStop, MediaPlayPause,
@@ -2269,7 +2269,7 @@ namespace ig
 		OEM_8,
 		OEM_102, // '<>|' for SE
 	};
-	std::string ConvertKeyToString(Key);
+	const char* GetKeyName(Key);
 
 	enum class EventType
 	{

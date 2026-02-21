@@ -349,7 +349,7 @@ namespace ig
 		};
 	}
 
-	std::string ConvertKeyToString(Key key)
+	const char* GetKeyName(Key key)
 	{
 		switch (key)
 		{
@@ -392,7 +392,7 @@ namespace ig
 		case Key::PrintScreen: return "PrintScreen"; case Key::Insert: return "Insert"; case Key::Delete: return "Delete";
 
 		case Key::Sleep: return "Sleep"; case Key::Multiply: return "Multiply"; case Key::Add: return "Add";
-		case Key::Seperator: return "Seperator"; case Key::Subtract: return "Subtract";
+		case Key::Separator: return "Separator"; case Key::Subtract: return "Subtract";
 		case Key::Decimal: return "Decimal"; case Key::Divide: return "Divide";
 
 		case Key::NumLock: return "NumLock"; case Key::ScrollLock: return "ScrollLock";
@@ -409,7 +409,8 @@ namespace ig
 		case Key::OEM_5: return "OEM_5"; case Key::OEM_6: return "OEM_6"; case Key::OEM_7: return "OEM_7"; case Key::OEM_8: return "OEM_8";
 		case Key::OEM_102: return "OEM_102";
 
-		default: return "<Unsupported key>";
+		default:
+			return "<Unsupported key>";
 		}
 	}
 
