@@ -18,11 +18,16 @@
     - Added FloatRect::GetExpanded()
     - Added FloatRect::CroppedTo()
     - Added Lerp()
+    - WindowsPreciseSleep() is now thread safe
     - utf8_next_codepoint() now returns replacement characters for invalid byte sequences
     - The utf16 functions now use u16string instead of wstring
+    - Improved utf8_is_next_sequence_valid()
+    - Improved Random::NextInt32()
     - Made some timer functions const
+    - Fixed bug in Vector4::GetNormalized()
   - iglo
     - Now compatible with Agility SDK 1.717.1-preview
+    - Now using NDEBUG instead of _DEBUG
     - Added GetFormatName()
     - Renamed ConvertKeyToString() to GetKeyName()
     - MouseEvent::scrollWheel is now a float
