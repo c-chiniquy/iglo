@@ -27,9 +27,11 @@
     - Now compatible with Agility SDK 1.717.1-preview
     - Renamed ConvertKeyToString() to GetKeyName()
     - Fixed a typo in ig::Key
+    - Fixed bug in Image::CalculateNumMips()
   - IGLOContext
     - Added GetMouseButtonState()
     - Added GetKeyState()
+    - Made some functions const
     - TextEntered event now ignores unprintable characters
   - BatchRenderer
     - Added DrawImmediate()
