@@ -17,7 +17,7 @@ This document contains my personal thoughts behind various design decisions i ha
 - iglo should be lightweight, low level and easy to setup and use.
   iglo can't be perfect at everything. It must have a purpose and be good at achieving its purpose.
 
-- I prefer the name 'IGLOContext' over 'RenderWindow', but i'm open to feedback on this issue.
+- I prefer the name 'IGLOContext' over 'RenderWindow', but I'm open to feedback on this issue.
 
 - iglo shouldn't throw exceptions based on user behaviour, much like D3D12.
   It's OK for iglo to throw exceptions in situations that should be impossible in the first place and would be iglo's own fault.
@@ -56,7 +56,7 @@ Prefer using `std::vector` over `std::unique_ptr` for dynamic arrays.
 - Deallocate vector:
   ```
   vectorA.clear();
-  VectorA.shrink_to_fit();
+  vectorA.shrink_to_fit();
   ```
 - Allocate vector with a specified size:
   ```
