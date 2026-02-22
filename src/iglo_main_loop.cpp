@@ -8,10 +8,10 @@ namespace ig
 		elapsedSeconds = timer.GetSecondsAndReset();
 		framesPerSecond = 1.0 / elapsedSeconds;
 
-		// Calculate avarage FPS
+		// Calculate average FPS
 		avgFPS_numFrames++;
 		avgFPS_totalElapsedSeconds += elapsedSeconds;
-		const double avgFPSDuration = 0.5; // The duration the avarage FPS is calculated
+		const double avgFPSDuration = 0.5; // Duration which the average FPS is calculated
 		if (avgFPS_totalElapsedSeconds >= avgFPSDuration)
 		{
 			avgFPS = (int)round(1.0 / (avgFPS_totalElapsedSeconds / avgFPS_numFrames));

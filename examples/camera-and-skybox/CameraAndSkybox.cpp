@@ -561,7 +561,7 @@ private:
 				(
 					sampleName, "\n",
 					"iglo v" IGLO_VERSION_STRING " " IGLO_GRAPHICS_API_STRING "\n",
-					"FPS: ", mainloop.GetAvarageFPS(), "\n",
+					"FPS: ", mainloop.GetAverageFPS(), "\n",
 					"Yaw: ", camera.GetYaw(), "\n",
 					"Pitch: ", camera.GetPitch(), "\n",
 					"Roll: ", camera.GetRoll(), "\n",

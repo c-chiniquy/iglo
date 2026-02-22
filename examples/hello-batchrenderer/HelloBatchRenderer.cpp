@@ -1204,7 +1204,7 @@ private:
 
 				std::string topLeftStr = ig::ToString
 				(
-					"iglo v" IGLO_VERSION_STRING, " ", IGLO_GRAPHICS_API_STRING, ", FPS: ", mainloop.GetAvarageFPS(), "\n",
+					"iglo v" IGLO_VERSION_STRING, " ", IGLO_GRAPHICS_API_STRING, ", FPS: ", mainloop.GetAverageFPS(), "\n",
 					"BatchRenderer draw calls: ", r.GetDrawCallCount()
 				);
 				ig::Vector2 strPos(7, 2);
