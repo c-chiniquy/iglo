@@ -642,10 +642,8 @@ namespace ig
 		this->freed.shrink_to_fit();
 		this->freed.reserve(maxIndices);
 
-#ifndef NDEBUG
 		this->isAllocated.Clear();
 		this->isAllocated.Resize(maxIndices, false);
-#endif
 	}
 
 	void DescriptorHeap::PersistentIndexAllocator::Clear()
@@ -656,9 +654,7 @@ namespace ig
 		freed.clear();
 		freed.shrink_to_fit();
 
-#ifndef NDEBUG
 		isAllocated.Clear();
-#endif
 	}
 
 	std::optional<uint32_t> DescriptorHeap::PersistentIndexAllocator::Allocate()
@@ -677,10 +673,8 @@ namespace ig
 		}
 		allocationCount++;
 
-#ifndef NDEBUG
 		if (isAllocated.GetAt(index)) throw std::runtime_error("The newly allocated index was already allocated!");
 		isAllocated.SetTrue(index);
-#endif
 
 		return index;
 	}
@@ -688,12 +682,10 @@ namespace ig
 	void DescriptorHeap::PersistentIndexAllocator::Free(uint32_t index)
 	{
 		if (index >= maxIndices) throw std::out_of_range("Index out of range.");
+		if (allocationCount == 0) throw std::runtime_error("Possible double free detected.");
 
-#ifndef NDEBUG
-		if (!isAllocated.GetAt(index)) throw std::runtime_error("Double free or invalid free detected.");
+		if (!isAllocated.GetAt(index)) throw std::runtime_error("Possible double free detected.");
 		isAllocated.SetFalse(index);
-		if (allocationCount == 0) throw std::runtime_error("Something is wrong here.");
-#endif
 
 		freed.push_back(index);
 		allocationCount--;
@@ -1123,7 +1115,7 @@ namespace ig
 
 	DetailedResult CommandList::ValidatePushConstants(const void* data, uint32_t sizeInBytes, uint32_t destOffsetInBytes)
 	{
-		if (sizeInBytes > MAX_PUSH_CONSTANTS_BYTE_SIZE)
+		if ((uint64_t)sizeInBytes + destOffsetInBytes > MAX_PUSH_CONSTANTS_BYTE_SIZE)
 		{
 			return DetailedResult::Fail(ToString("Exceeded maximum push constants byte size (", MAX_PUSH_CONSTANTS_BYTE_SIZE, ")."));
 		}

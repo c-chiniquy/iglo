@@ -49,7 +49,7 @@ namespace ig
 	enum class CharacterEncoding;
 	struct ReadTextFileResult;
 	struct ReadFileResult;
-	class UniformRandom;
+	class Xoshiro256pp;
 
 
 	// An array of boolean values. This class was written as an alternative to std::vector<bool>.
@@ -580,7 +580,6 @@ namespace ig
 	std::u32string utf8_to_utf32(const std::string& utf8);
 	// Returns true if given utf8 string does not contain any invalid byte sequences.
 	bool utf8_is_valid(const std::string& utf8);
-	bool utf8_is_valid(const std::string& utf8, size_t startIndex, size_t endIndex);
 	bool utf8_is_valid(const char* utf8, size_t length);
 	// Returns true if next byte sequence is valid.
 	// If returns true, 'out_stepForward' is set to the number of bytes to move forward to reach next byte sequence.
@@ -760,23 +759,31 @@ namespace ig
 	///////////////////////////// Randomness  /////////////////////////////
 
 	/*
-		This is a wrapper class to make std::mt19937 easier to use. An instance of this class will start with
-		a predetermined seed, so it is recommended to call SetSeed() or SetSeedUsingRandomDevice() before using it.
-
-		Example usage:
-		ig::UniformRandom random;
-		random.SetSeedUsingRandomDevice();
-		float someRandomFloat = random.NextFloat(0, 1);
-		uint32_t someRandomInt = random.NextUInt32();
+		A wrapper for xoshiro256++, a public domain fast random number generator.
+		This random number generator is not cryptographically secure.
+		Source: https://prng.di.unimi.it/
 	*/
-	class UniformRandom
+	class Xoshiro256pp
 	{
 	public:
-		UniformRandom() = default;
+		Xoshiro256pp();
+		explicit Xoshiro256pp(uint64_t seed);
+		Xoshiro256pp(uint64_t seed_A, uint64_t seed_B, uint64_t seed_C, uint64_t seed_D);
+
+		// Any seed value will work fine, even zero
+		void SetSeed(uint64_t seed);
+
+		// A bit faster than SetSeed().
+		// NOTE: At least one value must be non-zero!
+		void SetSeed256(uint64_t a, uint64_t b, uint64_t c, uint64_t d);
+
+		uint64_t Next();
+
+		uint32_t NextUInt32();
+		uint64_t NextUInt64();
 
 		// min and max are inclusive bounds.
 		int32_t NextInt32(int32_t min, int32_t max);
-		uint32_t NextUInt32();
 
 		// 50% chance of returning true.
 		bool NextBool();
@@ -785,46 +792,33 @@ namespace ig
 		// Example: 0.2f = returns true 20% of the time.
 		bool NextProbability(float probability);
 
-		// Produces a random float in the range [min, max).
-		// Due to rounding issues, this may in fact produce a value in an inclusive max range instead.
+		// Returns range [min, max)
 		float NextFloat(float min, float max);
 
-		// Produces a random double in the range [min, max)
-		// Due to rounding issues, this may in fact produce a value in an inclusive max range instead.
+		// Returns range [min, max)
 		double NextDouble(double min, double max);
-
-		void SetSeed(unsigned int seed);
-		// Seeds the random generator using std::random_device and std::seed_seq.
-		// This is generally considered the 'default' way to seed this thing.
-		void SetSeedUsingRandomDevice();
-
-		std::mt19937* GetRandomGenerator() { return &this->randomGenerator; }
 
 	private:
-		std::mt19937 randomGenerator;
+		uint64_t s[4];
 
+		static uint64_t rotl(uint64_t x, int k);
+		static uint64_t SplitMix64(uint64_t& x);
 	};
 
+	/*
+		A convenience wrapper for ig::Xoshiro256pp,
+		allowing you to generate random numbers with a thread-local instance.
+	*/
 	namespace Random
 	{
-		/*
-			These are wrapper functions to make rand() easier to use.
-			These functions are fast but have low quality randomness, so don't use for important stuff.
-		*/
-
-		// min and max are inclusive bounds.
-		int32_t NextInt32(int32_t min, int32_t max);
+		void SetSeed(uint64_t seed);
 		uint32_t NextUInt32();
-		// 50% chance of returning true.
+		uint64_t NextUInt64();
+		int32_t NextInt32(int32_t min, int32_t max);
 		bool NextBool();
-		// 'probability' must be in the range 0.0f to 1.0f. Higher probability means higher chance of returning true.
-		// Example: 0.2f = returns true 20% of the time.
 		bool NextProbability(float probability);
 		float NextFloat(float min, float max);
 		double NextDouble(double min, double max);
-
-		void SetSeed(unsigned int seed);
-
 	}
 
 	///////////////////////////// Math /////////////////////////////
