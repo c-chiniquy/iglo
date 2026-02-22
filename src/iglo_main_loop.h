@@ -98,8 +98,8 @@ namespace ig
 		// Frames per second
 		double GetFPS() const { return framesPerSecond; }
 
-		// Avarage frames per second. Rounded to nearest integer and updates only a few times every second.
-		int32_t GetAvarageFPS() const { return avgFPS; }
+		// Average frames per second. Rounded to nearest integer and updates only a few times every second.
+		int32_t GetAverageFPS() const { return avgFPS; }
 
 	private:
 		IGLOContext* context = nullptr;
@@ -134,9 +134,9 @@ namespace ig
 		double framesPerSecond = 0;
 		double elapsedSeconds = 0;
 
-		// Avarage FPS
+		// Average FPS
 		uint32_t avgFPS_numFrames = 0; // Number of frames passed since start of measurement
-		double avgFPS_totalElapsedSeconds = 0; // The total elapsed time since started measuring avarage FPS
+		double avgFPS_totalElapsedSeconds = 0; // The total elapsed time since started measuring average FPS
 		int32_t avgFPS = 0;
 
 		void Tick();

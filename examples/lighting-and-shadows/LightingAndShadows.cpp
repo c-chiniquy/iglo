@@ -784,7 +784,7 @@ private:
 				std::string strTop = ig::ToString(
 					sampleName, "\n",
 					"iglo v" IGLO_VERSION_STRING " " IGLO_GRAPHICS_API_STRING "\n",
-					"FPS: ", mainloop.GetAvarageFPS());
+					"FPS: ", mainloop.GetAverageFPS());
 
 				std::string presentModeStr = "";
 				switch (context->GetPresentMode())

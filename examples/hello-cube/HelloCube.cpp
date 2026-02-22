@@ -325,7 +325,7 @@ private:
 				(
 					sampleName, "\n",
 					"iglo v" IGLO_VERSION_STRING " " IGLO_GRAPHICS_API_STRING "\n",
-					"FPS: ", mainloop.GetAvarageFPS()
+					"FPS: ", mainloop.GetAverageFPS()
 				);
 				r->DrawString(4, 4, str, *defaultFont, ig::Colors::Yellow);
 			}
