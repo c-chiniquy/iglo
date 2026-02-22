@@ -22,8 +22,10 @@
     - utf8_next_codepoint() now returns replacement characters for invalid byte sequences
     - The utf16 functions now use u16string instead of wstring
     - Improved utf8_is_next_sequence_valid()
-    - Improved ig::Random::NextInt32()
+    - Improved utf8_is_valid()
     - Made some timer functions const
+    - Replaced UniformRandom class with Xoshiro256pp class
+    - ig::Random now uses Xoshiro256pp instead of rand()
     - Fixed bug in Vector4::GetNormalized()
   - iglo
     - Now compatible with Agility SDK 1.717.1-preview
@@ -33,6 +35,8 @@
     - MouseEvent::scrollWheel is now a float
     - Fixed a typo in ig::Key enum
     - Fixed bug in Image::CalculateNumMips()
+    - Fixed bug in CommandList::ValidatePushConstants()
+    - DescriptorHeap::PersistentIndexAllocator now checks against double frees in Release
   - IGLOContext
     - Added GetMouseButtonState()
     - Added GetKeyState()
@@ -45,6 +49,7 @@
     - Added IsActive()
     - Renamed DrawCenterStretchedTexture() to DrawNineSliceSprite()
     - Improved SDF pixel shader (better shadows)
+    - Fixed bug in DrawString()
   - Font
     - PrebakedFontData loading function is now more explicit (to remove compiler warnings)
     - Added out_isErrorGlyph option to Font::GetGlyph()
