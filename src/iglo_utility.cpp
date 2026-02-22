@@ -1143,13 +1143,9 @@ namespace ig
 		return true;
 	}
 
-	bool utf8_is_valid(const std::string& utf8, size_t startIndex, size_t endIndex)
-	{
-		return utf8_is_valid(&utf8[startIndex], endIndex - startIndex);
-	}
 	bool utf8_is_valid(const std::string& utf8)
 	{
-		return utf8_is_valid(&utf8[0], utf8.size());
+		return utf8_is_valid(utf8.data(), utf8.size());
 	}
 	bool utf8_is_valid(const char* utf8, size_t length)
 	{
@@ -2323,7 +2319,7 @@ namespace ig
 #else
 		OutputDebugStringW(text);
 #endif
-}
+	}
 	void Print(const std::wstringstream& text)
 	{
 #ifdef IGLO_WIN32_FORCE_CONSOLE_OUTPUT
@@ -2334,101 +2330,113 @@ namespace ig
 	}
 #endif
 
-	float UniformRandom::NextFloat(float min, float max)
+	Xoshiro256pp::Xoshiro256pp()
 	{
-		std::uniform_real_distribution<float> d(min, max);
-		return d(randomGenerator);
+		SetSeed256(1, 2, 3, 4);
+	}
+	Xoshiro256pp::Xoshiro256pp(uint64_t seed)
+	{
+		SetSeed(seed);
+	}
+	Xoshiro256pp::Xoshiro256pp(uint64_t seed_A, uint64_t seed_B, uint64_t seed_C, uint64_t seed_D)
+	{
+		SetSeed256(seed_A, seed_B, seed_C, seed_D);
 	}
 
-	double UniformRandom::NextDouble(double min, double max)
+	uint64_t Xoshiro256pp::rotl(const uint64_t x, int k)
 	{
-		std::uniform_real_distribution<double> d(min, max);
-		return d(randomGenerator);
+		return (x << k) | (x >> (64 - k));
 	}
 
-	int32_t UniformRandom::NextInt32(int32_t min, int32_t max)
+	uint64_t Xoshiro256pp::Next()
 	{
-		std::uniform_int_distribution<int32_t> d(min, max);
-		return d(randomGenerator);
+		const uint64_t result = rotl(s[0] + s[3], 23) + s[0];
+		const uint64_t t = s[1] << 17;
+		s[2] ^= s[0];
+		s[3] ^= s[1];
+		s[1] ^= s[2];
+		s[0] ^= s[3];
+		s[2] ^= t;
+		s[3] = rotl(s[3], 45);
+		return result;
 	}
 
-	uint32_t UniformRandom::NextUInt32()
+	uint64_t Xoshiro256pp::SplitMix64(uint64_t& x)
 	{
-		std::uniform_int_distribution<uint32_t> d(0, 0xFFFFFFFF);
-		return d(randomGenerator);
+		uint64_t z = (x += 0x9e3779b97f4a7c15);
+		z = (z ^ (z >> 30)) * 0xbf58476d1ce4e5b9;
+		z = (z ^ (z >> 27)) * 0x94d049bb133111eb;
+		return z ^ (z >> 31);
 	}
 
-	bool UniformRandom::NextBool()
+	void Xoshiro256pp::SetSeed(uint64_t seed)
 	{
-		return (NextInt32(0, 1) == 0);
+		uint64_t x = seed;
+		SetSeed256(SplitMix64(x), SplitMix64(x), SplitMix64(x), SplitMix64(x));
 	}
 
-	bool UniformRandom::NextProbability(float probability)
+	void Xoshiro256pp::SetSeed256(uint64_t a, uint64_t b, uint64_t c, uint64_t d)
 	{
-		if (probability >= 1.0f) return true;
-		if (probability <= 0.0f) return false;
-		float d = NextFloat(0, 1);
-		return d < probability;
+		s[0] = a;
+		s[1] = b;
+		s[2] = c;
+		s[3] = d;
 	}
 
-	void UniformRandom::SetSeed(unsigned int seed)
+	uint32_t Xoshiro256pp::NextUInt32()
 	{
-		randomGenerator.seed(seed);
+		return static_cast<uint32_t>(Next() >> 32);
 	}
 
-	void UniformRandom::SetSeedUsingRandomDevice()
+	uint64_t Xoshiro256pp::NextUInt64()
 	{
-		std::random_device r;
-		std::seed_seq seed{ r(), r(), r(), r(), r(), r(), r(), r() };
-		randomGenerator.seed(seed);
+		return Next();
+	}
+
+	int32_t Xoshiro256pp::NextInt32(int32_t min, int32_t max)
+	{
+		uint32_t range = (uint32_t)max - (uint32_t)min + 1;
+		return (int32_t)((uint32_t)min + (NextUInt32() % range));
+	}
+
+	bool Xoshiro256pp::NextBool()
+	{
+		return (Next() >> 63) != 0;
+	}
+
+	bool Xoshiro256pp::NextProbability(float probability)
+	{
+		constexpr float scale = 1.0f / (1u << 24);
+		float roll = static_cast<float>(Next() >> 40) * scale;
+		return roll < probability;
+	}
+
+	float Xoshiro256pp::NextFloat(float min, float max)
+	{
+		constexpr float scale = 1.0f / (1u << 24);
+		float t = static_cast<float>(Next() >> 40) * scale;
+		return min + t * (max - min);
+	}
+
+	double Xoshiro256pp::NextDouble(double min, double max)
+	{
+		constexpr double scale = 1.0 / (1ull << 53);
+		double t = static_cast<double>(Next() >> 11) * scale;
+		return min + t * (max - min);
 	}
 
 	namespace Random
 	{
-		int32_t NextInt32(int32_t min, int32_t max)
-		{
-			uint32_t range = (uint32_t)max - (uint32_t)min + 1;
-			return (int32_t)((uint32_t)min + (rand() % range));
-		}
+		thread_local Xoshiro256pp instance;
 
-		uint32_t NextUInt32()
-		{
-			uint32_t a = rand() & 0xff;
-			a |= (rand() & 0xff) << 8;
-			a |= (rand() & 0xff) << 16;
-			a |= (rand() & 0xff) << 24;
-			return a;
-		}
-
-		bool NextBool()
-		{
-			return NextProbability(0.5f);
-		}
-
-		bool NextProbability(float probability)
-		{
-			if (probability >= 1.0f) return true;
-			if (probability <= 0.0f) return false;
-			double d = (double)rand() / ((double)RAND_MAX + 1.0); // d can never be 1.0
-			return d < (double)probability;
-		}
-
-		float NextFloat(float min, float max)
-		{
-			float d = (float)rand() / RAND_MAX;
-			return min + d * (max - min);
-		}
-
-		double NextDouble(double min, double max)
-		{
-			double d = (double)rand() / RAND_MAX;
-			return min + d * (max - min);
-		}
-
-		void SetSeed(unsigned int seed)
-		{
-			srand(seed);
-		}
+		void SetSeed(uint64_t seed) { instance.SetSeed(seed); }
+		uint32_t NextUInt32() { return instance.NextUInt32(); }
+		uint64_t NextUInt64() { return instance.NextUInt64(); }
+		int32_t NextInt32(int32_t min, int32_t max) { return instance.NextInt32(min, max); }
+		bool NextBool() { return instance.NextBool(); }
+		bool NextProbability(float probability) { return instance.NextProbability(probability); }
+		float NextFloat(float min, float max) { return instance.NextFloat(min, max); }
+		double NextDouble(double min, double max) { return instance.NextDouble(min, max); }
 	}
 
 	uint64_t AlignUp(uint64_t value, uint64_t alignment)
@@ -2460,4 +2468,4 @@ namespace ig
 		return a + (b - a) * t;
 	}
 
-	} // namespace ig
+} // namespace ig

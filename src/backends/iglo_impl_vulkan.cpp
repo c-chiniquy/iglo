@@ -2012,8 +2012,12 @@ namespace ig
 		VkRect2D vkScissors[MAX_SIMULTANEOUS_RENDER_TARGETS];
 		for (uint32_t i = 0; i < count; i++)
 		{
-			vkScissors[i].offset = { scissorRects[i].left,scissorRects[i].top };
-			vkScissors[i].extent = { (uint32_t)scissorRects[i].GetWidth(), (uint32_t)scissorRects[i].GetHeight() };
+			vkScissors[i].offset = { scissorRects[i].left, scissorRects[i].top };
+			vkScissors[i].extent =
+			{
+				(uint32_t)std::max((int32_t)0, scissorRects[i].GetWidth()),
+				(uint32_t)std::max((int32_t)0, scissorRects[i].GetHeight())
+			};
 		}
 		vkCmdSetScissor(impl.currentCommandBuffer, 0, count, vkScissors);
 	}

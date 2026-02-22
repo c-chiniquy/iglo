@@ -715,7 +715,7 @@ namespace ig
 
 	void BatchRenderer::DrawString(Vector2 position, const std::string& utf8string, Font& font, Color32 color, size_t startIndex, size_t endIndex)
 	{
-		DrawString(position.x, position.y, utf8string, font, color, 0, utf8string.size());
+		DrawString(position.x, position.y, utf8string, font, color, startIndex, endIndex);
 	}
 
 	void BatchRenderer::DrawString(float x, float y, const std::string& utf8string, Font& font, Color32 color, size_t startIndex, size_t endIndex)
