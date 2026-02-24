@@ -30,6 +30,7 @@
   - iglo
     - Now compatible with Agility SDK 1.717.1-preview
     - Now using NDEBUG instead of _DEBUG
+    - Added Fatal()
     - Added GetFormatName()
     - Renamed ConvertKeyToString() to GetKeyName()
     - MouseEvent::scrollWheel is now a float
