@@ -133,11 +133,7 @@ namespace ig
 	};
 
 	static CallbackLog logCallback = nullptr;
-
-	void SetLogCallback(CallbackLog logFunc)
-	{
-		logCallback = logFunc;
-	}
+	static CallbackFatal fatalCallback = nullptr;
 
 	void Log(LogType type, const std::string& message)
 	{
@@ -157,6 +153,23 @@ namespace ig
 
 			Print(typeStr + message + "\n");
 		}
+	}
+
+	void SetLogCallback(CallbackLog logFunc)
+	{
+		logCallback = logFunc;
+	}
+
+	[[noreturn]] void Fatal(const std::string& message)
+	{
+		Log(LogType::FatalError, message);
+		if (fatalCallback) fatalCallback(message);
+		std::abort();
+	}
+
+	void SetFatalCallback(CallbackFatal fatalFunc)
+	{
+		fatalCallback = fatalFunc;
 	}
 
 	std::string GetGpuVendorNameFromID(uint32_t vendorID)
@@ -657,9 +670,13 @@ namespace ig
 		isAllocated.Clear();
 	}
 
-	std::optional<uint32_t> DescriptorHeap::PersistentIndexAllocator::Allocate()
+	uint32_t DescriptorHeap::PersistentIndexAllocator::Allocate()
 	{
-		if (allocationCount >= maxIndices) return std::nullopt;
+		if (allocationCount >= maxIndices)
+		{
+			Fatal(ToString("Failed to allocate persistent descriptor. Reason: Ran out of persistent descriptors ",
+				"(", allocationCount, "/", maxIndices, ")"));
+		}
 
 		uint32_t index;
 		if (!freed.empty())
@@ -673,7 +690,10 @@ namespace ig
 		}
 		allocationCount++;
 
-		if (isAllocated.GetAt(index)) throw std::runtime_error("The newly allocated index was already allocated!");
+		if (isAllocated.GetAt(index))
+		{
+			Fatal(ToString("The newly allocated persistent descriptor (index=", index, ") was already allocated!"));
+		}
 		isAllocated.SetTrue(index);
 
 		return index;
@@ -681,10 +701,12 @@ namespace ig
 
 	void DescriptorHeap::PersistentIndexAllocator::Free(uint32_t index)
 	{
-		if (index >= maxIndices) throw std::out_of_range("Index out of range.");
-		if (allocationCount == 0) throw std::runtime_error("Possible double free detected.");
+		const char* errStr = "Failed to free persistent descriptor. Reason: ";
 
-		if (!isAllocated.GetAt(index)) throw std::runtime_error("Possible double free detected.");
+		if (index >= maxIndices) Fatal(ToString(errStr, "Index out of range (", index, ">=", maxIndices, ")"));
+		if (allocationCount == 0) Fatal(ToString(errStr, "No persistent descriptors are even allocated to begin with."));
+
+		if (!isAllocated.GetAt(index)) Fatal(ToString(errStr, "Index (", index, ") wasn't allocated to begin with. Double free detected?"));
 		isAllocated.SetFalse(index);
 
 		freed.push_back(index);
@@ -704,9 +726,13 @@ namespace ig
 		allocationCount = 0;
 	}
 
-	std::optional<uint32_t> DescriptorHeap::TempIndexAllocator::Allocate()
+	uint32_t DescriptorHeap::TempIndexAllocator::Allocate()
 	{
-		if (allocationCount >= maxIndices) return std::nullopt;
+		if (allocationCount >= maxIndices)
+		{
+			Fatal(ToString("Failed to allocate temp descriptor. Reason: Ran out of temp descriptors ",
+				"(", allocationCount, "/", maxIndices, ")"));
+		}
 
 		uint32_t index = allocationCount;
 		allocationCount++;
@@ -803,45 +829,24 @@ namespace ig
 	Descriptor DescriptorHeap::AllocatePersistent(DescriptorType descriptorType)
 	{
 		PersistentIndexAllocator& allocator = (descriptorType == DescriptorType::Sampler) ? persSamplerIndices : persResourceIndices;
-
-		std::optional<uint32_t> out = allocator.Allocate();
-		if (!out)
-		{
-			Log(LogType::Error, ToString("Failed to allocate persistent resource descriptor (",
-				allocator.GetAllocationCount(), " out of ",
-				allocator.GetMaxIndices(), " descriptors in use)."));
-			return Descriptor();
-		}
-
-		return Descriptor(out.value(), descriptorType);
+		uint32_t out = allocator.Allocate();
+		return Descriptor(out, descriptorType);
 	}
 
 	Descriptor DescriptorHeap::AllocateTemp(DescriptorType descriptorType)
 	{
-		if (descriptorType == DescriptorType::Sampler)
-		{
-			Log(LogType::Error, ToString("Failed to allocate temporary descriptor. Reason: Temporary samplers are not supported."));
-			return Descriptor();
-		}
-
+		assert(descriptorType != DescriptorType::Sampler && "temp samplers are not supported");
 		assert(frameIndex < tempResourceIndices.size());
+
 		TempIndexAllocator& allocator = tempResourceIndices[frameIndex];
 
-		std::optional<uint32_t> out = allocator.Allocate();
-		if (!out)
-		{
-			Log(LogType::Error, ToString("Failed to allocate temporary resource descriptor (",
-				allocator.GetAllocationCount(), " out of ",
-				allocator.GetMaxIndices(), " descriptors in use)."));
-			return Descriptor();
-		}
-
-		return Descriptor(out.value(), descriptorType);
+		uint32_t out = allocator.Allocate();
+		return Descriptor(out, descriptorType);
 	}
 
 	void DescriptorHeap::FreePersistent(Descriptor descriptor)
 	{
-		assert(descriptor);
+		if (!descriptor) Fatal("Attempted to free a null persistent descriptor!");
 
 		if (descriptor.type == DescriptorType::Sampler)
 		{
@@ -901,7 +906,7 @@ namespace ig
 		switch (simpleBarrier)
 		{
 		default:
-			throw std::invalid_argument("Invalid SimpleBarrier.");
+			Fatal("Invalid SimpleBarrier.");
 
 			// In D3D12, 'Present' and 'Common' layouts share the same enum value (0).
 			// We distinguish them here as separate to provide the option of not using queue-specific layouts.
@@ -1061,96 +1066,70 @@ namespace ig
 	void CommandList::SetRenderTargets(const Texture* const* renderTextures, uint32_t numRenderTextures,
 		const Texture* depthBuffer, bool optimizedClear)
 	{
-		if (numRenderTextures > 0 && !renderTextures)
+		if (numRenderTextures > 0)
 		{
-			Log(LogType::Error, "Failed to set render targets. Reason: Bad arguments.");
-			return;
+			assert(renderTextures != nullptr);
 		}
-		if (numRenderTextures > MAX_SIMULTANEOUS_RENDER_TARGETS)
-		{
-			Log(LogType::Error, "Failed to set render targets. Reason: Too many render textures provided.");
-			return;
-		}
+		assert(numRenderTextures <= MAX_SIMULTANEOUS_RENDER_TARGETS && "too many render textures provided");
 
 		Impl_SetRenderTargets(renderTextures, numRenderTextures, depthBuffer, optimizedClear);
 	}
 
 	void CommandList::ClearColor(const Texture& renderTexture, Color color, uint32_t numRects, const IntRect* rects)
 	{
-		if (numRects > 0 && !rects)
+		if (numRects > 0)
 		{
-			Log(LogType::Error, "Failed to clear render texture. Reason: Bad arguments.");
-			return;
+			assert(rects != nullptr);
 		}
-
 		Impl_ClearColor(renderTexture, color, numRects, rects);
 	}
 
 	void CommandList::ClearDepth(const Texture& depthBuffer, float depth, byte stencil, bool clearDepth, bool clearStencil,
 		uint32_t numRects, const IntRect* rects)
 	{
-		if (numRects > 0 && !rects)
+		if (numRects > 0)
 		{
-			Log(LogType::Error, "Failed to clear depth buffer. Reason: Bad arguments.");
-			return;
+			assert(rects != nullptr);
 		}
-
 		Impl_ClearDepth(depthBuffer, depth, stencil, clearDepth, clearStencil, numRects, rects);
 	}
 
 	void CommandList::ClearUnorderedAccessBufferUInt32(const Buffer& buffer, const uint32_t value)
 	{
+		assert(buffer.GetUsage() == BufferUsage::UnorderedAccess);
 		Impl_ClearUnorderedAccessBufferUInt32(buffer, value);
 	}
 
 	void CommandList::ClearUnorderedAccessTextureFloat(const Texture& texture, const float values[4])
 	{
+		assert(texture.GetUsage() == TextureUsage::UnorderedAccess);
 		Impl_ClearUnorderedAccessTextureFloat(texture, values);
 	}
 
 	void CommandList::ClearUnorderedAccessTextureUInt32(const Texture& texture, const uint32_t values[4])
 	{
+		assert(texture.GetUsage() == TextureUsage::UnorderedAccess);
 		Impl_ClearUnorderedAccessTextureUInt32(texture, values);
 	}
 
-	DetailedResult CommandList::ValidatePushConstants(const void* data, uint32_t sizeInBytes, uint32_t destOffsetInBytes)
+	void CommandList::AssertPushConstants(const void* data, uint32_t sizeInBytes, uint32_t destOffsetInBytes)
 	{
-		if ((uint64_t)sizeInBytes + destOffsetInBytes > MAX_PUSH_CONSTANTS_BYTE_SIZE)
-		{
-			return DetailedResult::Fail(ToString("Exceeded maximum push constants byte size (", MAX_PUSH_CONSTANTS_BYTE_SIZE, ")."));
-		}
-		if (sizeInBytes % 4 != 0 || destOffsetInBytes % 4 != 0)
-		{
-			return DetailedResult::Fail("Push constants byte size and offset must be multiples of 4.");
-		}
-		if (!data || sizeInBytes == 0)
-		{
-			return DetailedResult::Fail("No data provided.");
-		}
-		return DetailedResult::Success();
+		assert((uint64_t)sizeInBytes + destOffsetInBytes <= MAX_PUSH_CONSTANTS_BYTE_SIZE && "Exceeded max push constants size");
+		assert(sizeInBytes % 4 == 0 && "size must be a multiple of 4");
+		assert(destOffsetInBytes % 4 == 0 && "offset must be a multiple of 4");
+		assert(data != nullptr);
+		assert(sizeInBytes > 0);
 	}
 
 	void CommandList::SetPushConstants(const void* data, uint32_t sizeInBytes, uint32_t destOffsetInBytes)
 	{
-		DetailedResult result = ValidatePushConstants(data, sizeInBytes, destOffsetInBytes);
-		if (!result)
-		{
-			Log(LogType::Error, ToString("Failed to set push constants of size ", sizeInBytes, ". Reason: ", result.errorMessage));
-			return;
-		}
-
+		AssertPushConstants(data, sizeInBytes, destOffsetInBytes);
 		Impl_SetPushConstants(data, sizeInBytes, destOffsetInBytes);
 	}
 
 	void CommandList::SetComputePushConstants(const void* data, uint32_t sizeInBytes, uint32_t destOffsetInBytes)
 	{
-		DetailedResult result = ValidatePushConstants(data, sizeInBytes, destOffsetInBytes);
-		if (!result)
-		{
-			Log(LogType::Error, ToString("Failed to set compute push constants of size ", sizeInBytes, ". Reason: ", result.errorMessage));
-			return;
-		}
-
+		AssertPushConstants(data, sizeInBytes, destOffsetInBytes);
 		Impl_SetComputePushConstants(data, sizeInBytes, destOffsetInBytes);
 	}
 
@@ -1162,35 +1141,19 @@ namespace ig
 
 	void CommandList::SetVertexBuffers(const Buffer* const* vertexBuffers, uint32_t count, uint32_t startSlot)
 	{
-		if (count == 0 || !vertexBuffers)
-		{
-			Log(LogType::Error, "Failed setting vertex buffer(s). Reason: No vertex buffers provided.");
-			return;
-		}
-		if (count + startSlot > MAX_VERTEX_BUFFER_BIND_SLOTS)
-		{
-			Log(LogType::Error, "Failed setting vertex buffer(s). Reason: Vertex buffer slot out of bounds!");
-			return;
-		}
+		assert(count > 0);
+		assert(vertexBuffers != nullptr);
+		assert(count + startSlot <= MAX_VERTEX_BUFFER_BIND_SLOTS);
 
 		Impl_SetVertexBuffers(vertexBuffers, count, startSlot);
 	}
 
 	void CommandList::SetTempVertexBuffer(const void* data, uint64_t sizeInBytes, uint32_t vertexStride, uint32_t slot)
 	{
-		if (slot >= MAX_VERTEX_BUFFER_BIND_SLOTS)
-		{
-			Log(LogType::Error, "Failed setting temporary vertex buffer. Reason: Vertex buffer slot out of bounds!");
-			return;
-		}
+		assert(slot < MAX_VERTEX_BUFFER_BIND_SLOTS);
 
 		TempBuffer vb = context.GetTempBufferAllocator().AllocateTempBuffer(sizeInBytes,
 			context.GetGraphicsSpecs().bufferPlacementAlignments.vertexOrIndexBuffer);
-		if (!vb)
-		{
-			Log(LogType::Error, "Failed setting temporary vertex buffer. Reason: Failed to allocate temporary buffer.");
-			return;
-		}
 
 		memcpy(vb.data, data, sizeInBytes);
 
@@ -1229,11 +1192,8 @@ namespace ig
 
 	void CommandList::CopyTexture(const Texture& source, const Texture& destination)
 	{
-		if (source.GetUsage() == TextureUsage::Readable)
-		{
-			Log(LogType::Error, "Failed to issue a copy texture command. Reason: The source texture must not have Readable usage.");
-			return;
-		}
+		assert(source.GetUsage() != TextureUsage::Readable && "source texture must not have Readable usage");
+
 		if (destination.GetUsage() == TextureUsage::Readable)
 		{
 			CopyTextureToReadableTexture(source, destination);
@@ -1246,11 +1206,8 @@ namespace ig
 	void CommandList::CopyTextureSubresource(const Texture& source, uint32_t sourceFaceIndex, uint32_t sourceMipIndex,
 		const Texture& destination, uint32_t destFaceIndex, uint32_t destMipIndex)
 	{
-		if (source.GetUsage() == TextureUsage::Readable)
-		{
-			Log(LogType::Error, "Failed to issue a copy texture subresource command. Reason: The source texture must not have Readable usage.");
-			return;
-		}
+		assert(source.GetUsage() != TextureUsage::Readable && "source texture must not have Readable usage");
+
 		if (destination.GetUsage() == TextureUsage::Readable)
 		{
 			Log(LogType::Error, "Failed to issue a copy texture subresource command."
@@ -1263,13 +1220,10 @@ namespace ig
 
 	void CommandList::CopyTextureToReadableTexture(const Texture& source, const Texture& destination)
 	{
-		if (source.GetUsage() == TextureUsage::Readable ||
-			destination.GetUsage() != TextureUsage::Readable)
-		{
-			Log(LogType::Error, "Unable to copy texture to readable texture."
-				" Reason: Destination texture usage must be Readable, and source texture usage must be non-readable.");
-			return;
-		}
+		assert(
+			source.GetUsage() != TextureUsage::Readable &&
+			destination.GetUsage() == TextureUsage::Readable &&
+			"dest must be Readable, source must be non-readable");
 
 		Impl_CopyTextureToReadableTexture(source, destination);
 	}
@@ -1321,10 +1275,6 @@ namespace ig
 			for (size_t p = 0; p < numPersistentPages; p++)
 			{
 				Page page = Page::Create(context, linearPageSize);
-				if (page.IsNull())
-				{
-					return { nullptr, DetailedResult::Fail("The buffer allocator failed to allocate memory.") };
-				}
 				frame.linearPages.push_back(page);
 			}
 
@@ -1385,11 +1335,6 @@ namespace ig
 		if (alignedSize > linearPageSize)
 		{
 			Page large = Page::Create(context, alignedSize);
-			if (large.IsNull())
-			{
-				Log(LogType::Error, ToString("Failed to allocate a temporary buffer of size ", sizeInBytes, "."));
-				return TempBuffer();
-			}
 			current.largePages.push_back(large);
 
 			TempBuffer out;
@@ -1403,11 +1348,6 @@ namespace ig
 		if (alignedStart + alignedSize > linearPageSize)
 		{
 			Page page = Page::Create(context, linearPageSize);
-			if (page.IsNull())
-			{
-				Log(LogType::Error, ToString("Failed to allocate a temporary buffer of size ", sizeInBytes, "."));
-				return TempBuffer();
-			}
 			current.linearPages.push_back(page);
 			current.linearNextByte = sizeInBytes;
 
@@ -1420,7 +1360,7 @@ namespace ig
 
 		// Use existing linear page
 		{
-			if (current.linearPages.size() == 0) throw std::runtime_error("This should be impossible.");
+			assert(current.linearPages.size() > 0);
 
 			// Move position forward by actual size, not aligned size.
 			// Aligning the size is only useful for preventing temporary buffer from extending outside bounds.
@@ -1440,13 +1380,13 @@ namespace ig
 	TempBufferAllocator::Stats TempBufferAllocator::GetCurrentStats() const
 	{
 		static_assert(numPersistentPages > 0);
-		if (perFrame.at(frameIndex).linearPages.size() == 0) throw std::runtime_error("This should be impossible.");
+		assert(perFrame.at(frameIndex).linearPages.size() > 0);
 
 		Stats out;
 
 		// Num overflow pages
 		{
-			const PerFrame& current = perFrame.at(frameIndex);
+			const PerFrame& current = perFrame[frameIndex];
 			out.overflowAllocations = current.largePages.size() + current.linearPages.size() - numPersistentPages;
 		}
 
@@ -1469,7 +1409,7 @@ namespace ig
 
 		// Capacity
 		{
-			const PerFrame& current = perFrame.at(frameIndex);
+			const PerFrame& current = perFrame[frameIndex];
 			const Page& page = current.linearPages.back();
 			uint64_t memMax = page.sizeInBytes;
 			uint64_t memUsed = current.linearNextByte;
@@ -1632,14 +1572,14 @@ namespace ig
 
 	MSAA IGLOContext::GetMaxMultiSampleCount(Format textureFormat) const
 	{
-		constexpr uint32_t MaxIgloFormats = 256; // An arbitrary safe upper bound.
+		constexpr uint32_t MaxIgloFormats = 256; // An arbitrary safe upper bound
 
 		uint32_t formatIndex = (uint32_t)textureFormat;
-		if (formatIndex >= MaxIgloFormats) throw std::invalid_argument("Invalid format.");
+		if (formatIndex >= MaxIgloFormats) Fatal("Failed GetMaxMultiSampleCount(). Reason: Invalid format.");
 
 		if (maxMSAAPerFormat.size() == 0) maxMSAAPerFormat.resize(MaxIgloFormats, 0);
 
-		// If the max MSAA has already been retreived for this format, then return it.
+		// If the max MSAA has already been retrieved for this format, then return it.
 		if (maxMSAAPerFormat[formatIndex] != 0) return (MSAA)maxMSAAPerFormat[formatIndex];
 
 		uint32_t maxMSAA = Impl_GetMaxMultiSampleCount(textureFormat);
@@ -1690,7 +1630,7 @@ namespace ig
 		}
 	}
 
-	void IGLOContext::OnFatalError(const std::string& message, bool popupMessage)
+	void IGLOContext::ShowFatalError(const std::string& message, bool popupMessage)
 	{
 		Log(LogType::FatalError, message);
 		if (popupMessage) PopupMessage(message, window.title, this);
@@ -1702,7 +1642,7 @@ namespace ig
 
 		if (renderSettings.maxFramesInFlight > renderSettings.numBackBuffers)
 		{
-			out->OnFatalError("Failed to create IGLOContext. Reason: "
+			out->ShowFatalError("Failed to create IGLOContext. Reason: "
 				"You can't have more frames in flight than the number of back buffers!", showPopupIfFailed);
 			return nullptr;
 		}
@@ -1710,7 +1650,7 @@ namespace ig
 		DetailedResult windowResult = out->InitWindow(windowSettings);
 		if (!windowResult)
 		{
-			out->OnFatalError("Failed to initialize window. Reason: " + windowResult.errorMessage, showPopupIfFailed);
+			out->ShowFatalError("Failed to initialize window. Reason: " + windowResult.errorMessage, showPopupIfFailed);
 			return nullptr;
 		}
 		out->isWindowInitialized = true;
@@ -1718,7 +1658,7 @@ namespace ig
 		DetailedResult graphicsResult = out->InitGraphicsDevice(renderSettings, out->windowedMode.size);
 		if (!graphicsResult)
 		{
-			out->OnFatalError("Failed to initialize " IGLO_GRAPHICS_API_STRING ". Reason: " + graphicsResult.errorMessage, showPopupIfFailed);
+			out->ShowFatalError("Failed to initialize " IGLO_GRAPHICS_API_STRING ". Reason: " + graphicsResult.errorMessage, showPopupIfFailed);
 			return nullptr;
 		}
 		out->isGraphicsDeviceInitialized = true;
@@ -2521,7 +2461,7 @@ namespace ig
 		std::unique_ptr<Image> out = CreateWrapped(stbiPixels, pointerImageDesc);
 		if (!out)
 		{
-			Log(LogType::Error, ToString(errStr, "Unable to create wrapped image. This error should be impossible."));
+			Log(LogType::Error, ToString(errStr, "Unable to create wrapped image. This should be impossible."));
 			stbi_image_free(stbiPixels);
 			return nullptr;
 		}
@@ -2717,7 +2657,7 @@ namespace ig
 		case Format::BYTE_BYTE_BYTE_BYTE_BGRA_sRGB: desc.format = Format::BYTE_BYTE_BYTE_BYTE_sRGB; break;
 
 		default:
-			throw std::invalid_argument("Unexpected format.");
+			break;
 		}
 
 		return true;
@@ -2812,7 +2752,7 @@ namespace ig
 				endOfFrame[frameIndex].copyReceipt = out;
 				break;
 			default:
-				throw std::runtime_error("This should be impossible.");
+				Fatal("Invalid CommandListType in IGLOContext::Submit()");
 			}
 		}
 		return out;
@@ -2857,9 +2797,9 @@ namespace ig
 	{
 		frameIndex = (frameIndex + 1) % numFramesInFlight;
 
-		if (numFramesInFlight > maxFramesInFlight) throw std::runtime_error("This should be impossible.");
-		if (numFramesInFlight > swapChain.numBackBuffers) throw std::runtime_error("This should be impossible.");
-		if (frameIndex >= endOfFrame.size()) throw std::runtime_error("This should be impossible.");
+		assert(numFramesInFlight <= maxFramesInFlight);
+		assert(numFramesInFlight <= swapChain.numBackBuffers);
+		assert(frameIndex < endOfFrame.size());
 
 		EndOfFrame& currentFrame = endOfFrame[frameIndex];
 		commandQueue->WaitForCompletion(currentFrame.graphicsReceipt);
@@ -2907,21 +2847,10 @@ namespace ig
 
 	Descriptor IGLOContext::CreateTempConstant(const void* data, uint64_t numBytes) const
 	{
-		const char* errStr = "Failed to create temporary shader constant. Reason: ";
+		if (numBytes == 0) Fatal("Failed to create temp shader constant. Reason: Size can't be zero.");
 
 		Descriptor outDescriptor = descriptorHeap->AllocateTemp(DescriptorType::ConstantBuffer_CBV);
-		if (!outDescriptor)
-		{
-			Log(LogType::Error, ToString(errStr, "Failed to allocate temporary resource descriptor."));
-			return Descriptor();
-		}
-
 		TempBuffer tempBuffer = tempBufferAllocator->AllocateTempBuffer(numBytes, GetGraphicsSpecs().bufferPlacementAlignments.constant);
-		if (!tempBuffer)
-		{
-			Log(LogType::Error, ToString(errStr, "Failed to allocate temporary buffer."));
-			return Descriptor();
-		}
 
 		memcpy(tempBuffer.data, data, numBytes);
 
@@ -2940,33 +2869,17 @@ namespace ig
 
 	Descriptor IGLOContext::CreateTempStructuredBuffer(const void* data, uint32_t elementStride, uint32_t numElements) const
 	{
-		const char* errStr = "Failed to create temporary structured buffer. Reason: ";
-
 		uint64_t numBytes = (uint64_t)elementStride * numElements;
 
-		if (numBytes == 0)
-		{
-			Log(LogType::Error, ToString(errStr, "Size of buffer can't be zero."));
-			return Descriptor();
-		}
+		if (numBytes == 0) Fatal("Failed to create temp structured buffer. Reason: Size can't be zero.");
 
 		Descriptor outDescriptor = descriptorHeap->AllocateTemp(DescriptorType::RawOrStructuredBuffer_SRV_UAV);
-		if (!outDescriptor)
-		{
-			Log(LogType::Error, ToString(errStr, "Failed to allocate temporary resource descriptor."));
-			return Descriptor();
-		}
 
 #ifdef IGLO_D3D12
 		// In D3D12, structured buffers need a special non-power of 2 element stride alignment,
 		// which is why we allocate 1 extra element here.
 		TempBuffer tempBuffer = tempBufferAllocator->AllocateTempBuffer(numBytes + elementStride,
 			GetGraphicsSpecs().bufferPlacementAlignments.rawOrStructuredBuffer);
-		if (!tempBuffer)
-		{
-			Log(LogType::Error, ToString(errStr, "Failed to allocate temporary buffer."));
-			return Descriptor();
-		}
 
 		// We pretend the entire page is an array of elements.
 		// We must figure out the index of our first element, aligned upwards to 'elementStride'.
@@ -2989,13 +2902,9 @@ namespace ig
 #ifdef IGLO_VULKAN
 		TempBuffer tempBuffer = tempBufferAllocator->AllocateTempBuffer(numBytes,
 			GetGraphicsSpecs().bufferPlacementAlignments.rawOrStructuredBuffer);
-		if (!tempBuffer)
-		{
-			Log(LogType::Error, ToString(errStr, "Failed to allocate temporary buffer."));
-			return Descriptor();
-		}
 
 		memcpy(tempBuffer.data, data, numBytes);
+
 		descriptorHeap->WriteBufferDescriptor(outDescriptor, tempBuffer.impl.buffer, tempBuffer.offset, numBytes);
 #endif
 
@@ -3004,33 +2913,14 @@ namespace ig
 
 	Descriptor IGLOContext::CreateTempRawBuffer(const void* data, uint64_t numBytes) const
 	{
-		const char* errStr = "Failed to create temporary raw buffer. Reason: ";
+		const char* errStr = "Failed to create temp raw buffer. Reason: ";
 
-		if (numBytes == 0)
-		{
-			Log(LogType::Error, ToString(errStr, "Size of buffer can't be zero."));
-			return Descriptor();
-		}
-		if (numBytes % 4 != 0)
-		{
-			Log(LogType::Error, ToString(errStr, "The size of this type of buffer must be a multiple of 4."));
-			return Descriptor();
-		}
+		if (numBytes == 0) Fatal(ToString(errStr, "Size can't be zero."));
+		if (numBytes % 4 != 0) Fatal(ToString(errStr, "Expected size to be a multiple of 4."));
 
 		Descriptor outDescriptor = descriptorHeap->AllocateTemp(DescriptorType::RawOrStructuredBuffer_SRV_UAV);
-		if (!outDescriptor)
-		{
-			Log(LogType::Error, ToString(errStr, "Failed to allocate temporary resource descriptor."));
-			return Descriptor();
-		}
-
 		TempBuffer tempBuffer = tempBufferAllocator->AllocateTempBuffer(numBytes,
 			GetGraphicsSpecs().bufferPlacementAlignments.rawOrStructuredBuffer);
-		if (!tempBuffer)
-		{
-			Log(LogType::Error, ToString(errStr, "Failed to allocate temporary buffer."));
-			return Descriptor();
-		}
 
 		memcpy(tempBuffer.data, data, numBytes);
 
@@ -3072,7 +2962,9 @@ namespace ig
 
 	Descriptor Buffer::GetDescriptor() const
 	{
-		if (desc.usage == BufferUsage::Readable) throw std::runtime_error("Invalid usage.");
+		const char* errStr = "Buffer does not have a descriptor of type SRV/CBV.";
+
+		if (desc.usage == BufferUsage::Readable) Fatal(errStr);
 
 		switch (desc.type)
 		{
@@ -3083,13 +2975,13 @@ namespace ig
 			return descriptor_SRV_or_CBV[0];
 
 		default:
-			throw std::runtime_error("Invalid type.");
+			Fatal(errStr);
 		}
 	}
 
 	Descriptor Buffer::GetUnorderedAccessDescriptor() const
 	{
-		if (!descriptor_UAV) throw std::runtime_error("Has no UAV.");
+		if (!descriptor_UAV) Fatal("Buffer does not have an unordered access descriptor.");
 		return descriptor_UAV;
 	}
 
@@ -3105,7 +2997,7 @@ namespace ig
 		case BufferType::RawBuffer:        errStr = "Failed to create raw buffer. Reason: "; break;
 		case BufferType::ShaderConstant:   errStr = "Failed to create shader constant buffer. Reason: "; break;
 		default:
-			throw std::invalid_argument("This should be impossible.");
+			Fatal("Invalid buffer type when creating buffer.");
 		}
 
 		if (desc.size == 0)
@@ -3234,34 +3126,21 @@ namespace ig
 		return InternalCreate(context, desc);
 	}
 
-	void Buffer::SetData(CommandList& cmd, void* srcData)
+	void Buffer::SetData(CommandList& cmd, const void* srcData)
 	{
-		if (desc.usage != BufferUsage::Default &&
-			desc.usage != BufferUsage::UnorderedAccess)
-		{
-			Log(LogType::Error, "Failed to set buffer data. Reason: Buffer must be created with Default or UnorderedAccess usage.");
-			return;
-		}
+		assert((desc.usage == BufferUsage::Default || desc.usage == BufferUsage::UnorderedAccess) &&
+			"usage must be Default or UnorderedAccess");
 
 		TempBuffer tempBuffer = context.GetTempBufferAllocator().AllocateTempBuffer(desc.size, 1);
-		if (!tempBuffer)
-		{
-			Log(LogType::Error, "Failed to set buffer data. Reason: Failed to allocate temporary buffer.");
-			return;
-		}
 
 		memcpy(tempBuffer.data, srcData, desc.size);
 
 		cmd.CopyTempBufferToBuffer(tempBuffer, *this);
 	}
 
-	void Buffer::SetDynamicData(void* srcData)
+	void Buffer::SetDynamicData(const void* srcData)
 	{
-		if (desc.usage != BufferUsage::Dynamic)
-		{
-			Log(LogType::Error, "Failed to set dynamic buffer data. Reason: Buffer must be created with Dynamic usage.");
-			return;
-		}
+		assert(desc.usage == BufferUsage::Dynamic && "must have Dynamic usage");
 
 		dynamicSetCounter = (dynamicSetCounter + 1) % context.GetMaxFramesInFlight();
 
@@ -3273,11 +3152,7 @@ namespace ig
 
 	void Buffer::ReadData(void* destData)
 	{
-		if (desc.usage != BufferUsage::Readable)
-		{
-			Log(LogType::Error, "Failed to read buffer data. Reason: Buffer must be created with Readable usage.");
-			return;
-		}
+		assert(desc.usage == BufferUsage::Readable && "must have Readable usage");
 
 		uint32_t frameIndex = context.GetFrameIndex();
 
@@ -3307,13 +3182,13 @@ namespace ig
 
 	Descriptor Texture::GetDescriptor() const
 	{
-		if (!srvDescriptor) throw std::runtime_error("No SRV.");
+		if (!srvDescriptor) Fatal("Texture has no SRV.");
 		return srvDescriptor;
 	}
 
 	Descriptor Texture::GetUnorderedAccessDescriptor() const
 	{
-		if (!uavDescriptor) throw std::runtime_error("No UAV.");
+		if (!uavDescriptor) Fatal("Texture has no UAV.");
 		return uavDescriptor;
 	}
 
@@ -3341,8 +3216,9 @@ namespace ig
 		case TextureUsage::RenderTexture:
 		case TextureUsage::DepthBuffer:
 			break;
+
 		default:
-			throw std::invalid_argument("Invalid texture usage.");
+			Fatal(ToString(errStr, "Invalid texture usage."));
 		}
 
 		if (desc.extent.width == 0 || desc.extent.height == 0)
@@ -3538,10 +3414,8 @@ namespace ig
 
 	DetailedResult Texture::GenerateMips(CommandList& cmd, const Image& image)
 	{
-		if (desc.mipLevels <= 1 || image.GetExtent() != desc.extent)
-		{
-			throw std::runtime_error("This should be impossible.");
-		}
+		assert(desc.mipLevels > 1);
+		assert(image.GetExtent() == desc.extent);
 
 		Extent2D nextMipExtent = Image::CalculateMipExtent(desc.extent, 1);
 		FormatInfo formatInfo = GetFormatInfo(desc.format);
@@ -3589,10 +3463,6 @@ namespace ig
 
 			Descriptor srv = heap.AllocateTemp(DescriptorType::Texture_SRV);
 			Descriptor uav = heap.AllocateTemp(DescriptorType::Texture_UAV);
-			if (!srv || !uav)
-			{
-				return DetailedResult::Fail("Failed to allocate temporary resource descriptors for mipmap generation.");
-			}
 			pushConstants.srcTextureIndex = srv.heapIndex;
 			pushConstants.destTextureIndex = uav.heapIndex;
 
@@ -3683,26 +3553,12 @@ namespace ig
 
 	void Texture::SetPixels(CommandList& cmd, const Image& srcImage)
 	{
-		const char* errStr = "Failed to set texture pixels. Reason: ";
-
-		if (desc.usage == TextureUsage::Readable)
-		{
-			Log(LogType::Error, ToString(errStr, "Texture must be created with non-readable texture usage."));
-			return;
-		}
-		if (desc.msaa != MSAA::Disabled)
-		{
-			Log(LogType::Error, ToString(errStr, "Texture is multisampled."));
-			return;
-		}
-		if (srcImage.GetExtent() != desc.extent ||
-			srcImage.GetFormat() != desc.format ||
-			srcImage.GetNumFaces() != desc.numFaces ||
-			srcImage.GetMipLevels() != desc.mipLevels)
-		{
-			Log(LogType::Error, ToString(errStr, "Source image dimensions must match texture."));
-			return;
-		}
+		assert(desc.usage != TextureUsage::Readable && "must have non-readable texture usage");
+		assert(desc.msaa == MSAA::Disabled && "texture must not be multisampled");
+		assert(srcImage.GetExtent() == desc.extent && "src image must match texture");
+		assert(srcImage.GetFormat() == desc.format && "src image must match texture");
+		assert(srcImage.GetNumFaces() == desc.numFaces && "src image must match texture");
+		assert(srcImage.GetMipLevels() == desc.mipLevels && "src image must match texture");
 
 #ifdef IGLO_D3D12
 		uint64_t requiredUploadBufferSize = 0;
@@ -3718,11 +3574,6 @@ namespace ig
 
 		TempBuffer tempBuffer = context.GetTempBufferAllocator().AllocateTempBuffer(requiredUploadBufferSize,
 			context.GetGraphicsSpecs().bufferPlacementAlignments.texture);
-		if (!tempBuffer)
-		{
-			Log(LogType::Error, ToString(errStr, "Failed to allocate temporary buffer."));
-			return;
-		}
 
 		byte* destPtr = (byte*)tempBuffer.data;
 		byte* srcPtr = (byte*)srcImage.GetPixels();
@@ -3737,9 +3588,7 @@ namespace ig
 					memcpy(destPtr, srcPtr, srcRowPitch);
 					srcPtr += srcRowPitch;
 					destPtr += destRowPitch;
-#ifndef NDEBUG
-					if (srcProgress + srcRowPitch > srcImage.GetMipSize(mipIndex)) throw std::runtime_error("Something is wrong here.");
-#endif
+					assert(srcProgress + srcRowPitch <= srcImage.GetMipSize(mipIndex));
 				}
 			}
 		}
@@ -3749,11 +3598,7 @@ namespace ig
 
 	void Texture::SetPixels(CommandList& cmd, const void* pixelData)
 	{
-		if (!pixelData)
-		{
-			Log(LogType::Error, "Failed to set texture pixels. Reason: The provided data is nullptr.");
-			return;
-		}
+		assert(pixelData != nullptr);
 
 		ImageDesc imageDesc;
 		imageDesc.extent = desc.extent;
@@ -3769,28 +3614,13 @@ namespace ig
 
 	void Texture::SetPixelsAtSubresource(CommandList& cmd, const Image& srcImage, uint32_t destFaceIndex, uint32_t destMipIndex)
 	{
-		const char* errStr = "Failed to set texture pixels at subresource. Reason: ";
-
-		if (desc.usage == TextureUsage::Readable)
-		{
-			Log(LogType::Error, ToString(errStr, "Texture must be created with non-readable texture usage."));
-			return;
-		}
-		if (desc.msaa != MSAA::Disabled)
-		{
-			Log(LogType::Error, ToString(errStr, "Texture is multisampled."));
-			return;
-		}
-		Extent2D subResDimensions = Image::CalculateMipExtent(desc.extent, destMipIndex);
-		if (srcImage.GetExtent() != subResDimensions ||
-			srcImage.GetFormat() != desc.format ||
-			srcImage.GetNumFaces() != 1 ||
-			srcImage.GetMipLevels() != 1)
-		{
-			Log(LogType::Error, ToString(errStr, "Source image is expected to have 1 face, 1 miplevel,"
-				" and the dimensions ", subResDimensions.ToString(), "."));
-			return;
-		}
+		assert(desc.usage != TextureUsage::Readable && "must have non-readable texture usage");
+		assert(desc.msaa == MSAA::Disabled && "texture must not be multisampled");
+		assert(srcImage.GetExtent() == Image::CalculateMipExtent(desc.extent, destMipIndex) &&
+			"src image extent must match texture subresource extent");
+		assert(srcImage.GetFormat() == desc.format && "src image must have same format as texture");
+		assert(srcImage.GetNumFaces() == 1 && "src image must have 1 face");
+		assert(srcImage.GetMipLevels() == 1 && "src image must have 1 mip");
 
 #ifdef IGLO_D3D12
 		uint32_t subResourceIndex = (destFaceIndex * desc.mipLevels) + destMipIndex;
@@ -3806,11 +3636,6 @@ namespace ig
 
 		TempBuffer tempBuffer = context.GetTempBufferAllocator().AllocateTempBuffer(requiredUploadBufferSize,
 			context.GetGraphicsSpecs().bufferPlacementAlignments.texture);
-		if (!tempBuffer)
-		{
-			Log(LogType::Error, "Failed to set texture pixels. Reason: Failed to allocate temporary buffer.");
-			return;
-		}
 
 		byte* destPtr = (byte*)tempBuffer.data;
 		byte* srcPtr = (byte*)srcImage.GetPixels();
@@ -3821,9 +3646,7 @@ namespace ig
 			memcpy(destPtr, srcPtr, srcRowPitch);
 			srcPtr += srcRowPitch;
 			destPtr += destRowPitch;
-#ifndef NDEBUG
-			if (srcProgress + srcRowPitch > srcImage.GetMipSize(0)) throw std::runtime_error("Something is wrong here.");
-#endif
+			assert(srcProgress + srcRowPitch <= srcImage.GetMipSize(0));
 		}
 
 		cmd.CopyTempBufferToTextureSubresource(tempBuffer, *this, destFaceIndex, destMipIndex);
@@ -3831,11 +3654,7 @@ namespace ig
 
 	void Texture::SetPixelsAtSubresource(CommandList& cmd, const void* pixelData, uint32_t destFaceIndex, uint32_t destMipIndex)
 	{
-		if (!pixelData)
-		{
-			Log(LogType::Error, "Failed to set texture pixels at subresource. Reason: The provided data is nullptr.");
-			return;
-		}
+		assert(pixelData != nullptr);
 
 		ImageDesc imageDesc;
 		imageDesc.extent = Image::CalculateMipExtent(desc.extent, destMipIndex);
@@ -3848,50 +3667,32 @@ namespace ig
 
 	void Texture::ReadPixels(Image& destImage)
 	{
-		const char* errStr = "Failed to read texture pixels. Reason: ";
-
-		if (desc.usage != TextureUsage::Readable)
-		{
-			Log(LogType::Error, ToString(errStr, "Texture must be created with Readable usage."));
-			return;
-		}
-		if (desc.msaa != MSAA::Disabled)
-		{
-			Log(LogType::Error, ToString(errStr, "Texture is multisampled."));
-			return;
-		}
-		if (destImage.GetExtent() != desc.extent ||
-			destImage.GetFormat() != desc.format ||
-			destImage.GetNumFaces() != desc.numFaces ||
-			destImage.GetMipLevels() != desc.mipLevels)
-		{
-			Log(LogType::Error, ToString(errStr, "Image dimension must match texture."));
-			return;
-		}
-
-		if (readMapped.size() != context.GetMaxFramesInFlight()) throw std::runtime_error("This should be impossible.");
+		assert(desc.usage == TextureUsage::Readable && "must have readable texture usage");
+		assert(desc.msaa == MSAA::Disabled && "texture must not be multisampled");
+		assert(destImage.GetExtent() == desc.extent && "image must match texture");
+		assert(destImage.GetFormat() == desc.format && "image must match texture");
+		assert(destImage.GetNumFaces() == desc.numFaces && "image must match texture");
+		assert(destImage.GetMipLevels() == desc.mipLevels && "image must match texture");
+		assert(readMapped.size() == context.GetMaxFramesInFlight());
 
 		byte* destPtr = (byte*)destImage.GetPixels();
 		byte* srcPtr = (byte*)readMapped[context.GetFrameIndex()];
+		const uint32_t textureRowPitch = context.GetGraphicsSpecs().bufferPlacementAlignments.textureRowPitch;
 		for (uint32_t faceIndex = 0; faceIndex < desc.numFaces; faceIndex++)
 		{
 			for (uint32_t mipIndex = 0; mipIndex < desc.mipLevels; mipIndex++)
 			{
-				size_t srcRowPitch = AlignUp(Image::CalculateMipRowPitch(desc.extent, desc.format, mipIndex),
-					context.GetGraphicsSpecs().bufferPlacementAlignments.textureRowPitch);
+				size_t srcRowPitch = AlignUp(Image::CalculateMipRowPitch(desc.extent, desc.format, mipIndex), textureRowPitch);
 				size_t destRowPitch = destImage.GetMipRowPitch(mipIndex);
 				for (uint64_t destProgress = 0; destProgress < destImage.GetMipSize(mipIndex); destProgress += destRowPitch)
 				{
 					memcpy(destPtr, srcPtr, destRowPitch);
 					srcPtr += srcRowPitch;
 					destPtr += destRowPitch;
-#ifndef NDEBUG
-					if (destProgress + destRowPitch > destImage.GetMipSize(mipIndex)) throw std::runtime_error("Something is wrong here.");
-#endif
+					assert(destProgress + destRowPitch <= destImage.GetMipSize(mipIndex));
 				}
 			}
 		}
-
 	}
 
 	std::unique_ptr<Image> Texture::ReadPixels()

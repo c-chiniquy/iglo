@@ -153,6 +153,7 @@ namespace ig
 {
 	// Callbacks
 	using CallbackLog = std::function<void(LogType messageType, const std::string& message)>;
+	using CallbackFatal = std::function<void(const std::string& message)>;
 	using CallbackModalLoop = std::function<void()>;
 	using CallbackOnDeviceRemoved = std::function<void(std::string deviceRemovalReason)>;
 
@@ -160,8 +161,8 @@ namespace ig
 	{
 		Info = 0, // Example: Prints the name of the graphics API version being used.
 		Warning,
-		Error, // Example: Failed to load texture, copy texture etc...
-		FatalError, // Example: Failed to create IGLOContext
+		Error, // Example: Failed to load texture, create buffer etc...
+		FatalError, // Example: Failed to create IGLOContext, or an unrecoverable error happened
 	};
 
 	// Logs a debug message.
@@ -173,6 +174,13 @@ namespace ig
 	void SetLogCallback(CallbackLog logFunc);
 
 	void PopupMessage(const std::string& message, const std::string& caption = "", const IGLOContext* parent = nullptr);
+
+	// Logs a debug message (FatalError) and aborts the app
+	[[noreturn]] void Fatal(const std::string& message);
+
+	// This callback is called just before std::abort(), but after the fatal error message has been logged.
+	// This gives you a chance to write a crash log before the app aborts.
+	void SetFatalCallback(CallbackFatal fatalFunc);
 
 	std::string GetGpuVendorNameFromID(uint32_t vendorID);
 
@@ -1121,11 +1129,11 @@ namespace ig
 		ClearValue GetOptimizedClearValue() const { return desc.optimizedClearValue; }
 
 		// Gets the SRV descriptor for this texture.
-		// Throws an exception if this texture doesn't have an SRV descriptor.
+		// Aborts if texture doesn't have an SRV descriptor.
 		Descriptor GetDescriptor() const;
 
 		// Gets the UAV descriptor for this texture.
-		// Throws an exception if this texture doesn't have a UAV descriptor.
+		// Aborts if texture doesn't have a UAV descriptor.
 		Descriptor GetUnorderedAccessDescriptor() const;
 
 #ifdef IGLO_D3D12
@@ -1230,12 +1238,12 @@ namespace ig
 		// Updates the contents of this buffer.
 		// Default or UnorderedAccess buffer usage is required.
 		// The number of bytes that is read from 'srcData' is equal to the size of this buffer.
-		void SetData(CommandList&, void* srcData);
+		void SetData(CommandList&, const void* srcData);
 
 		// Updates the contents of this buffer.
 		// Dynamic buffer usage is required.
 		// The number of bytes that is read from 'srcData' is equal to the size of this buffer.
-		void SetDynamicData(void* srcData);
+		void SetDynamicData(const void* srcData);
 
 		// Reads the contents of this buffer and writes it to the given pointer.
 		// Readable buffer usage is required.
@@ -1250,11 +1258,11 @@ namespace ig
 		uint32_t GetNumElements() const { return desc.numElements; }
 
 		// Gets the SRV or CBV descriptor for this buffer (determined by buffer usage).
-		// Throws an exception if this buffer doesn't have an SRV or CBV descriptor.
+		// Aborts if buffer doesn't have an SRV or CBV descriptor.
 		Descriptor GetDescriptor() const;
 
 		// Gets the UAV descriptor for this buffer.
-		// Throws an exception if this buffer doesn't have a UAV descriptor.
+		// Aborts if buffer doesn't have a UAV descriptor.
 		Descriptor GetUnorderedAccessDescriptor() const;
 
 #ifdef IGLO_D3D12
@@ -1448,8 +1456,13 @@ namespace ig
 		// Frees all temporary resource descriptors
 		void FreeAllTempResources();
 
+		// Aborts on failure
 		[[nodiscard]] Descriptor AllocatePersistent(DescriptorType);
-		Descriptor AllocateTemp(DescriptorType);
+
+		// Aborts on failure
+		[[nodiscard]] Descriptor AllocateTemp(DescriptorType);
+
+		// Aborts on failure
 		void FreePersistent(Descriptor);
 
 		struct Stats
@@ -1547,7 +1560,7 @@ namespace ig
 
 			void Reset(uint32_t maxIndices);
 			void Clear();
-			std::optional<uint32_t> Allocate(); // Returns nothing if failed 
+			uint32_t Allocate(); // Aborts on failure
 			void Free(uint32_t index);
 			uint32_t GetAllocationCount() const { return allocationCount; }
 			uint32_t GetMaxIndices() const { return maxIndices; }
@@ -1565,7 +1578,7 @@ namespace ig
 
 			void Reset(uint32_t maxIndices, uint32_t offset);
 			void Clear();
-			std::optional<uint32_t> Allocate(); // Returns nothing if failed 
+			uint32_t Allocate(); // Aborts on failure
 			void FreeAllIndices();
 			uint32_t GetAllocationCount() const { return allocationCount; }
 			uint32_t GetMaxIndices() const { return maxIndices; }
@@ -2035,7 +2048,7 @@ namespace ig
 		void Impl_CopyTextureToReadableTexture(const Texture& source, const Texture& destination);
 
 		void CopyTextureToReadableTexture(const Texture& source, const Texture& destination);
-		static DetailedResult ValidatePushConstants(const void* data, uint32_t sizeInBytes, uint32_t destOffsetInBytes);
+		static void AssertPushConstants(const void* data, uint32_t sizeInBytes, uint32_t destOffsetInBytes);
 	};
 
 	struct TempBuffer
@@ -2051,10 +2064,7 @@ namespace ig
 	};
 
 	// TempBufferAllocator manages upload heap buffers used for per-frame data.
-	// All data stored in these buffers is transient and discarded/reset each frame.
-	// Buffers are allocated in pages.
-	// Some pages are reused across frames for efficiency,
-	// these are called persistent pages, but the data on them is still always temporary.
+	// The contents on these buffers are temporary (valid for 1 frame).
 	class TempBufferAllocator
 	{
 	private:
@@ -2074,7 +2084,7 @@ namespace ig
 		void NextFrame();
 		void FreeAllTempPages();
 
-		// Sub‐allocate a chunk from an existing page, or from a new page if there's no room left.
+		// Aborts on failure.
 		TempBuffer AllocateTempBuffer(uint64_t sizeInBytes, uint32_t alignment);
 
 		// Gets the byte size of a linear page.
@@ -2117,7 +2127,7 @@ namespace ig
 			bool IsNull() const { return (mapped == nullptr); }
 			void Free(const IGLOContext&);
 
-			// Creates a new page. Returns a null page if failed.
+			// Creates a new page. Aborts on failure.
 			static Page Create(const IGLOContext&, uint64_t sizeInBytes);
 
 			void* mapped = nullptr;
@@ -2638,8 +2648,11 @@ namespace ig
 		void DelayedDestroyTexture(std::unique_ptr<Texture> texture) const;
 		void DelayedDestroyBuffer(std::unique_ptr<Buffer> buffer) const;
 
+		// Aborts on failure
 		Descriptor CreateTempConstant(const void* data, uint64_t numBytes) const;
+		// Aborts on failure
 		Descriptor CreateTempStructuredBuffer(const void* data, uint32_t elementStride, uint32_t numElements) const;
+		// Aborts on failure
 		Descriptor CreateTempRawBuffer(const void* data, uint64_t numBytes) const;
 
 		uint32_t GetMaxFramesInFlight() const { return maxFramesInFlight; }
@@ -2696,7 +2709,7 @@ namespace ig
 		void DestroyWindow();
 		void DestroyGraphicsDevice();
 
-		void OnFatalError(const std::string& message, bool popupMessage);
+		void ShowFatalError(const std::string& message, bool popupMessage);
 
 		//------------------ Window ------------------//
 

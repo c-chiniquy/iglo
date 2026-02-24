@@ -964,7 +964,7 @@ namespace ig
 			// If for some weird reason there is no pointer to file data
 			if (!fileDataReadOnly)
 			{
-				throw std::runtime_error("Font doesn't have a font file to read from. This should be impossible.");
+				Fatal("Font doesn't have a font file to read from. This should be impossible.");
 			}
 
 			int stbttGlyphIndex = stbtt_FindGlyphIndex(&stbttFontInfo, codepoint);

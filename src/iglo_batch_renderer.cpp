@@ -71,20 +71,12 @@ namespace ig
 
 		state.texture = &texture;
 
-		if (!texture.GetDescriptor()) throw std::runtime_error("No SRV.");
-
 		TextureConstants textureConstants = {};
 		textureConstants.textureSize = Vector2((float)texture.GetWidth(), (float)texture.GetHeight());
 		textureConstants.inverseTextureSize = Vector2(1.0f / (float)texture.GetWidth(), 1.0f / (float)texture.GetHeight());
 		textureConstants.msaa = (uint32_t)texture.GetMSAA();
 
 		Descriptor tempConstant = context.CreateTempConstant(&textureConstants, sizeof(textureConstants));
-		if (!tempConstant)
-		{
-			const char* errorMsg = "Failed to set texture in BatchRenderer. Reason: Failed to create temp constant.";
-			Log(LogType::FatalError, ToString(errorMsg));
-			throw std::runtime_error(errorMsg);
-		}
 
 		state.pushConstants.textureConstantsIndex = tempConstant.heapIndex;
 		state.pushConstants.textureIndex = texture.GetDescriptor().heapIndex;
@@ -245,7 +237,6 @@ namespace ig
 
 		Matrix4x4 viewProjConstant = (projection * view).GetTransposed();
 		Descriptor tempConstant = context.CreateTempConstant(&viewProjConstant, sizeof(viewProjConstant));
-		if (!tempConstant) throw std::runtime_error("Failed to create temp constant.");
 
 		state.pushConstants.viewProjMatrixIndex = tempConstant.heapIndex;
 	}
@@ -270,7 +261,6 @@ namespace ig
 
 		Matrix4x4 worldConstant = world.GetTransposed();
 		Descriptor tempConstant = context.CreateTempConstant(&worldConstant, sizeof(worldConstant));
-		if (!tempConstant) throw std::runtime_error("Failed to create temp constant.");
 
 		state.pushConstants.worldMatrixIndex = tempConstant.heapIndex;
 	}
@@ -550,8 +540,8 @@ namespace ig
 	{
 		FlushPrimitives();
 		state.tempConstantSDFEffect = context.CreateTempConstant(&sdf, sizeof(sdf));
-		if (!state.tempConstantSDFEffect) throw std::runtime_error("Failed to create temp constant.");
 	}
+
 	void BatchRenderer::SetDepthBufferDrawStyle(float zNear, float zFar, bool drawStencilComponent)
 	{
 		FlushPrimitives();
@@ -562,7 +552,6 @@ namespace ig
 			.zFar = zFar,
 		};
 		state.tempConstantDepthBufferDrawStyle = context.CreateTempConstant(&style, sizeof(style));
-		if (!state.tempConstantDepthBufferDrawStyle) throw std::runtime_error("Failed to create temp constant.");
 	}
 
 	Descriptor BatchRenderer::GetSDFEffectRenderConstant()
@@ -629,16 +618,10 @@ namespace ig
 	void BatchRenderer::InternalDraw(const void* vertexData, uint32_t numPrimitives)
 	{
 		const char* errStr = "BatchRenderer failed to draw. Reason: ";
-		if (!isActive)
-		{
-			Log(LogType::Error, ToString(errStr, "Didn't properly use Begin() and End()."));
-			return;
-		}
-		if (state.batchType >= batchPipelines.size() || batchPipelines[state.batchType].pipeline == nullptr)
-		{
-			Log(LogType::Error, ToString(errStr, "Invalid batch type."));
-			return;
-		}
+
+		if (!isActive) Fatal(ToString(errStr, "Didn't properly use Begin() and End()"));
+		if (state.batchType >= batchPipelines.size()) Fatal(ToString(errStr, "Invalid batch type"));
+		if (!batchPipelines[state.batchType].pipeline) Fatal(ToString(errStr, "Invalid batch type"));
 
 		uint32_t numVertices = numPrimitives * state.batchDesc.inputVerticesPerPrimitive;
 
@@ -689,7 +672,7 @@ namespace ig
 			break;
 
 		default:
-			throw std::runtime_error("impossible");
+			Fatal("Invalid BatchDesc::VertexGenerationMethod");
 		}
 
 		drawCallCounter++;

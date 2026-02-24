@@ -32,11 +32,6 @@ namespace ig
 		std::unique_ptr<StencilTextureView> out = std::unique_ptr<StencilTextureView>(new StencilTextureView(context));
 
 		out->stencilDescriptor = context.GetDescriptorHeap().AllocatePersistent(DescriptorType::Texture_SRV);
-		if (!out->stencilDescriptor)
-		{
-			Log(LogType::Error, ToString(errStr, "Failed to allocate descriptor."));
-			return nullptr;
-		}
 
 		Impl_Texture impl;
 

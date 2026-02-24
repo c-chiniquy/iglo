@@ -62,7 +62,7 @@ namespace ig
 		case TextureFilter::_Maximum_AnisotropicX16: out.filter = D3D12_FILTER_MAXIMUM_ANISOTROPIC;			     out.maxAnisotropy = 16; break;
 
 		default:
-			throw std::invalid_argument("Invalid texture filter.");
+			Fatal("Invalid texture filter.");
 		}
 		return out;
 	}
@@ -488,8 +488,9 @@ namespace ig
 		case CommandListType::Graphics: d3d12CmdType = D3D12_COMMAND_LIST_TYPE_DIRECT; break;
 		case CommandListType::Compute: d3d12CmdType = D3D12_COMMAND_LIST_TYPE_COMPUTE; break;
 		case CommandListType::Copy: d3d12CmdType = D3D12_COMMAND_LIST_TYPE_COPY; break;
+
 		default:
-			throw std::invalid_argument("Invalid command list type.");
+			Fatal("Invalid command list type.");
 		}
 
 		// Create one commmand allocator for each frame
@@ -1104,10 +1105,6 @@ namespace ig
 		{
 			// Allocate descriptor
 			srvDescriptor = heap.AllocatePersistent(DescriptorType::Texture_SRV);
-			if (!srvDescriptor)
-			{
-				return DetailedResult::Fail("Failed to allocate descriptor.");
-			}
 
 			D3D12_SHADER_RESOURCE_VIEW_DESC srv = {};
 			srv.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
@@ -1177,10 +1174,6 @@ namespace ig
 		{
 			// Allocate descriptor
 			uavDescriptor = heap.AllocatePersistent(DescriptorType::Texture_UAV);
-			if (!uavDescriptor)
-			{
-				return DetailedResult::Fail("Failed to allocate descriptor.");
-			}
 
 			D3D12_UNORDERED_ACCESS_VIEW_DESC uav = GenerateD3D12Desc_UAV(desc.format, desc.msaa, desc.numFaces);
 			device->CreateUnorderedAccessView(impl.resource[0].Get(), nullptr, &uav, heap.GetD3D12CPUHandle(uavDescriptor));
@@ -1217,7 +1210,7 @@ namespace ig
 		case TextureUsage::Readable:
 			return impl.resource.at(context.GetFrameIndex()).Get();
 		default:
-			throw std::runtime_error("Invalid texture usage.");
+			Fatal("Invalid texture usage.");
 		}
 	}
 
@@ -1367,7 +1360,10 @@ namespace ig
 				D3D12_RANGE noWrite = { 0, 0 };
 				impl.resource[i]->Unmap(0, &noWrite);
 			}
-			else throw std::runtime_error("This should be impossible.");
+			else
+			{
+				Fatal("Unexpected buffer usage detected.");
+			}
 		}
 		impl.resource.clear();
 	}
@@ -1461,10 +1457,6 @@ namespace ig
 					: DescriptorType::RawOrStructuredBuffer_SRV_UAV;
 
 				Descriptor allocatedDescriptor = heap.AllocatePersistent(descriptorType);
-				if (!allocatedDescriptor)
-				{
-					return DetailedResult::Fail("Failed to allocate descriptor.");
-				}
 
 				if (desc.type == BufferType::ShaderConstant)
 				{
@@ -1509,10 +1501,6 @@ namespace ig
 		if (desc.usage == BufferUsage::UnorderedAccess)
 		{
 			descriptor_UAV = heap.AllocatePersistent(DescriptorType::RawOrStructuredBuffer_SRV_UAV);
-			if (!descriptor_UAV)
-			{
-				return DetailedResult::Fail("Failed to allocate descriptor.");
-			}
 
 			if (desc.type == BufferType::StructuredBuffer)
 			{
@@ -1522,7 +1510,10 @@ namespace ig
 			{
 				impl.desc_cpu_uav = GenerateD3D12Desc_UAV_Raw(desc.size);
 			}
-			else throw std::runtime_error("This should be impossible.");
+			else
+			{
+				Fatal("Impossible buffer usage detected.");
+			}
 
 			device->CreateUnorderedAccessView(impl.resource[0].Get(), nullptr, &impl.desc_cpu_uav, heap.GetD3D12CPUHandle(descriptor_UAV));
 		}
@@ -1542,7 +1533,7 @@ namespace ig
 		case BufferUsage::Dynamic:
 			return impl.resource.at(dynamicSetCounter).Get();
 		default:
-			throw std::runtime_error("This should be impossible.");
+			Fatal("Unexpected buffer usage.");
 		}
 	}
 
@@ -1585,10 +1576,6 @@ namespace ig
 		DescriptorHeap& heap = context.GetDescriptorHeap();
 
 		descriptor = heap.AllocatePersistent(DescriptorType::Sampler);
-		if (!descriptor)
-		{
-			return DetailedResult::Fail("Failed to allocate sampler descriptor.");
-		}
 
 		D3D12TextureFilter filterD3D = ToD3D12TextureFilter(desc.filter);
 
@@ -1651,11 +1638,11 @@ namespace ig
 
 		HRESULT hr = context.GetD3D12Device()->CreateCommittedResource3(&heapProp, D3D12_HEAP_FLAG_NONE, &desc, barrierLayout,
 			nullptr, nullptr, 0, nullptr, IID_PPV_ARGS(&out.impl.resource));
-		if (FAILED(hr)) return Page();
+		if (FAILED(hr)) Fatal(ToString("Failed to create upload heap buffer with size ", sizeInBytes, "."));
 
 		D3D12_RANGE noRead = { 0, 0 };
 		hr = out.impl.resource->Map(0, &noRead, &out.mapped);
-		if (FAILED(hr)) return Page();
+		if (FAILED(hr)) Fatal(ToString("Failed to map upload heap buffer with size ", sizeInBytes, "."));
 
 		out.sizeInBytes = sizeInBytes;
 		return out;
