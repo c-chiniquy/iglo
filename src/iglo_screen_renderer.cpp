@@ -70,8 +70,6 @@ namespace ig
 
 	void ScreenRenderer::DrawFullscreenQuad(CommandList& cmd, const Texture& source, const Texture& destTarget, ScreenRendererBlend blend)
 	{
-		if (!source.GetDescriptor()) throw std::runtime_error("No SRV.");
-
 		bool sameSize =
 			(source.GetWidth() == destTarget.GetWidth()) &&
 			(source.GetHeight() == destTarget.GetHeight());

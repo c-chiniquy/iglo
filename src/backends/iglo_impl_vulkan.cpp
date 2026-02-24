@@ -386,7 +386,7 @@ namespace ig
 			const VertexElement& element = elems[i];
 			const uint32_t slot = element.inputSlot;
 
-			if ((size_t)slot >= offsetTracker.size()) throw std::invalid_argument("inputSlot too high.");
+			if ((size_t)slot >= offsetTracker.size()) Fatal("inputSlot too high.");
 
 			FormatInfo formatInfo = GetFormatInfo(element.format);
 
@@ -509,7 +509,7 @@ namespace ig
 				break;
 
 			default:
-				throw std::invalid_argument("Invalid texture filter.");
+				Fatal("Invalid texture filter.");
 
 			}
 
@@ -531,9 +531,7 @@ namespace ig
 				for (uint64_t srcProgress = 0; srcProgress < (uint64_t)image.GetMipSize(mip); srcProgress += srcRowPitch)
 				{
 					size += destRowPitch;
-#ifndef NDEBUG
-					if (srcProgress + srcRowPitch > (uint64_t)image.GetMipSize(mip)) throw std::runtime_error("Something is wrong here.");
-#endif
+					assert(srcProgress + srcRowPitch <= (uint64_t)image.GetMipSize(mip));
 				}
 			}
 		}
@@ -2231,7 +2229,7 @@ namespace ig
 	{
 		if (impl.isRendering)
 		{
-			if (impl.temporaryRenderPause) throw std::runtime_error("This should be impossible.");
+			assert(impl.temporaryRenderPause == false);
 
 			vkCmdEndRendering(impl.currentCommandBuffer);
 
@@ -2245,7 +2243,7 @@ namespace ig
 	{
 		if (impl.isRendering)
 		{
-			if (impl.temporaryRenderPause) throw std::runtime_error("This should be impossible.");
+			assert(impl.temporaryRenderPause == false);
 
 			vkCmdEndRendering(impl.currentCommandBuffer);
 
@@ -2258,7 +2256,7 @@ namespace ig
 	{
 		if (impl.temporaryRenderPause)
 		{
-			if (impl.isRendering) throw std::runtime_error("This should be impossible.");
+			assert(impl.isRendering == false);
 
 			vkCmdBeginRendering(impl.currentCommandBuffer, &impl.renderInfo.renderingInfo);
 
@@ -2325,7 +2323,7 @@ namespace ig
 		bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
 		VkResult result = vkCreateBuffer(device, &bufferInfo, nullptr, &out.impl.buffer);
-		if (result != VK_SUCCESS) return Page();
+		if (result != VK_SUCCESS) Fatal(ToString("Failed to create upload heap buffer with size ", sizeInBytes, "."));
 
 		VkMemoryRequirements memReq = {};
 		vkGetBufferMemoryRequirements(device, out.impl.buffer, &memReq);
@@ -2335,11 +2333,10 @@ namespace ig
 			VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
 
 		std::optional<uint32_t> memTypeIndex = FindVulkanMemoryType(physicalDevice, memReq.memoryTypeBits, memPropFlags);
-
 		if (!memTypeIndex.has_value())
 		{
 			vkDestroyBuffer(device, out.impl.buffer, nullptr);
-			return Page();
+			Fatal(ToString("Failed to FindVulkanMemoryType of upload heap buffer with size ", sizeInBytes, "."));
 		}
 
 		VkMemoryAllocateInfo allocInfo = {};
@@ -2351,17 +2348,23 @@ namespace ig
 		if (result != VK_SUCCESS)
 		{
 			vkDestroyBuffer(device, out.impl.buffer, nullptr);
-			return Page();
+			Fatal(ToString("Failed to allocate memory of upload heap buffer with size ", sizeInBytes, "."));
 		}
 
-		vkBindBufferMemory(device, out.impl.buffer, out.impl.memory, 0);
+		result = vkBindBufferMemory(device, out.impl.buffer, out.impl.memory, 0);
+		if (result != VK_SUCCESS)
+		{
+			vkDestroyBuffer(device, out.impl.buffer, nullptr);
+			vkFreeMemory(device, out.impl.memory, nullptr);
+			Fatal(ToString("Failed to bind memory of upload heap buffer with size ", sizeInBytes, "."));
+		}
 
 		result = vkMapMemory(device, out.impl.memory, 0, sizeInBytes, 0, &out.mapped);
 		if (result != VK_SUCCESS)
 		{
 			vkDestroyBuffer(device, out.impl.buffer, nullptr);
 			vkFreeMemory(device, out.impl.memory, nullptr);
-			return Page();
+			Fatal(ToString("Failed to map memory of upload heap buffer with size ", sizeInBytes, "."));
 		}
 
 		out.sizeInBytes = sizeInBytes;
@@ -2463,7 +2466,7 @@ namespace ig
 			break;
 
 		default:
-			throw std::invalid_argument("Invalid texture usage.");
+			Fatal("Invalid texture usage.");
 		}
 
 		VkMemoryPropertyFlags memProperties = 0;
@@ -2578,7 +2581,6 @@ namespace ig
 		{
 			// Allocate descriptor
 			srvDescriptor = heap.AllocatePersistent(DescriptorType::Texture_SRV);
-			if (!srvDescriptor) return DetailedResult::Fail("Failed to allocate descriptor.");
 
 			VkImageViewType srvViewType = VK_IMAGE_VIEW_TYPE_2D;
 			if (desc.isCubemap)
@@ -2609,7 +2611,6 @@ namespace ig
 		{
 			// Allocate descriptor
 			uavDescriptor = heap.AllocatePersistent(DescriptorType::Texture_UAV);
-			if (!uavDescriptor) return DetailedResult::Fail("Failed to allocate descriptor.");
 
 			VkImageViewType viewType = (desc.numFaces == 1) ? VK_IMAGE_VIEW_TYPE_2D : VK_IMAGE_VIEW_TYPE_2D_ARRAY;
 
@@ -2667,7 +2668,7 @@ namespace ig
 		case TextureUsage::Readable:
 			return impl.image[context.GetFrameIndex()];
 		default:
-			throw std::runtime_error("Invalid texture usage.");
+			Fatal("Invalid texture usage.");
 		}
 	}
 
@@ -2684,7 +2685,7 @@ namespace ig
 		case TextureUsage::Readable:
 			return impl.memory[context.GetFrameIndex()];
 		default:
-			throw std::runtime_error("Invalid texture usage.");
+			Fatal("Invalid texture usage.");
 		}
 	}
 
@@ -2739,7 +2740,7 @@ namespace ig
 		case BufferType::RawBuffer: usageFlags |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT; break;
 		case BufferType::ShaderConstant: usageFlags |= VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT; break;
 		default:
-			throw std::invalid_argument("Invalid buffer type.");
+			Fatal("Invalid buffer type.");
 		}
 
 		switch (desc.usage)
@@ -2761,7 +2762,7 @@ namespace ig
 			break;
 
 		default:
-			throw std::invalid_argument("Invalid buffer usage.");
+			Fatal("Invalid buffer usage.");
 		}
 
 		VkMemoryPropertyFlags memoryProperties = 0;
@@ -2844,7 +2845,6 @@ namespace ig
 					: DescriptorType::RawOrStructuredBuffer_SRV_UAV;
 
 				Descriptor allocatedDescriptor = heap.AllocatePersistent(descriptorType);
-				if (!allocatedDescriptor) return DetailedResult::Fail("Failed to allocate descriptor.");
 
 				heap.WriteBufferDescriptor(allocatedDescriptor, impl.buffer[i], 0, desc.size);
 
@@ -2856,7 +2856,6 @@ namespace ig
 		if (desc.usage == BufferUsage::UnorderedAccess)
 		{
 			descriptor_UAV = heap.AllocatePersistent(DescriptorType::RawOrStructuredBuffer_SRV_UAV);
-			if (!descriptor_UAV) return DetailedResult::Fail("Failed to allocate UAV descriptor.");
 
 			heap.WriteBufferDescriptor(descriptor_UAV, impl.buffer[0], 0, desc.size);
 		}
@@ -2876,7 +2875,7 @@ namespace ig
 		case BufferUsage::Dynamic:
 			return impl.buffer[dynamicSetCounter];
 		default:
-			throw std::runtime_error("This should be impossible.");
+			Fatal("Invalid buffer usage.");
 		}
 	}
 
@@ -2892,7 +2891,7 @@ namespace ig
 		case BufferUsage::Dynamic:
 			return impl.memory[dynamicSetCounter];
 		default:
-			throw std::runtime_error("This should be impossible.");
+			Fatal("Invalid buffer usage.");
 		}
 	}
 
@@ -2902,10 +2901,6 @@ namespace ig
 		DescriptorHeap& heap = context.GetDescriptorHeap();
 
 		descriptor = heap.AllocatePersistent(DescriptorType::Sampler);
-		if (!descriptor)
-		{
-			return DetailedResult::Fail("Failed to allocate sampler descriptor.");
-		}
 
 		VkClearColorValue borderColor = {};
 		borderColor.float32[0] = desc.borderColor.red;
@@ -3073,10 +3068,8 @@ namespace ig
 		Extent2D cappedExtent = extent;
 		VkSurfaceCapabilitiesKHR caps;
 		vkGetPhysicalDeviceSurfaceCapabilitiesKHR(graphics.physicalDevice, graphics.surface, &caps);
-		if (extent.width > caps.minImageExtent.width ||
-			extent.height > caps.minImageExtent.height ||
-			extent.width < caps.minImageExtent.width ||
-			extent.height < caps.minImageExtent.height)
+		if (extent.width != caps.minImageExtent.width ||
+			extent.height != caps.minImageExtent.height)
 		{
 			cappedExtent = Extent2D(caps.minImageExtent.width, caps.minImageExtent.height);
 
@@ -3143,7 +3136,7 @@ namespace ig
 		// Retrieve swapchain images
 		uint32_t imageCount = 0;
 		vkGetSwapchainImagesKHR(graphics.device, graphics.swapChain, &imageCount, nullptr);
-		if (imageCount < numBackBuffers) throw std::runtime_error("This should be impossible.");
+		if (imageCount < numBackBuffers) Fatal("vkGetSwapchainImagesKHR returned smaller image count than num backbuffers.");
 		if (imageCount != numBackBuffers)
 		{
 			Log(LogType::Warning, ToString("Using ", imageCount, " backbuffers instead of the requested ", numBackBuffers, "."));

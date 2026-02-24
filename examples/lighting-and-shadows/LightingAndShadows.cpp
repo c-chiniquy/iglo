@@ -273,7 +273,7 @@ private:
 	// Origin is in the center
 	Mesh GenerateSphereMesh(ig::CommandList& currentCmd, float radius, uint32_t latitudeSegments, uint32_t longitudeSegments)
 	{
-		if ((size_t)latitudeSegments * longitudeSegments >= (size_t)IGLO_UINT16_MAX) throw std::invalid_argument("Too many vertices!");
+		if ((size_t)latitudeSegments * longitudeSegments >= (size_t)IGLO_UINT16_MAX) ig::Fatal("Too many vertices!");
 
 		// Step 1: Generate vertices
 		std::vector<Vertex> vertices;
@@ -789,7 +789,9 @@ private:
 				std::string presentModeStr = "";
 				switch (context->GetPresentMode())
 				{
-				default: throw std::runtime_error("Unexpected present mode");
+				default:
+					ig::Fatal("Unexpected present mode");
+
 				case ig::PresentMode::Immediate: presentModeStr = "Immediate"; break;
 				case ig::PresentMode::ImmediateWithTearing: presentModeStr = "Immediate with tearing"; break;
 				case ig::PresentMode::Vsync: presentModeStr = "Vsync"; break;

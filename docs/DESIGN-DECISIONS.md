@@ -19,9 +19,6 @@ This document contains my personal thoughts behind various design decisions I ha
 
 - I prefer the name 'IGLOContext' over 'RenderWindow', but I'm open to feedback on this issue.
 
-- iglo shouldn't throw exceptions based on user behaviour, much like D3D12.
-  It's OK for iglo to throw exceptions in situations that should be impossible in the first place and would be iglo's own fault.
-
 - iglo shouldn't support runtime shader compilation, it's a bad practice imo (needless waste of CPU).
   Windows Store doesn't support apps that compile shaders at runtime.
 
