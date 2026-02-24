@@ -13,6 +13,10 @@
   - Added SimpleBarrier::ClearInactiveRenderTarget
 - Bug fixes:
   - Fixed segfault caused by NVIDIA drivers on Linux/Vulkan backend that would appear when closing the window
+  - Fixed bug in Vector4::GetNormalized()
+  - Fixed bug in Image::CalculateNumMips()
+  - Fixed bug in CommandList::ValidatePushConstants()
+  - Fixed bug in BatchRenderer::DrawString()
 - Minor changes:
   - iglo utility
     - Added FloatRect::GetExpanded()
@@ -26,7 +30,6 @@
     - Made some timer functions const
     - Replaced UniformRandom class with Xoshiro256pp class
     - ig::Random now uses Xoshiro256pp instead of rand()
-    - Fixed bug in Vector4::GetNormalized()
   - iglo
     - Now compatible with Agility SDK 1.717.1-preview
     - Now using NDEBUG instead of _DEBUG
@@ -35,8 +38,6 @@
     - Renamed ConvertKeyToString() to GetKeyName()
     - MouseEvent::scrollWheel is now a float
     - Fixed a typo in ig::Key enum
-    - Fixed bug in Image::CalculateNumMips()
-    - Fixed bug in CommandList::ValidatePushConstants()
     - DescriptorHeap::PersistentIndexAllocator now checks against double frees in Release
   - IGLOContext
     - Added GetMouseButtonState()
@@ -50,7 +51,6 @@
     - Added IsActive()
     - Renamed DrawCenterStretchedTexture() to DrawNineSliceSprite()
     - Improved SDF pixel shader (better shadows)
-    - Fixed bug in DrawString()
   - Font
     - PrebakedFontData loading function is now more explicit (to remove compiler warnings)
     - Added out_isErrorGlyph option to Font::GetGlyph()
