@@ -87,7 +87,7 @@ namespace ig
 	struct SimpleBarrierInfo;
 	class CommandList;
 	struct TempBuffer;
-	class TempBufferAllocator;
+	class UploadHeap;
 	struct Viewport;
 	enum class SystemCursor;
 	class Cursor;
@@ -1325,7 +1325,7 @@ namespace ig
 	{
 		Shader() = default;
 
-		// Specifying 'entryPointName' is mandatory in Vulkan, but in D3D12 it's not needed.
+		// Specifying 'entryPointName' is mandatory in Vulkan, but not necessary in D3D12.
 		Shader(const byte* shaderBytecode, size_t bytecodeLength, const std::string& entryPointName = "main")
 		{
 			this->shaderBytecode = shaderBytecode;
@@ -1333,6 +1333,7 @@ namespace ig
 			this->entryPointName = entryPointName;
 		}
 
+		Shader(std::vector<byte>&& shaderBytecode, const std::string& entryPointName) = delete;
 		Shader(const std::vector<byte>& shaderBytecode, const std::string& entryPointName = "main")
 		{
 			this->shaderBytecode = shaderBytecode.data();
@@ -1406,7 +1407,7 @@ namespace ig
 		// You must provide one blend state (BlendDesc) for each expected render texture.
 		static std::unique_ptr<Pipeline> LoadFromFile(const IGLOContext&,
 			const std::string& filepathVS, const std::string& entryPointNameVS,
-			const std::string filepathPS, const std::string& entryPointNamePS,
+			const std::string& filepathPS, const std::string& entryPointNamePS,
 			const RenderTargetDesc&, const std::vector<VertexElement>&,
 			PrimitiveTopology, DepthDesc, RasterizerDesc, const std::vector<BlendDesc>&);
 
@@ -2063,21 +2064,22 @@ namespace ig
 		Impl_TempBuffer impl;
 	};
 
-	// TempBufferAllocator manages upload heap buffers used for per-frame data.
+	// Manages the allocation of upload heaps.
+	// Upload heaps are used for per-frame data (TempBuffer).
 	// The contents on these buffers are temporary (valid for 1 frame).
-	class TempBufferAllocator
+	class UploadHeap
 	{
 	private:
-		TempBufferAllocator(const IGLOContext& context, uint64_t linearPageSize, uint32_t numFramesInFlight)
+		UploadHeap(const IGLOContext& context, uint64_t linearPageSize, uint32_t numFramesInFlight)
 			:context(context), linearPageSize(linearPageSize), numFramesInFlight(numFramesInFlight) {};
 
-		TempBufferAllocator& operator=(const TempBufferAllocator&) = delete;
-		TempBufferAllocator(const TempBufferAllocator&) = delete;
+		UploadHeap& operator=(const UploadHeap&) = delete;
+		UploadHeap(const UploadHeap&) = delete;
 
 	public:
-		~TempBufferAllocator();
+		~UploadHeap();
 
-		static std::pair<std::unique_ptr<TempBufferAllocator>, DetailedResult> Create(const IGLOContext&,
+		static std::pair<std::unique_ptr<UploadHeap>, DetailedResult> Create(const IGLOContext&,
 			uint64_t linearPageSize, uint32_t numFramesInFlight);
 
 		// Must be called once per frame. Rolls to next frameIndex, frees that frame's temp pages.
@@ -2160,24 +2162,12 @@ namespace ig
 
 	struct Viewport
 	{
-		Viewport() = default;
-
-		Viewport(float x, float y, float width, float height, float minDepth = 0, float maxDepth = 1.0f)
-		{
-			this->x = x;
-			this->y = y;
-			this->width = width;
-			this->height = height;
-			this->minDepth = minDepth;
-			this->maxDepth = maxDepth;
-		}
-
 		float x = 0;
 		float y = 0;
 		float width = 0;
 		float height = 0;
 		float minDepth = 0;
-		float maxDepth = 0;
+		float maxDepth = 1.0f;
 	};
 
 	enum class SystemCursor
@@ -2361,10 +2351,19 @@ namespace ig
 		uint32_t maxFramesInFlight = 2;
 		uint32_t numBackBuffers = 3;
 
-		uint64_t tempBufferAllocatorLinearPageSize = IGLO_MEGABYTE * 32;
+		// There is 1 persistent upload heap page per frame.
+		// If a frame fully exhausts a page, another page is temporarily allocated for that frame,
+		// which is slow, as these allocations happen per-frame.
+		// These activities use the upload heap:
+		// •Loading textures
+		// •Setting texture and buffer data (Default/UnorderedAccess usage)
+		// •Drawing stuff with BatchRenderer
+		// •Anything that allocates TempBuffers
+		uint64_t uploadHeapPageSize = IGLO_MEGABYTE * 32;
 
+		// Running out of descriptors will cause the app to abort.
 		uint32_t maxPersistentResourceDescriptors = 16384;
-		uint32_t maxTemporaryResourceDescriptorsPerFrame = 4096;
+		uint32_t maxTempResourceDescriptorsPerFrame = 4096;
 		uint32_t maxSamplerDescriptors = 512;
 	};
 
@@ -2671,7 +2670,7 @@ namespace ig
 		// Gets the current back buffer for this frame.
 		const Texture& GetBackBuffer(bool get_opposite_sRGB_view = false) const;
 		DescriptorHeap& GetDescriptorHeap() const { return *descriptorHeap; }
-		TempBufferAllocator& GetTempBufferAllocator() const { return *tempBufferAllocator; }
+		UploadHeap& GetUploadHeap() const { return *uploadHeap; }
 		CommandQueue& GetCommandQueue() const { return *commandQueue; }
 
 		// Gets the max allowed MSAA per texture format.
@@ -2787,7 +2786,7 @@ namespace ig
 		std::unique_ptr<Sampler> bilinearClampSampler; // For the mipmap generation compute shader
 
 		mutable std::unique_ptr<DescriptorHeap> descriptorHeap;
-		mutable std::unique_ptr<TempBufferAllocator> tempBufferAllocator;
+		mutable std::unique_ptr<UploadHeap> uploadHeap;
 		mutable std::unique_ptr<CommandQueue> commandQueue;
 		mutable std::vector<uint32_t> maxMSAAPerFormat; // A cached list of max MSAA values for all iglo formats.
 

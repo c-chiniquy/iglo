@@ -456,7 +456,7 @@ namespace ig
 
 		if (displayMode == DisplayMode::Windowed)
 		{
-			Impl_SetWindowSize(width, height);
+			Impl_SetWindowSize(cappedWidth, cappedHeight);
 		}
 	}
 
@@ -592,7 +592,7 @@ namespace ig
 
 	std::unique_ptr<Pipeline> Pipeline::LoadFromFile(const IGLOContext& context,
 		const std::string& filepathVS, const std::string& entryPointNameVS,
-		const std::string filepathPS, const std::string& entryPointNamePS,
+		const std::string& filepathPS, const std::string& entryPointNamePS,
 		const RenderTargetDesc& renderTargetDesc, const std::vector<VertexElement>& vertexLayout,
 		PrimitiveTopology primitiveTopology, DepthDesc depth, RasterizerDesc rasterizer, const std::vector<BlendDesc>& blend)
 	{
@@ -1152,7 +1152,7 @@ namespace ig
 	{
 		assert(slot < MAX_VERTEX_BUFFER_BIND_SLOTS);
 
-		TempBuffer vb = context.GetTempBufferAllocator().AllocateTempBuffer(sizeInBytes,
+		TempBuffer vb = context.GetUploadHeap().AllocateTempBuffer(sizeInBytes,
 			context.GetGraphicsSpecs().bufferPlacementAlignments.vertexOrIndexBuffer);
 
 		memcpy(vb.data, data, sizeInBytes);
@@ -1173,7 +1173,7 @@ namespace ig
 
 	void CommandList::SetViewport(float width, float height)
 	{
-		Viewport viewport(0, 0, width, height);
+		Viewport viewport{ .width = width, .height = height };
 		SetViewport(viewport);
 	}
 	void CommandList::SetViewport(Viewport viewPort)
@@ -1228,7 +1228,7 @@ namespace ig
 		Impl_CopyTextureToReadableTexture(source, destination);
 	}
 
-	void TempBufferAllocator::Page::Free(const IGLOContext& context)
+	void UploadHeap::Page::Free(const IGLOContext& context)
 	{
 		Impl_Free(context);
 
@@ -1236,7 +1236,7 @@ namespace ig
 		sizeInBytes = 0;
 	}
 
-	TempBufferAllocator::~TempBufferAllocator()
+	UploadHeap::~UploadHeap()
 	{
 		for (size_t i = 0; i < perFrame.size(); i++)
 		{
@@ -1256,10 +1256,10 @@ namespace ig
 		perFrame.clear();
 	}
 
-	std::pair<std::unique_ptr<TempBufferAllocator>, DetailedResult> TempBufferAllocator::Create(
+	std::pair<std::unique_ptr<UploadHeap>, DetailedResult> UploadHeap::Create(
 		const IGLOContext& context, uint64_t linearPageSize, uint32_t numFramesInFlight)
 	{
-		std::unique_ptr<TempBufferAllocator> out = std::unique_ptr<TempBufferAllocator>(new TempBufferAllocator(
+		std::unique_ptr<UploadHeap> out = std::unique_ptr<UploadHeap>(new UploadHeap(
 			context, linearPageSize, numFramesInFlight));
 
 		// Each frame has a set number of persistent pages, and a changing number of temporary pages placed ontop.
@@ -1285,7 +1285,7 @@ namespace ig
 		return { std::move(out), DetailedResult::Success() };
 	}
 
-	void TempBufferAllocator::NextFrame()
+	void UploadHeap::NextFrame()
 	{
 		lastFrameStats = GetCurrentStats();
 
@@ -1295,7 +1295,7 @@ namespace ig
 		FreeTempPagesAtFrame(context, perFrame[frameIndex]);
 	}
 
-	void TempBufferAllocator::FreeAllTempPages()
+	void UploadHeap::FreeAllTempPages()
 	{
 		for (size_t i = 0; i < perFrame.size(); i++)
 		{
@@ -1303,7 +1303,7 @@ namespace ig
 		}
 	}
 
-	void TempBufferAllocator::FreeTempPagesAtFrame(const IGLOContext& context, PerFrame& perFrame)
+	void UploadHeap::FreeTempPagesAtFrame(const IGLOContext& context, PerFrame& perFrame)
 	{
 		// Delete extra linear pages
 		while (perFrame.linearPages.size() > numPersistentPages)
@@ -1323,7 +1323,7 @@ namespace ig
 		perFrame.linearNextByte = 0;
 	}
 
-	TempBuffer TempBufferAllocator::AllocateTempBuffer(uint64_t sizeInBytes, uint32_t alignment)
+	TempBuffer UploadHeap::AllocateTempBuffer(uint64_t sizeInBytes, uint32_t alignment)
 	{
 		assert(frameIndex < perFrame.size());
 		PerFrame& current = perFrame[frameIndex];
@@ -1377,7 +1377,7 @@ namespace ig
 		}
 	}
 
-	TempBufferAllocator::Stats TempBufferAllocator::GetCurrentStats() const
+	UploadHeap::Stats UploadHeap::GetCurrentStats() const
 	{
 		static_assert(numPersistentPages > 0);
 		assert(perFrame.at(frameIndex).linearPages.size() > 0);
@@ -1546,9 +1546,9 @@ namespace ig
 		this->endOfFrame.clear();
 		this->endOfFrame.resize(numFramesInFlight);
 
-		// Recreate the temp buffer allocator with new number of frames in flight
-		const uint64_t linearPageSize = this->tempBufferAllocator->GetLinearPageSize();
-		this->tempBufferAllocator = TempBufferAllocator::Create(*this, linearPageSize, numFramesInFlight).first;
+		// Recreate the upload heap manager with new number of frames in flight
+		const uint64_t uploadHeapPageSize = this->uploadHeap->GetLinearPageSize();
+		this->uploadHeap = UploadHeap::Create(*this, uploadHeapPageSize, numFramesInFlight).first;
 
 		// The descriptor heap manager can't be recreated here with a new number of frames in flight,
 		// because it contains persistent descriptors which we don't want to destroy.
@@ -1721,7 +1721,7 @@ namespace ig
 		bilinearClampSampler = nullptr;
 
 		descriptorHeap = nullptr;
-		tempBufferAllocator = nullptr;
+		uploadHeap = nullptr;
 		commandQueue = nullptr;
 
 		DestroySwapChainResources();
@@ -1768,20 +1768,20 @@ namespace ig
 			commandQueue = std::move(result.first);
 		}
 
-		// Temp buffer allocator
+		// Upload heap manager
 		{
-			auto result = TempBufferAllocator::Create(*this,
-				renderSettings.tempBufferAllocatorLinearPageSize,
+			auto result = UploadHeap::Create(*this,
+				renderSettings.uploadHeapPageSize,
 				numFramesInFlight);
 			if (!result.second) return result.second;
-			tempBufferAllocator = std::move(result.first);
+			uploadHeap = std::move(result.first);
 		}
 
 		// Descriptor heap manager
 		{
 			auto result = DescriptorHeap::Create(*this,
 				renderSettings.maxPersistentResourceDescriptors,
-				renderSettings.maxTemporaryResourceDescriptorsPerFrame,
+				renderSettings.maxTempResourceDescriptorsPerFrame,
 				renderSettings.maxSamplerDescriptors,
 				renderSettings.maxFramesInFlight);
 			if (!result.second) return result.second;
@@ -2004,11 +2004,11 @@ namespace ig
 		uint32_t mipHeight = std::max(uint32_t(1), extent.height >> mipIndex);
 		if (info.blockSize > 0) // Block-compressed format
 		{
-			return (size_t)std::max(uint32_t(1), ((mipWidth + 3) / 4)) * (size_t)std::max(uint32_t(1), ((mipHeight + 3) / 4)) * info.blockSize;
+			return std::max(size_t(1), size_t((mipWidth + 3) / 4)) * std::max(size_t(1), size_t((mipHeight + 3) / 4)) * (size_t)info.blockSize;
 		}
 		else
 		{
-			return std::max(uint32_t(1), mipWidth * mipHeight * info.bytesPerPixel);
+			return std::max(size_t(1), (size_t)mipWidth * (size_t)mipHeight * (size_t)info.bytesPerPixel);
 		}
 	}
 
@@ -2785,7 +2785,7 @@ namespace ig
 	void IGLOContext::FreeAllTempResources()
 	{
 		descriptorHeap->FreeAllTempResources();
-		tempBufferAllocator->FreeAllTempPages();
+		uploadHeap->FreeAllTempPages();
 		for (size_t i = 0; i < endOfFrame.size(); i++)
 		{
 			endOfFrame[i].delayedDestroyTextures.clear();
@@ -2811,7 +2811,7 @@ namespace ig
 		currentFrame.delayedDestroyBuffers.clear();
 
 		descriptorHeap->NextFrame();
-		tempBufferAllocator->NextFrame();
+		uploadHeap->NextFrame();
 
 #ifdef IGLO_VULKAN
 		if (graphics.validSwapChain)
@@ -2850,7 +2850,7 @@ namespace ig
 		if (numBytes == 0) Fatal("Failed to create temp shader constant. Reason: Size can't be zero.");
 
 		Descriptor outDescriptor = descriptorHeap->AllocateTemp(DescriptorType::ConstantBuffer_CBV);
-		TempBuffer tempBuffer = tempBufferAllocator->AllocateTempBuffer(numBytes, GetGraphicsSpecs().bufferPlacementAlignments.constant);
+		TempBuffer tempBuffer = uploadHeap->AllocateTempBuffer(numBytes, GetGraphicsSpecs().bufferPlacementAlignments.constant);
 
 		memcpy(tempBuffer.data, data, numBytes);
 
@@ -2878,7 +2878,7 @@ namespace ig
 #ifdef IGLO_D3D12
 		// In D3D12, structured buffers need a special non-power of 2 element stride alignment,
 		// which is why we allocate 1 extra element here.
-		TempBuffer tempBuffer = tempBufferAllocator->AllocateTempBuffer(numBytes + elementStride,
+		TempBuffer tempBuffer = uploadHeap->AllocateTempBuffer(numBytes + elementStride,
 			GetGraphicsSpecs().bufferPlacementAlignments.rawOrStructuredBuffer);
 
 		// We pretend the entire page is an array of elements.
@@ -2900,8 +2900,7 @@ namespace ig
 		graphics.device->CreateShaderResourceView(tempBuffer.impl.resource, &srv, descriptorHeap->GetD3D12CPUHandle(outDescriptor));
 #endif
 #ifdef IGLO_VULKAN
-		TempBuffer tempBuffer = tempBufferAllocator->AllocateTempBuffer(numBytes,
-			GetGraphicsSpecs().bufferPlacementAlignments.rawOrStructuredBuffer);
+		TempBuffer tempBuffer = uploadHeap->AllocateTempBuffer(numBytes, GetGraphicsSpecs().bufferPlacementAlignments.rawOrStructuredBuffer);
 
 		memcpy(tempBuffer.data, data, numBytes);
 
@@ -2919,8 +2918,7 @@ namespace ig
 		if (numBytes % 4 != 0) Fatal(ToString(errStr, "Expected size to be a multiple of 4."));
 
 		Descriptor outDescriptor = descriptorHeap->AllocateTemp(DescriptorType::RawOrStructuredBuffer_SRV_UAV);
-		TempBuffer tempBuffer = tempBufferAllocator->AllocateTempBuffer(numBytes,
-			GetGraphicsSpecs().bufferPlacementAlignments.rawOrStructuredBuffer);
+		TempBuffer tempBuffer = uploadHeap->AllocateTempBuffer(numBytes, GetGraphicsSpecs().bufferPlacementAlignments.rawOrStructuredBuffer);
 
 		memcpy(tempBuffer.data, data, numBytes);
 
@@ -3131,7 +3129,7 @@ namespace ig
 		assert((desc.usage == BufferUsage::Default || desc.usage == BufferUsage::UnorderedAccess) &&
 			"usage must be Default or UnorderedAccess");
 
-		TempBuffer tempBuffer = context.GetTempBufferAllocator().AllocateTempBuffer(desc.size, 1);
+		TempBuffer tempBuffer = context.GetUploadHeap().AllocateTempBuffer(desc.size, 1);
 
 		memcpy(tempBuffer.data, srcData, desc.size);
 
@@ -3572,7 +3570,7 @@ namespace ig
 		uint64_t requiredUploadBufferSize = GetRequiredUploadBufferSize(srcImage, context.GetGraphicsSpecs().bufferPlacementAlignments);
 #endif
 
-		TempBuffer tempBuffer = context.GetTempBufferAllocator().AllocateTempBuffer(requiredUploadBufferSize,
+		TempBuffer tempBuffer = context.GetUploadHeap().AllocateTempBuffer(requiredUploadBufferSize,
 			context.GetGraphicsSpecs().bufferPlacementAlignments.texture);
 
 		byte* destPtr = (byte*)tempBuffer.data;
@@ -3634,7 +3632,7 @@ namespace ig
 		uint64_t requiredUploadBufferSize = GetRequiredUploadBufferSize(srcImage, context.GetGraphicsSpecs().bufferPlacementAlignments);
 #endif
 
-		TempBuffer tempBuffer = context.GetTempBufferAllocator().AllocateTempBuffer(requiredUploadBufferSize,
+		TempBuffer tempBuffer = context.GetUploadHeap().AllocateTempBuffer(requiredUploadBufferSize,
 			context.GetGraphicsSpecs().bufferPlacementAlignments.texture);
 
 		byte* destPtr = (byte*)tempBuffer.data;

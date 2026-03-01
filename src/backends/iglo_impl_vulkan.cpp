@@ -2295,7 +2295,7 @@ namespace ig
 		SafeResumeRendering();
 	}
 
-	void TempBufferAllocator::Page::Impl_Free(const IGLOContext& context)
+	void UploadHeap::Page::Impl_Free(const IGLOContext& context)
 	{
 		if (impl.memory) vkUnmapMemory(context.GetVulkanDevice(), impl.memory);
 		if (impl.buffer) vkDestroyBuffer(context.GetVulkanDevice(), impl.buffer, nullptr);
@@ -2304,7 +2304,7 @@ namespace ig
 		impl.memory = VK_NULL_HANDLE;
 	}
 
-	TempBufferAllocator::Page TempBufferAllocator::Page::Create(const IGLOContext& context, uint64_t sizeInBytes)
+	UploadHeap::Page UploadHeap::Page::Create(const IGLOContext& context, uint64_t sizeInBytes)
 	{
 		Page out;
 		VkDevice device = context.GetVulkanDevice();

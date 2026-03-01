@@ -1598,7 +1598,7 @@ namespace ig
 		return DetailedResult::Success();
 	}
 
-	void TempBufferAllocator::Page::Impl_Free(const IGLOContext& context)
+	void UploadHeap::Page::Impl_Free(const IGLOContext& context)
 	{
 		if (impl.resource)
 		{
@@ -1607,7 +1607,7 @@ namespace ig
 		}
 	}
 
-	TempBufferAllocator::Page TempBufferAllocator::Page::Create(const IGLOContext& context, uint64_t sizeInBytes)
+	UploadHeap::Page UploadHeap::Page::Create(const IGLOContext& context, uint64_t sizeInBytes)
 	{
 		Page out;
 
