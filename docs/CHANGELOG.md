@@ -22,7 +22,6 @@
     - Added FloatRect::GetExpanded()
     - Added FloatRect::CroppedTo()
     - Added Lerp()
-    - WindowsPreciseSleep() is now thread safe
     - utf8_next_codepoint() now returns replacement characters for invalid byte sequences
     - The utf16 functions now use u16string instead of wstring
     - Improved utf8_is_next_sequence_valid()

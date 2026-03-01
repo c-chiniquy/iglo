@@ -963,22 +963,20 @@ namespace ig
 		static int schedulerPeriodMs = 0;
 		static INT64 qpcPerSecond = 0;
 
-		static std::once_flag initFlag; // Thread safety
-		std::call_once(initFlag, []()
-			{
-				// Initialization
-				timerHandle = CreateWaitableTimerExW(NULL, NULL, CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, TIMER_ALL_ACCESS);
-				if (timerHandle == NULL) throw std::exception(); // This shouldn't happen
+		if (timerHandle == NULL)
+		{
+			// Initialization
+			timerHandle = CreateWaitableTimerExW(NULL, NULL, CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, TIMER_ALL_ACCESS);
+			if (timerHandle == NULL) throw std::exception(); // This shouldn't happen
 
-				TIMECAPS caps;
-				timeGetDevCaps(&caps, sizeof caps);
-				timeBeginPeriod(caps.wPeriodMin);
-				schedulerPeriodMs = (int)caps.wPeriodMin;
-
-				LARGE_INTEGER qpf;
-				QueryPerformanceFrequency(&qpf);
-				qpcPerSecond = qpf.QuadPart;
-			});
+			TIMECAPS caps;
+			timeGetDevCaps(&caps, sizeof caps);
+			timeBeginPeriod(caps.wPeriodMin);
+			schedulerPeriodMs = (int)caps.wPeriodMin;
+			LARGE_INTEGER qpf;
+			QueryPerformanceFrequency(&qpf);
+			qpcPerSecond = qpf.QuadPart;
+		}
 
 		LARGE_INTEGER qpc;
 		QueryPerformanceCounter(&qpc);
