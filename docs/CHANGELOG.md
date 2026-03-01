@@ -15,6 +15,8 @@
   - Fixed segfault caused by NVIDIA drivers on Linux/Vulkan backend that would appear when closing the window
   - Fixed bug in Vector4::GetNormalized()
   - Fixed bug in Image::CalculateNumMips()
+  - Fixed potential overflow in Image::CalculateMipSize()
+  - Fixed bug in IGLOContext::SetWindowSize()
   - Fixed bug in CommandList::ValidatePushConstants()
   - Fixed bug in BatchRenderer::DrawString()
 - Minor changes:
@@ -38,6 +40,7 @@
     - MouseEvent::scrollWheel is now a float
     - Fixed a typo in ig::Key enum
     - DescriptorHeap::PersistentIndexAllocator now checks against double frees in Release
+    - Improved Viewport struct (better defaults)
   - IGLOContext
     - Added GetMouseButtonState()
     - Added GetKeyState()
