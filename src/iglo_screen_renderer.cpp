@@ -86,7 +86,9 @@ namespace ig
 		pushConstants.textureIndex = source.GetDescriptor().heapIndex;
 		pushConstants.samplerIndex = chosenSampler.GetDescriptor().heapIndex;
 
-		cmd.SetPipeline(*pipelines.at((uint32_t)blend));
+		const uint32_t pipelineIndex = (uint32_t)blend;
+		assert(pipelineIndex < pipelines.size() && "invalid blend");
+		cmd.SetPipeline(*pipelines[pipelineIndex]);
 		cmd.SetPushConstants(&pushConstants, sizeof(pushConstants));
 		cmd.Draw(4);
 	}

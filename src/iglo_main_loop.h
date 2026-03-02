@@ -142,7 +142,9 @@ namespace ig
 		void Tick();
 		void MeasureTimePassed();
 
-		static constexpr uint32_t MillisecondsToSleepWhenMinimized = 15;
+		static constexpr double AvgFPSDuration = 0.5;
+		static constexpr uint32_t MinimizedSleepTimeMs = 15;
+		static constexpr uint32_t IdleModeWaitTimeoutMs = 70;
 	};
 
 

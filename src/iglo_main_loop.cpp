@@ -11,10 +11,9 @@ namespace ig
 		// Calculate average FPS
 		avgFPS_numFrames++;
 		avgFPS_totalElapsedSeconds += elapsedSeconds;
-		const double avgFPSDuration = 0.5; // Duration which the average FPS is calculated
-		if (avgFPS_totalElapsedSeconds >= avgFPSDuration)
+		if (avgFPS_totalElapsedSeconds >= AvgFPSDuration)
 		{
-			avgFPS = (int)round(1.0 / (avgFPS_totalElapsedSeconds / avgFPS_numFrames));
+			avgFPS = (int)round(avgFPS_numFrames / avgFPS_totalElapsedSeconds);
 			avgFPS_numFrames = 0;
 			avgFPS_totalElapsedSeconds = 0;
 		}
@@ -51,7 +50,7 @@ namespace ig
 		Event e;
 		if (idleMode)
 		{
-			context->WaitForEvent(e, 70); // If no event is pending, then thread will sleep here for a little while.
+			context->WaitForEvent(e, IdleModeWaitTimeoutMs); // If no event is pending, then thread will sleep here for a little while.
 			if (!mainLoopRunning) return;
 			if (callbackOnEvent) callbackOnEvent(e);
 		}
@@ -94,7 +93,7 @@ namespace ig
 			}
 			else if (windowMinimizedBehaviour == WindowMinimizedBehaviour::SkipDrawAndSleep)
 			{
-				BasicSleep(MillisecondsToSleepWhenMinimized);
+				BasicSleep(MinimizedSleepTimeMs);
 			}
 		}
 		else
