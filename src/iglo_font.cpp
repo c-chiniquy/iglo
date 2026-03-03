@@ -424,8 +424,6 @@ namespace ig
 	{
 		const char* errStr = "Failed to load prebaked font. Reason: ";
 
-		PrebakedFontFileHeader* header = (PrebakedFontFileHeader*)fileData;
-
 		if (numBytes == 0 || fileData == nullptr)
 		{
 			Log(LogType::Error, ToString(errStr, "No file data provided."));
@@ -437,6 +435,8 @@ namespace ig
 			Log(LogType::Error, ToString(errStr, "File is corrupt (it is smaller than expected)."));
 			return false;
 		}
+
+		PrebakedFontFileHeader* header = (PrebakedFontFileHeader*)fileData;
 
 		std::string fileDescriptor(header->fileDescriptor, 8);
 		if (fileDescriptor != "IGLOFONT")
@@ -915,7 +915,7 @@ namespace ig
 		}
 		else
 		{
-			uint16_t value = pos->second;
+			int16_t value = pos->second;
 			return value;
 		}
 	}
@@ -1133,7 +1133,7 @@ namespace ig
 
 		bool foundMatch = false;
 		size_t bestIndex = 0;
-		float bestRatio = 0;
+		float bestRatio = IGLO_FLOAT32_MAX;
 		IntRect bestRect = IntRect(0, 0, 0, 0);
 		const float maxRatio = 1.3f; // Acceptable height ratio between rect and glyph
 
@@ -1143,7 +1143,7 @@ namespace ig
 			float ratio = (float)page.rects[i].GetHeight() / (float)glyphHeight;
 			if (ratio >= 1 && ratio <= maxRatio) // Check height
 			{
-				if (ratio <= bestRatio) continue;
+				if (ratio >= bestRatio) continue; // We want as small ratio as possible
 				if ((int64_t)page.rects[i].GetWidth() + glyphWidth <= (int64_t)page.width) // Check width
 				{
 					foundMatch = true;
