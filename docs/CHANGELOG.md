@@ -32,7 +32,6 @@
     - Replaced UniformRandom class with Xoshiro256pp class
     - ig::Random now uses Xoshiro256pp instead of rand()
   - iglo
-    - Now compatible with Agility SDK 1.717.1-preview
     - Now using NDEBUG instead of _DEBUG
     - Added Fatal()
     - Added GetFormatName()
@@ -56,7 +55,7 @@
   - Font
     - PrebakedFontData loading function is now more explicit (to remove compiler warnings)
     - Added out_isErrorGlyph option to Font::GetGlyph()
-  - Updated Agility SDK to version 1.717.1-preview in the CMake script
+  - Updated Agility SDK to version 1.719.0-preview in the CMake script
 
 ## v0.3.2
 
