@@ -19,6 +19,7 @@
   - Fixed bug in IGLOContext::SetWindowSize()
   - Fixed bug in CommandList::ValidatePushConstants()
   - Fixed bug in BatchRenderer::DrawString()
+  - Fixed bug in Font::AllocateRoomForGlyph()
 - Minor changes:
   - iglo utility
     - Added FloatRect::GetExpanded()
