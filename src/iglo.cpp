@@ -2048,16 +2048,17 @@ namespace ig
 
 	void* Image::GetMipPixels(uint32_t faceIndex, uint32_t mipIndex) const
 	{
-		byte* out = pixelsPtr;
-		for (uint32_t f = 0; f < desc.numFaces; f++)
+		if (faceIndex >= desc.numFaces || mipIndex >= desc.mipLevels)
 		{
-			for (uint32_t m = 0; m < desc.mipLevels; m++)
-			{
-				if (f == faceIndex && m == mipIndex) return out;
-				out += GetMipSize(m);
-			}
+			Fatal("Out of bounds Image::GetMipPixels");
 		}
-		return (void*)out;
+		byte* out = pixelsPtr;
+		out += faceIndex * CalculateTotalSize(desc.extent, desc.format, desc.mipLevels, 1);
+		for (uint32_t m = 0; m < mipIndex; m++)
+		{
+			out += GetMipSize(m);
+		}
+		return out;
 	}
 
 	std::unique_ptr<Image> Image::LoadFromFile(const std::string& filename)

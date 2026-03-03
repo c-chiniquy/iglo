@@ -87,7 +87,8 @@ namespace ig
 		pushConstants.samplerIndex = chosenSampler.GetDescriptor().heapIndex;
 
 		const uint32_t pipelineIndex = (uint32_t)blend;
-		assert(pipelineIndex < pipelines.size() && "invalid blend");
+		if (pipelineIndex >= pipelines.size()) Fatal("Invalid ScreenRendererBlend");
+
 		cmd.SetPipeline(*pipelines[pipelineIndex]);
 		cmd.SetPushConstants(&pushConstants, sizeof(pushConstants));
 		cmd.Draw(4);
