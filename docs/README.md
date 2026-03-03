@@ -21,7 +21,7 @@ iglo (Intuitive Graphics Layer Open-source) is a cross-platform, public domain C
 - Vector, matrix and quaternion classes with essential math functions.
 - Helper functions for:
   - File I/O (reading/writing files)
-  - Randomness (`rand` and `mt19937`)
+  - Randomness (`Xoshiro256pp`)
   - UTF string conversions and manipulation
 - Simple app callbacks: `Start()`, `Update()`, `FixedUpdate()`, `Draw()`, `OnEvent()` and `OnLoopExited()`.
 - Easy 2D rendering via `BatchRenderer` (text, sprites, shapes, etc...)
