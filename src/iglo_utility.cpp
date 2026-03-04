@@ -1673,7 +1673,6 @@ namespace ig
 			bool found = false;
 			for (uint32_t tableIndex = 0; tableIndex < 256; tableIndex++)
 			{
-				if (codepoint >= 32 && codepoint <= 126) continue;
 				if (cp437_codepoint_table[tableIndex] == codepoint)
 				{
 					out.push_back((byte)tableIndex); // Found matching codepoint!
