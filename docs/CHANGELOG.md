@@ -1,6 +1,11 @@
 
 # Changelog
 
+## v0.4.1
+
+### Changes
+- Fixed ig::CreateDirectory() so it returns false on failure instead of throwing exceptions.
+
 ## v0.4.0
 
 ### Changes
