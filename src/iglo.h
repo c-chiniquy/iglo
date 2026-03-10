@@ -9,7 +9,7 @@
 // -------------------- Version --------------------//
 #define IGLO_VERSION_MAJOR 0
 #define IGLO_VERSION_MINOR 4
-#define IGLO_VERSION_PATCH 0
+#define IGLO_VERSION_PATCH 1
 
 #define IGLO_STRINGIFY_HELPER(x) #x
 #define IGLO_STRINGIFY(x) IGLO_STRINGIFY_HELPER(x)
@@ -2644,6 +2644,7 @@ namespace ig
 		// If a resource needs to be replaced mid-frame, transfer ownership to
 		// IGLOContext using one of these functions. The context will defer destruction
 		// until the GPU has finished executing all commands that reference the resource.
+		// Passing nullptr is safe and has no effect.
 		void DelayedDestroyTexture(std::unique_ptr<Texture> texture) const;
 		void DelayedDestroyBuffer(std::unique_ptr<Buffer> buffer) const;
 

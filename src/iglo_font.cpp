@@ -777,7 +777,7 @@ namespace ig
 		}
 		atlas.glyphMap.clear();
 
-		if (page.texture) context.DelayedDestroyTexture(std::move(page.texture));
+		context.DelayedDestroyTexture(std::move(page.texture));
 		page.rects.clear();
 		page.rects.shrink_to_fit();
 		page.pixels.clear();
@@ -852,7 +852,7 @@ namespace ig
 
 		if (page.width == 0 || page.height == 0)
 		{
-			if (page.texture) context.DelayedDestroyTexture(std::move(page.texture));
+			context.DelayedDestroyTexture(std::move(page.texture));
 			return;
 		}
 
@@ -870,7 +870,7 @@ namespace ig
 		if (mustCreateNewTexture)
 		{
 			// We can't instantly destroy the old texture because the GPU might still depend on it in a previous frame.
-			if (page.texture) context.DelayedDestroyTexture(std::move(page.texture));
+			context.DelayedDestroyTexture(std::move(page.texture));
 
 			page.texture = Texture::Create(context, page.width, page.height, Format::BYTE, TextureUsage::Default);
 			if (!page.texture)

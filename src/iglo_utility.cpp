@@ -1705,7 +1705,15 @@ namespace ig
 	}
 	bool CreateDirectory(const std::string& directoryName)
 	{
-		return std::filesystem::create_directory(utf8_to_path(directoryName));
+		try
+		{
+			std::filesystem::create_directory(utf8_to_path(directoryName));
+			return true;
+		}
+		catch (...)
+		{
+			return false;
+		}
 	}
 	std::string GetCurrentPath()
 	{

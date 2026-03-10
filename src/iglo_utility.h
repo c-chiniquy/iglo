@@ -8,7 +8,6 @@
 #endif
 
 #include <string>
-#include <random>
 #include <chrono>
 #include <filesystem>
 #ifdef __linux__
@@ -653,6 +652,8 @@ namespace ig
 	std::string GetFileExtension(const std::string& filename);
 	bool FileExists(const std::string& filename);
 	bool DirectoryExists(const std::string& directoryName);
+	
+	// Returns true if the directory was created or already exists, false on failure (e.g. access denied).
 	bool CreateDirectory(const std::string& directoryName);
 
 	// Gets the current working directory
