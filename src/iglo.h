@@ -9,7 +9,7 @@
 // -------------------- Version --------------------//
 #define IGLO_VERSION_MAJOR 0
 #define IGLO_VERSION_MINOR 4
-#define IGLO_VERSION_PATCH 1
+#define IGLO_VERSION_PATCH 2
 
 #define IGLO_STRINGIFY_HELPER(x) #x
 #define IGLO_STRINGIFY(x) IGLO_STRINGIFY_HELPER(x)
@@ -155,7 +155,7 @@ namespace ig
 	using CallbackLog = std::function<void(LogType messageType, const std::string& message)>;
 	using CallbackFatal = std::function<void(const std::string& message)>;
 	using CallbackModalLoop = std::function<void()>;
-	using CallbackOnDeviceRemoved = std::function<void(std::string deviceRemovalReason)>;
+	using CallbackOnDeviceRemoved = std::function<void(const std::string& deviceRemovalReason)>;
 
 	enum class LogType
 	{

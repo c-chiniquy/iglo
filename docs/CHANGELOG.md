@@ -1,6 +1,11 @@
 
 # Changelog
 
+## v0.4.2
+
+### Changes
+- OnDeviceRemoved() callback now passes the string argument as const&.
+
 ## v0.4.1
 
 ### Changes
