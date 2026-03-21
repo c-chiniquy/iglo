@@ -13,7 +13,7 @@ namespace ig
 		avgFPS_totalElapsedSeconds += elapsedSeconds;
 		if (avgFPS_totalElapsedSeconds >= AvgFPSDuration)
 		{
-			avgFPS = (int)round(avgFPS_numFrames / avgFPS_totalElapsedSeconds);
+			avgFPS = (int32_t)round((double)avgFPS_numFrames / avgFPS_totalElapsedSeconds);
 			avgFPS_numFrames = 0;
 			avgFPS_totalElapsedSeconds = 0;
 		}

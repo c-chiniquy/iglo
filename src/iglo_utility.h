@@ -7,12 +7,11 @@
 #define _UNICODE
 #endif
 
+#include <cmath>
+#include <memory>
 #include <string>
 #include <chrono>
 #include <filesystem>
-#ifdef __linux__
-#include <memory>
-#endif
 
 #define IGLO_PI	(3.14159265358979323846)
 #define IGLO_SQR2 (1.41421356237309504880)

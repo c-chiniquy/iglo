@@ -944,10 +944,10 @@ namespace ig
 		float b = std::clamp(blue, 0.0f, 1.0f);
 		float a = std::clamp(alpha, 0.0f, 1.0f);
 		return Color32(
-			(byte)std::roundf(r * 255.0f),
-			(byte)std::roundf(g * 255.0f),
-			(byte)std::roundf(b * 255.0f),
-			(byte)std::roundf(a * 255.0f));
+			(byte)roundf(r * 255.0f),
+			(byte)roundf(g * 255.0f),
+			(byte)roundf(b * 255.0f),
+			(byte)roundf(a * 255.0f));
 	}
 
 	void BasicSleep(uint32_t milliseconds)
