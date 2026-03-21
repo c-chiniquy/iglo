@@ -2,6 +2,8 @@
 # Changelog
 
 ## v0.4.3
+
+### Changes
 - Fixed compile error on Linux caused by the removal of `#include <random>` in iglo_utility.h. `<cmath>` and `<memory>` are now explicitly included on both Windows and Linux.
 
 ## v0.4.2
