@@ -1,6 +1,14 @@
 
 # Changelog
 
+## v0.4.4
+
+### Changes
+- iglo_config.h is now included in iglo_utility.h instead of iglo.h
+- Refactored some includes in iglo.h and iglo_utility.h/cpp
+- Moved DetailedResult and Log() to iglo_utility.h
+- iglo_utility.cpp now calls Fatal() instead of throwing exceptions
+
 ## v0.4.3
 
 ### Changes
