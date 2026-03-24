@@ -1,17 +1,13 @@
-﻿#include "iglo_config.h"
-#include "iglo_utility.h"
+﻿#include "iglo_utility.h"
 
+#include <thread>
 #include <fstream>
 #include <sstream>
 #include <iostream>
-#include <thread>
-#include <array>
 
 #ifdef _WIN32
-#ifndef WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #pragma comment(lib, "Winmm.lib") // For precise sleep (timeGetDevCaps, timeBeginPeriod)
-#endif
 // Conflicts with ig::CreateDirectory
 #ifdef CreateDirectory
 #undef CreateDirectory
@@ -21,7 +17,6 @@
 #ifdef __linux__
 #include <time.h>
 #include <errno.h>
-#include <cstring>
 #endif
 
 namespace ig
@@ -52,6 +47,45 @@ namespace ig
 		945,223,915,960,931,963,181,964,934,920,937,948,8734,966,949,8745,8801,177,8805,8804,8992,8993,247,8776,176,
 		8729,183,8730,8319,178,9632,160 };
 
+	static CallbackLog logCallback = nullptr;
+	static CallbackFatal fatalCallback = nullptr;
+
+	void Log(LogType type, const std::string& message)
+	{
+		if (logCallback)
+		{
+			logCallback(type, message);
+		}
+		else
+		{
+			std::string typeStr = "IGLO ";
+
+			if (type == LogType::Info) typeStr += "Info: ";
+			else if (type == LogType::Warning) typeStr += "Warning: ";
+			else if (type == LogType::Error) typeStr += "Error: ";
+			else if (type == LogType::FatalError) typeStr += "Fatal error: ";
+			else typeStr += ": ";
+
+			Print(typeStr + message + "\n");
+		}
+	}
+
+	void SetLogCallback(CallbackLog logFunc)
+	{
+		logCallback = logFunc;
+	}
+
+	[[noreturn]] void Fatal(const std::string& message)
+	{
+		Log(LogType::FatalError, message);
+		if (fatalCallback) fatalCallback(message);
+		std::abort();
+	}
+
+	void SetFatalCallback(CallbackFatal fatalFunc)
+	{
+		fatalCallback = fatalFunc;
+	}
 
 	PackedBoolArray::PackedBoolArray(const PackedBoolArray& a)
 	{
@@ -75,8 +109,9 @@ namespace ig
 
 	bool PackedBoolArray::GetAt(uint64_t index) const
 	{
+		assert(index < booleanCount && "out of bounds");
 		const uint64_t whatElement = index / elementSize;
-		const int whatBit = index % elementSize;
+		const uint32_t whatBit = index % elementSize;
 		const bool isTrue = (data[whatElement] & (1 << whatBit));
 		return isTrue;
 	}
@@ -89,6 +124,7 @@ namespace ig
 
 	void PackedBoolArray::SetTrue(uint64_t index)
 	{
+		assert(index < booleanCount && "out of bounds");
 		const uint64_t whatElement = index / elementSize;
 		const uint32_t whatBit = index % elementSize;
 		data[whatElement] |= (1 << whatBit);
@@ -96,6 +132,7 @@ namespace ig
 
 	void PackedBoolArray::SetFalse(uint64_t index)
 	{
+		assert(index < booleanCount && "out of bounds");
 		const uint64_t whatElement = index / elementSize;
 		const uint32_t whatBit = index % elementSize;
 		data[whatElement] &= ~(1 << whatBit);
@@ -967,7 +1004,7 @@ namespace ig
 		{
 			// Initialization
 			timerHandle = CreateWaitableTimerExW(NULL, NULL, CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, TIMER_ALL_ACCESS);
-			if (timerHandle == NULL) throw std::exception(); // This shouldn't happen
+			if (timerHandle == NULL) Fatal("Failed to create waitable timer"); // This shouldn't happen
 
 			TIMECAPS caps;
 			timeGetDevCaps(&caps, sizeof caps);
@@ -2446,8 +2483,8 @@ namespace ig
 
 	uint64_t AlignUp(uint64_t value, uint64_t alignment)
 	{
-		if (alignment == 0) throw std::invalid_argument("alignment must be non-zero.");
-		if (alignment & (alignment - 1)) throw std::invalid_argument("alignment not a power of 2.");
+		if (alignment == 0) Fatal("AlignUp: Alignment must be non-zero.");
+		if (alignment & (alignment - 1)) Fatal("AlignUp: Alignment not a power of 2.");
 
 		uint64_t alignMask = alignment - 1;
 		if (value & alignMask) // Not aligned

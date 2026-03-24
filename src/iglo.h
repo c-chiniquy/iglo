@@ -9,7 +9,7 @@
 // -------------------- Version --------------------//
 #define IGLO_VERSION_MAJOR 0
 #define IGLO_VERSION_MINOR 4
-#define IGLO_VERSION_PATCH 3
+#define IGLO_VERSION_PATCH 4
 
 #define IGLO_STRINGIFY_HELPER(x) #x
 #define IGLO_STRINGIFY(x) IGLO_STRINGIFY_HELPER(x)
@@ -19,21 +19,14 @@
     IGLO_STRINGIFY(IGLO_VERSION_PATCH)
 
 // -------------------- Includes --------------------//
-#include "iglo_config.h"
 #include "iglo_utility.h"
 
-#include <array>
 #include <queue>
 #include <mutex>
-#include <optional>
-#include <cassert>
-#include <functional>
 
 // -------------------- Forward Declarations --------------------//
 namespace ig
 {
-	enum class LogType;
-	struct DetailedResult;
 	enum class MSAA;
 	enum class PresentMode;
 	struct SupportedPresentModes;
@@ -94,7 +87,7 @@ namespace ig
 	enum class MouseButton;
 	enum class Key;
 	enum class EventType;
-	class Event;
+	struct Event;
 	struct WindowSettings;
 	struct RenderSettings;
 	struct WindowState;
@@ -152,53 +145,12 @@ namespace ig
 namespace ig
 {
 	// Callbacks
-	using CallbackLog = std::function<void(LogType messageType, const std::string& message)>;
-	using CallbackFatal = std::function<void(const std::string& message)>;
 	using CallbackModalLoop = std::function<void()>;
 	using CallbackOnDeviceRemoved = std::function<void(const std::string& deviceRemovalReason)>;
 
-	enum class LogType
-	{
-		Info = 0, // Example: Prints the name of the graphics API version being used.
-		Warning,
-		Error, // Example: Failed to load texture, create buffer etc...
-		FatalError, // Example: Failed to create IGLOContext, or an unrecoverable error happened
-	};
-
-	// Logs a debug message.
-	// By default, the message is printed to the console window or debug output window.
-	// You can decide how a debug message is handled with SetLogCallback(myFunc).
-	void Log(LogType type, const std::string& message);
-
-	// If nullptr is specified then Log() will revert to default behavior.
-	void SetLogCallback(CallbackLog logFunc);
-
 	void PopupMessage(const std::string& message, const std::string& caption = "", const IGLOContext* parent = nullptr);
 
-	// Logs a debug message (FatalError) and aborts the app
-	[[noreturn]] void Fatal(const std::string& message);
-
-	// This callback is called just before std::abort(), but after the fatal error message has been logged.
-	// This gives you a chance to write a crash log before the app aborts.
-	void SetFatalCallback(CallbackFatal fatalFunc);
-
 	std::string GetGpuVendorNameFromID(uint32_t vendorID);
-
-	struct DetailedResult
-	{
-		const bool success = false;
-		const std::string errorMessage; // Will be empty if the operation succeeded.
-
-		[[nodiscard]] static DetailedResult Success()
-		{
-			return { .success = true, .errorMessage = {} };
-		}
-		[[nodiscard]] static DetailedResult Fail(const std::string& errorMessage)
-		{
-			return { .success = false, .errorMessage = errorMessage };
-		}
-		explicit operator bool() const { return success; }
-	};
 
 	// Multisampled anti aliasing
 	enum class MSAA
@@ -2289,9 +2241,8 @@ namespace ig
 		Restored, // Window is no longer minimized. (you can now see the window)
 	};
 
-	class Event
+	struct Event
 	{
-	public:
 		Event()
 		{
 			type = EventType::None;
@@ -2302,7 +2253,6 @@ namespace ig
 			textEntered = TextEnteredEvent();
 		}
 
-	private:
 		struct MouseEvent
 		{
 			int32_t x = 0;
@@ -2318,7 +2268,7 @@ namespace ig
 		{
 			uint32_t codepoint = 0; // Unicode codepoint (UTF-32)
 		};
-	public:
+
 		EventType type;
 		DragAndDropEvent dragAndDrop; // Used by: DragAndDrop
 		union

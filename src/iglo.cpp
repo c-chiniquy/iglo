@@ -132,46 +132,6 @@ namespace ig
 		Colors::Black // borderColor
 	};
 
-	static CallbackLog logCallback = nullptr;
-	static CallbackFatal fatalCallback = nullptr;
-
-	void Log(LogType type, const std::string& message)
-	{
-		if (logCallback)
-		{
-			logCallback(type, message);
-		}
-		else
-		{
-			std::string typeStr = "IGLO ";
-
-			if (type == LogType::Info) typeStr += "Info: ";
-			else if (type == LogType::Warning) typeStr += "Warning: ";
-			else if (type == LogType::Error) typeStr += "Error: ";
-			else if (type == LogType::FatalError) typeStr += "Fatal error: ";
-			else typeStr += ": ";
-
-			Print(typeStr + message + "\n");
-		}
-	}
-
-	void SetLogCallback(CallbackLog logFunc)
-	{
-		logCallback = logFunc;
-	}
-
-	[[noreturn]] void Fatal(const std::string& message)
-	{
-		Log(LogType::FatalError, message);
-		if (fatalCallback) fatalCallback(message);
-		std::abort();
-	}
-
-	void SetFatalCallback(CallbackFatal fatalFunc)
-	{
-		fatalCallback = fatalFunc;
-	}
-
 	std::string GetGpuVendorNameFromID(uint32_t vendorID)
 	{
 		switch (vendorID)

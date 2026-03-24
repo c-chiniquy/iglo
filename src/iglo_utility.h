@@ -1,5 +1,7 @@
 ﻿#pragma once
 
+#include "iglo_config.h"
+
 #ifndef UNICODE
 #define UNICODE
 #endif
@@ -8,9 +10,14 @@
 #endif
 
 #include <cmath>
+#include <cstring>
+#include <cassert>
+#include <array>
 #include <memory>
 #include <string>
 #include <chrono>
+#include <optional>
+#include <functional>
 #include <filesystem>
 
 #define IGLO_PI	(3.14159265358979323846)
@@ -28,6 +35,8 @@ typedef uint8_t byte;
 
 namespace ig
 {
+	struct DetailedResult;
+	enum class LogType;
 	class PackedBoolArray;
 	class Timer;
 	class FrameRateLimiter;
@@ -49,6 +58,48 @@ namespace ig
 	struct ReadFileResult;
 	class Xoshiro256pp;
 
+	// Callbacks
+	using CallbackLog = std::function<void(LogType messageType, const std::string& message)>;
+	using CallbackFatal = std::function<void(const std::string& message)>;
+
+	struct DetailedResult
+	{
+		const bool success = false;
+		const std::string errorMessage; // Will be empty if the operation succeeded.
+
+		[[nodiscard]] static DetailedResult Success()
+		{
+			return { .success = true, .errorMessage = {} };
+		}
+		[[nodiscard]] static DetailedResult Fail(const std::string& errorMessage)
+		{
+			return { .success = false, .errorMessage = errorMessage };
+		}
+		explicit operator bool() const { return success; }
+	};
+
+	enum class LogType
+	{
+		Info = 0, // Example: Prints the name of the graphics API version being used.
+		Warning,
+		Error, // Example: Failed to load texture, create buffer etc...
+		FatalError, // Example: Failed to create IGLOContext, or an unrecoverable error happened
+	};
+
+	// If nullptr is specified then Log() will revert to default behavior.
+	void SetLogCallback(CallbackLog logFunc);
+
+	// This callback is called just before std::abort(), but after the fatal error message has been logged.
+	// This gives you a chance to write a crash log before the app aborts.
+	void SetFatalCallback(CallbackFatal fatalFunc);
+
+	// Logs a debug message.
+	// By default, the message is printed using ig::Print().
+	// You can decide how a debug message is handled with SetLogCallback(myFunc).
+	void Log(LogType type, const std::string& message);
+
+	// Logs a debug message (FatalError) and aborts the app
+	[[noreturn]] void Fatal(const std::string& message);
 
 	// An array of boolean values. This class was written as an alternative to std::vector<bool>.
 	// Unlike std::vector<bool>, this class guarantees that all booleans are efficiently packed in memory (1 bit per boolean).
@@ -90,7 +141,7 @@ namespace ig
 	private:
 		static uint64_t GetElementCount(uint64_t numBooleans, uint32_t sizeOfEachElement);
 
-		static constexpr unsigned int elementSize = 8;
+		static constexpr uint32_t elementSize = 8;
 		uint64_t booleanCount = 0;
 		std::unique_ptr<uint8_t[]> data;
 	};
@@ -641,7 +692,6 @@ namespace ig
 	// Converts u8string to string. Needed for C++20.
 	std::string u8string_to_string(const std::u8string& u8str);
 
-
 	//////////////////////// File system ////////////////////////
 
 	// iglo uses UTF-8 encoding by default.
@@ -756,7 +806,7 @@ namespace ig
 	void Print(const wchar_t* text);
 #endif
 
-	///////////////////////////// Randomness  /////////////////////////////
+	//////////////////////// Randomness  ////////////////////////
 
 	/*
 		A wrapper for xoshiro256++, a public domain fast random number generator.
@@ -821,7 +871,7 @@ namespace ig
 		double NextDouble(double min, double max);
 	}
 
-	///////////////////////////// Math /////////////////////////////
+	//////////////////////// Math ////////////////////////
 
 	// The alignment is required to be a power of 2.
 	uint64_t AlignUp(uint64_t value, uint64_t alignment);
