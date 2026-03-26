@@ -1,6 +1,11 @@
 
 # Changelog
 
+## v0.4.5
+
+### Changes
+- Fixed bug in Xoshiro256pp class (NextInt32 is now replaced with NextUInt32Range)
+
 ## v0.4.4
 
 ### Changes
