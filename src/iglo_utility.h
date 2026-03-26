@@ -832,8 +832,8 @@ namespace ig
 		uint32_t NextUInt32();
 		uint64_t NextUInt64();
 
-		// min and max are inclusive bounds.
-		int32_t NextInt32(int32_t min, int32_t max);
+		// Returns a random number in the range [0, exclusiveMax)
+		uint32_t NextUInt32Range(uint32_t exclusiveMax);
 
 		// 50% chance of returning true.
 		bool NextBool();
@@ -842,10 +842,10 @@ namespace ig
 		// Example: 0.2f = returns true 20% of the time.
 		bool NextProbability(float probability);
 
-		// Returns range [min, max)
+		// Returns a random float in the range [min, max)
 		float NextFloat(float min, float max);
 
-		// Returns range [min, max)
+		// Returns a random double in the range [min, max)
 		double NextDouble(double min, double max);
 
 	private:
@@ -864,7 +864,7 @@ namespace ig
 		void SetSeed(uint64_t seed);
 		uint32_t NextUInt32();
 		uint64_t NextUInt64();
-		int32_t NextInt32(int32_t min, int32_t max);
+		uint32_t NextUInt32Range(uint32_t exclusiveMax);
 		bool NextBool();
 		bool NextProbability(float probability);
 		float NextFloat(float min, float max);

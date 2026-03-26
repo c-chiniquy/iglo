@@ -2414,7 +2414,11 @@ namespace ig
 	void Xoshiro256pp::SetSeed(uint64_t seed)
 	{
 		uint64_t x = seed;
-		SetSeed256(SplitMix64(x), SplitMix64(x), SplitMix64(x), SplitMix64(x));
+		uint64_t a = SplitMix64(x);
+		uint64_t b = SplitMix64(x);
+		uint64_t c = SplitMix64(x);
+		uint64_t d = SplitMix64(x);
+		SetSeed256(a, b, c, d);
 	}
 
 	void Xoshiro256pp::SetSeed256(uint64_t a, uint64_t b, uint64_t c, uint64_t d)
@@ -2435,10 +2439,19 @@ namespace ig
 		return Next();
 	}
 
-	int32_t Xoshiro256pp::NextInt32(int32_t min, int32_t max)
+	uint32_t Xoshiro256pp::NextUInt32Range(uint32_t exclusiveMax)
 	{
-		uint32_t range = (uint32_t)max - (uint32_t)min + 1;
-		return (int32_t)((uint32_t)min + (NextUInt32() % range));
+		if (exclusiveMax <= 1) return 0;
+
+		uint32_t threshold = (0u - exclusiveMax) % exclusiveMax;
+		uint32_t r;
+		do
+		{
+			r = NextUInt32();
+		}
+		while (r < threshold);
+
+		return r % exclusiveMax;
 	}
 
 	bool Xoshiro256pp::NextBool()
@@ -2474,7 +2487,7 @@ namespace ig
 		void SetSeed(uint64_t seed) { instance.SetSeed(seed); }
 		uint32_t NextUInt32() { return instance.NextUInt32(); }
 		uint64_t NextUInt64() { return instance.NextUInt64(); }
-		int32_t NextInt32(int32_t min, int32_t max) { return instance.NextInt32(min, max); }
+		uint32_t NextUInt32Range(uint32_t exclusiveMax) { return instance.NextUInt32Range(exclusiveMax); }
 		bool NextBool() { return instance.NextBool(); }
 		bool NextProbability(float probability) { return instance.NextProbability(probability); }
 		float NextFloat(float min, float max) { return instance.NextFloat(min, max); }
