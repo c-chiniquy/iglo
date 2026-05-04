@@ -15,7 +15,7 @@ namespace ig
 	{
 		ComPtr<ID3D12Device10> device;
 		ComPtr<IDXGISwapChain3> swapChain;
-		ComPtr<IDXGIFactory4> factory;
+		ComPtr<IDXGIFactory6> factory;
 		ComPtr<IDXGIAdapter1> adapter;
 	};
 
@@ -133,5 +133,6 @@ namespace ig
 	FormatInfoDXGI GetFormatInfoDXGI(Format format);
 
 	std::vector<D3D12_INPUT_ELEMENT_DESC> ToD3D12InputElements(const std::vector<VertexElement>& elems);
+	DetailedResult IsAdapterCompatible(ID3D12Device* device);
 
 }

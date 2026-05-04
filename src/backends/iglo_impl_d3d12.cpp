@@ -2034,9 +2034,58 @@ namespace ig
 		return true;
 	}
 
+	DetailedResult IsAdapterCompatible(ID3D12Device* device)
+	{
+		std::vector<std::string> missingFeatures;
+
+		// Shader model 6.6 (required for Bindless rendering)
+		D3D12_FEATURE_DATA_SHADER_MODEL sm = { .HighestShaderModel = D3D_SHADER_MODEL_6_6 };
+		if (FAILED(device->CheckFeatureSupport(D3D12_FEATURE_SHADER_MODEL, &sm, sizeof(sm))) ||
+			sm.HighestShaderModel < D3D_SHADER_MODEL_6_6)
+		{
+			missingFeatures.push_back("Shader Model 6.6");
+		}
+
+		// Enhanced barriers
+		D3D12_FEATURE_DATA_D3D12_OPTIONS12 opt12 = {};
+		if (FAILED(device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS12, &opt12, sizeof(opt12))) ||
+			!opt12.EnhancedBarriersSupported)
+		{
+			missingFeatures.push_back("Enhanced Barriers");
+		}
+
+		// Resource Binding Tier 3 (required for Bindless rendering)
+		D3D12_FEATURE_DATA_D3D12_OPTIONS opt = {};
+		if (FAILED(device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS, &opt, sizeof(opt))) ||
+			opt.ResourceBindingTier < D3D12_RESOURCE_BINDING_TIER_3)
+		{
+			missingFeatures.push_back("Resource Binding Tier 3");
+		}
+
+		// Root signature 1.1
+		D3D12_FEATURE_DATA_ROOT_SIGNATURE rs = {};
+		rs.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_1;
+		if (FAILED(device->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &rs, sizeof(rs))) ||
+			rs.HighestVersion < D3D_ROOT_SIGNATURE_VERSION_1_1)
+		{
+			missingFeatures.push_back("Root signature 1.1");
+		}
+
+		if (missingFeatures.empty()) return DetailedResult::Success();
+
+		std::string errMsg;
+		for (const auto& feature : missingFeatures)
+		{
+			if (!errMsg.empty()) errMsg.append(", ");
+			errMsg.append(feature);
+		}
+		return DetailedResult::Fail(errMsg);
+	}
+
 	DetailedResult IGLOContext::Impl_InitGraphicsDevice()
 	{
-		const char* strLatestDrivers = "Ensure that you have the latest graphics drivers installed.";
+		const char* strLatestDrivers = "Please ensure that you have the latest graphics drivers installed.";
+		const char* strMinimumWindowsVersion = "IGLO requires Windows 10 version 1909 or later.";
 		HRESULT hr = 0;
 		UINT factoryFlags = 0;
 
@@ -2049,155 +2098,87 @@ namespace ig
 				debugInterface->EnableDebugLayer();
 				factoryFlags = DXGI_CREATE_FACTORY_DEBUG;
 			}
+			else
+			{
+				Log(LogType::Warning, "Failed to enable the D3D12 debug layer.");
+			}
 		}
 #endif
 
 		hr = CreateDXGIFactory2(factoryFlags, IID_PPV_ARGS(&graphics.factory));
 		if (FAILED(hr))
 		{
-			return DetailedResult::Fail(D3D12ErrorMsg("CreateDXGIFactory2", hr));
+			return DetailedResult::Fail(ToString(D3D12ErrorMsg("CreateDXGIFactory2", hr), " ", strMinimumWindowsVersion));
 		}
 
 		// Find a suitable adapter
 		ComPtr<IDXGIAdapter1> adapter;
+		std::string adapterErrors;
+		const DXGI_GPU_PREFERENCE gpuPref = DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE;
+		for (UINT i = 0; graphics.factory->EnumAdapterByGpuPreference(i, gpuPref, IID_PPV_ARGS(&adapter)) != DXGI_ERROR_NOT_FOUND; i++)
 		{
-			bool foundSuitableAdapter = false;
-			for (UINT i = 0; graphics.factory->EnumAdapters1(i, &adapter) != DXGI_ERROR_NOT_FOUND; i++)
+			DXGI_ADAPTER_DESC1 adapterDesc = {};
+			adapter->GetDesc1(&adapterDesc);
+
+			// Ignore software adapters
+			if (adapterDesc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE)
 			{
-				DXGI_ADAPTER_DESC1 adapterDesc = {};
-				adapter->GetDesc1(&adapterDesc);
-
-				// We don't want software adapters
-				if (adapterDesc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE)
-				{
-					continue;
-				}
-
-				// If device creation succeeds with this adapter
-				if (SUCCEEDED(D3D12CreateDevice(adapter.Get(), d3d12FeatureLevel, _uuidof(ID3D12Device), nullptr)))
-				{
-					// specs for D3D_FEATURE_LEVEL_12_1
-					graphicsSpecs.apiName = "Direct3D 12";
-					graphicsSpecs.rendererName = utf16_to_utf8((char16_t*)adapterDesc.Description);
-					graphicsSpecs.vendorName = GetGpuVendorNameFromID(adapterDesc.VendorId);
-					graphicsSpecs.maxTextureDimension = 16384;
-					graphicsSpecs.bufferPlacementAlignments =
-					{
-						.vertexOrIndexBuffer = 4,
-						.rawOrStructuredBuffer = 16,
-						.constant = D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT,
-						.texture = D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT,
-						.textureRowPitch = D3D12_TEXTURE_DATA_PITCH_ALIGNMENT,
-					};
-					graphicsSpecs.supportedPresentModes =
-					{
-						.immediateWithTearing = true,
-						.immediate = true,
-						.vsync = true,
-						.vsyncHalf = true,
-					};
-
-					foundSuitableAdapter = true;
-					break;
-				}
+				adapter.Reset();
+				continue;
 			}
 
-			// Couldn't find a suitable adapter
-			if (!foundSuitableAdapter)
-			{
-				return DetailedResult::Fail(ToString(
-					"No adaptor found capable of feature level ", FeatureLevelToString(d3d12FeatureLevel), ". ",
-					strLatestDrivers));
-			}
-		}
+			const std::string adapterName = utf16_to_utf8(reinterpret_cast<const char16_t*>(adapterDesc.Description));
 
-		// Create D3D12 Device
-		{
+			// Create device with this adapter
+			ComPtr<ID3D12Device10> device;
+			if (FAILED(D3D12CreateDevice(adapter.Get(), d3d12FeatureLevel, IID_PPV_ARGS(&device))))
+			{
+				if (!adapterErrors.empty()) adapterErrors.append("\n\n");
+				adapterErrors.append("[" + adapterName + "]\n" + "Does not support Feature Level " + FeatureLevelToString(d3d12FeatureLevel));
+				adapter.Reset();
+				continue;
+			}
+
+			DetailedResult isCompatible = IsAdapterCompatible(device.Get());
+			if (!isCompatible)
+			{
+				if (!adapterErrors.empty()) adapterErrors.append("\n\n");
+				adapterErrors.append("[" + adapterName + "]\nMissing features: " + isCompatible.errorMessage);
+				adapter.Reset();
+				continue;
+			}
+
+			// specs for D3D_FEATURE_LEVEL_12_1
+			graphicsSpecs.apiName = "Direct3D 12";
+			graphicsSpecs.rendererName = adapterName;
+			graphicsSpecs.vendorName = GetGpuVendorNameFromID(adapterDesc.VendorId);
+			graphicsSpecs.maxTextureDimension = 16384;
+			graphicsSpecs.bufferPlacementAlignments =
+			{
+				.vertexOrIndexBuffer = 4,
+				.rawOrStructuredBuffer = 16,
+				.constant = D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT,
+				.texture = D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT,
+				.textureRowPitch = D3D12_TEXTURE_DATA_PITCH_ALIGNMENT,
+			};
+			graphicsSpecs.supportedPresentModes =
+			{
+				.immediateWithTearing = true,
+				.immediate = true,
+				.vsync = true,
+				.vsyncHalf = true,
+			};
+
 			graphics.adapter = adapter;
-			ComPtr<ID3D12Device> deviceVer0;
-			hr = D3D12CreateDevice(adapter.Get(), d3d12FeatureLevel, IID_PPV_ARGS(&deviceVer0));
-			if (FAILED(hr))
-			{
-				return DetailedResult::Fail(D3D12ErrorMsg("D3D12CreateDevice", hr));
-			}
-			hr = deviceVer0.As(&graphics.device);
-			if (FAILED(hr))
-			{
-				return DetailedResult::Fail(D3D12ErrorMsg("ComPtr::As", hr));
-			}
+			graphics.device = device;
+			return DetailedResult::Success();
 		}
 
-		// Check shader model support
-		{
-			D3D12_FEATURE_DATA_SHADER_MODEL shaderModel = {};
-			shaderModel.HighestShaderModel = D3D_SHADER_MODEL_6_6;
-			bool supportsSM_6_6 = false;
-			if (SUCCEEDED(graphics.device->CheckFeatureSupport(D3D12_FEATURE_SHADER_MODEL, &shaderModel, sizeof(shaderModel))))
-			{
-				if (shaderModel.HighestShaderModel >= D3D_SHADER_MODEL_6_6)
-				{
-					supportsSM_6_6 = true;
-				}
-			}
-			if (!supportsSM_6_6)
-			{
-				return DetailedResult::Fail(ToString(
-					"Shader Model 6.6 is not supported on this device. ",
-					"Bindless rendering requires Shader Model 6.6 or later. ",
-					strLatestDrivers));
-			}
-		}
-
-		// Check enhanced barrier support
-		{
-			D3D12_FEATURE_DATA_D3D12_OPTIONS12 options12 = {};
-			bool supportsEnhancedBarriers = false;
-			if (SUCCEEDED(graphics.device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS12, &options12, sizeof(options12))))
-			{
-				supportsEnhancedBarriers = options12.EnhancedBarriersSupported;
-			}
-			if (!supportsEnhancedBarriers)
-			{
-				return DetailedResult::Fail(ToString(
-					"Enhanced Barriers are not supported on this device. ",
-					strLatestDrivers));
-			}
-		}
-
-		// Check bindless support
-		{
-			D3D12_FEATURE_DATA_D3D12_OPTIONS options;
-			bool supportBindless = false;
-			if (SUCCEEDED(graphics.device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS, &options, sizeof(options))))
-			{
-				if (options.ResourceBindingTier >= D3D12_RESOURCE_BINDING_TIER_3)
-				{
-					supportBindless = true;
-				}
-			}
-			if (!supportBindless)
-			{
-				return DetailedResult::Fail(ToString(
-					"Resource Binding Tier 3 is not supported on this device. "
-					"Bindless rendering requires Resource Binding Tier 3. ",
-					strLatestDrivers));
-			}
-		}
-
-		// Check root signature support
-		{
-			D3D12_FEATURE_DATA_ROOT_SIGNATURE features = {};
-			features.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_1;
-
-			if (FAILED(graphics.device->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &features, sizeof(features))))
-			{
-				return DetailedResult::Fail(ToString(
-					"Root signature version 1.1 is not supported on this device. ",
-					strLatestDrivers));
-			}
-		}
-
-		return DetailedResult::Success();
+		// Couldn't find a suitable adapter
+		return DetailedResult::Fail(ToString(
+			"Unable to find a hardware adapter that supports the required features.\n\n",
+			adapterErrors, "\n\n",
+			strLatestDrivers));
 	}
 
 	void IGLOContext::Impl_DestroyGraphicsDevice()

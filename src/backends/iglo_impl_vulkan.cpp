@@ -3245,7 +3245,7 @@ namespace ig
 
 	DetailedResult IGLOContext::Impl_InitGraphicsDevice()
 	{
-		const char* strEnsureLatestDrivers = "Ensure that you have the latest graphics drivers installed.";
+		const char* strEnsureLatestDrivers = "Please ensure that you have the latest graphics drivers installed.";
 
 		// App
 		VkApplicationInfo appInfo = {};
