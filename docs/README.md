@@ -127,7 +127,7 @@ Follow these steps to create a new iglo project in Visual Studio 2019:
 
 6. In the Solution Explorer, create a new **Filter** named `iglo` under your project. Add all source files from the iglo `/src/` directory to this filter. You don't have to add the files from `/src/stb/` and `/src/shaders/`. 
 
-7. Right-click on the project and select **Manage NuGet Packages...**. Check the box for **Include prerelease**. Install the latest prerelease version of **Microsoft.Direct3D.D3D12** (DirectX 12 Agility SDK).  
+7. Right-click on the project and select **Manage NuGet Packages...**. Install the latest release version of **Microsoft.Direct3D.D3D12** (DirectX 12 Agility SDK).  
 
 8. In your `main.cpp` file, ensure the `UINT D3D12SDKVersion` value matches the version of the Agility SDK you installed.  
 
@@ -147,7 +147,7 @@ If you want to use the Vulkan backend instead, modify iglo_config.h to enable IG
 
 #ifdef IGLO_D3D12
 // Agility SDK path and version
-extern "C" { __declspec(dllexport) extern const UINT D3D12SDKVersion = 717; }
+extern "C" { __declspec(dllexport) extern const UINT D3D12SDKVersion = 619; }
 extern "C" { __declspec(dllexport) extern const char* D3D12SDKPath = ".\\D3D12\\"; }
 #endif
 
