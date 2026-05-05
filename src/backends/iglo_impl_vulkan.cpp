@@ -3600,6 +3600,7 @@ namespace ig
 		lineFeats.stippledBresenhamLines = VK_TRUE;
 		lineFeats.stippledSmoothLines = VK_TRUE;
 
+		// DynamicRenderingLocalRead is the Vulkan equivalent of D3D12's ALLOW_SIMULTANEOUS_ACCESS.
 		VkPhysicalDeviceDynamicRenderingLocalReadFeaturesKHR dynamicLocalReadFeats = {};
 		dynamicLocalReadFeats.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_LOCAL_READ_FEATURES_KHR;
 		dynamicLocalReadFeats.pNext = &lineFeats;

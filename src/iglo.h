@@ -997,14 +997,15 @@ namespace ig
 		// Only relevant for render texture and depth buffer usage.
 		ClearValue optimizedClearValue = ClearValue();
 
-		// The format to use for the shader resourve view (SRV).
+		// The format to use for the shader resource view (SRV).
 		// Optional. If set to Format::None, the texture's main format is used for the SRV.
 		// It can be useful to use different formats for the SRV and RTV of a render texture,
 		// like for example to avoid automatic sRGB conversions by using a non-sRGB RTV and an sRGB SRV.
 		Format overrideSRVFormat = Format::None;
 
-		// By default, descriptor(s) are created for textures that need them.
-		// You can set this to false if you know you won't be needing any descriptors for this texture.
+		// If true, iglo creates descriptors based on texture usage (SRV for Default, SRV+UAV for UnorderedAccess, etc).
+		// Set to false to skip this (useful if you create descriptors manually or if the texture doesn't need descriptors).
+		// If you need descriptors for individual mip levels or faces, then you will need to create your own descriptors.
 		bool createDescriptors = true;
 	};
 
