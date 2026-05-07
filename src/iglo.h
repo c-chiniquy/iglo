@@ -2303,16 +2303,18 @@ namespace ig
 		uint32_t numBackBuffers = 3;
 
 		// There is 1 persistent upload heap page per frame.
-		// If a frame fully exhausts a page, another page is temporarily allocated for that frame,
-		// which is slow, as these allocations happen per-frame.
+		// If a frame fully exhausts its page, additional pages are allocated on demand,
+		// which is slow because these on-demand pages only last for 1 frame before being deallocated.
 		// These activities use the upload heap:
 		// •Loading textures
-		// •Setting texture and buffer data (Default/UnorderedAccess usage)
+		// •Uploading data to textures and buffers
 		// •Drawing stuff with BatchRenderer
 		// •Anything that allocates TempBuffers
 		uint64_t uploadHeapPageSize = IGLO_MEGABYTE * 32;
 
 		// Running out of descriptors will cause the app to abort.
+		// So make sure these values are large enough for what the app will use.
+		// (Modern GPUs allow these to be very large)
 		uint32_t maxPersistentResourceDescriptors = 16384;
 		uint32_t maxTempResourceDescriptorsPerFrame = 4096;
 		uint32_t maxSamplerDescriptors = 512;
