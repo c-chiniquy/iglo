@@ -50,11 +50,11 @@ struct SDFEffect
 {
 	float4 outlineColor;
 	float4 glowColor;
-	float smoothing;
-	float outlineThickness;
 	float2 glowOffset;
 	float glowSize;
-	uint sdfEffectFlags;
+	float outlineThickness;
+	float smoothing;
+	uint flags;
 };
 
 struct DepthBufferDrawStyle

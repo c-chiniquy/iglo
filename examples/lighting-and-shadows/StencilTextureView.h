@@ -19,7 +19,7 @@ namespace ig
 	public:
 		~StencilTextureView();
 
-		static std::unique_ptr<StencilTextureView> Create(const IGLOContext&, const Texture& depthBufferWithStencil);
+		static std::unique_ptr<StencilTextureView> Create(const IGLOContext&, const Texture& depthStencil);
 
 		const Texture& GetWrappedTexture() const { return *wrappedTexture; }
 

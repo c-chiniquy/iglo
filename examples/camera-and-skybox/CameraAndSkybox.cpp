@@ -572,7 +572,7 @@ private:
 				);
 
 				ig::SDFEffect sdfEffect;
-				sdfEffect.sdfEffectFlags = (uint32_t)ig::SDFEffectFlags::Glow | (uint32_t)ig::SDFEffectFlags::Outline;
+				sdfEffect.flags = ig::SDFEffectFlags::Glow | ig::SDFEffectFlags::Outline;
 				r->SetSDFEffect(sdfEffect);
 
 				ig::Vector2 strPos = ig::Vector2(7, 2);

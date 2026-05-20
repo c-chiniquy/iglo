@@ -68,27 +68,26 @@ namespace ig
 	};
 	using CircleParams = Vertex_Circle;
 
-
-	// You can enable multiple SDF effects at the same time.
 	enum class SDFEffectFlags : uint32_t
 	{
-		NoEffects = 0, // Variables used: 'smoothing'
-		Outline = 1, // Variables used: 'smoothing', 'outlineThickness', 'outlineColor'
-		Glow = 2 // Variables used: 'smoothing', 'glowOffset', 'glowSize', 'glowColor'
+		None = 0,
+		Outline = 1 << 0, // Variables used: 'outlineThickness', 'outlineColor'
+		Glow = 1 << 1, // Variables used: 'glowSize', 'glowOffset', 'glowColor'
 	};
+	IGLO_DEFINE_FLAG_OPERATORS(SDFEffectFlags, uint32_t);
 
 	struct SDFEffect
 	{
 		Color outlineColor = Colors::Black;
 		Color glowColor = Color(0.0f, 0.0f, 0.0f, 0.5f);
-		float smoothing = 0.11f; // For anti alias. Larger value makes it look smoother.
-		float outlineThickness = 0.15f;
 		Vector2 glowOffset = ig::Vector2(1.0f, 1.0f);
 		float glowSize = 0.25f;
-		uint32_t sdfEffectFlags = (uint32_t)SDFEffectFlags::NoEffects;
+		float outlineThickness = 0.15f;
+		float smoothing = 0.11f; // For anti alias. Larger value makes it look smoother.
+		SDFEffectFlags flags = SDFEffectFlags::None;
 	};
 
-	typedef uint32_t BatchType;
+	using BatchType = uint32_t;
 	enum class StandardBatchType : BatchType
 	{
 		None = 0,
@@ -396,7 +395,7 @@ namespace ig
 		std::unique_ptr<Sampler> samplerPixelatedTextures;
 
 		std::vector<BatchPipeline> batchPipelines; // One for each batch type
-		
+
 		std::vector<byte> vertices; // Vertex data
 		bool isActive = false;
 		uint32_t nextPrimitive = 0; // Index of next primitive to write to

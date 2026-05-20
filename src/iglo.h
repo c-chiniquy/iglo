@@ -24,9 +24,11 @@
 #include <queue>
 #include <mutex>
 
-// -------------------- Forward Declarations --------------------//
 namespace ig
 {
+	// -------------------- Forward Declarations --------------------//
+	enum class DescriptorType;
+	struct Descriptor;
 	enum class MSAA;
 	enum class PresentMode;
 	struct SupportedPresentModes;
@@ -48,8 +50,6 @@ namespace ig
 	struct DepthDesc;
 	struct RasterizerDesc;
 	struct SamplerDesc;
-	enum class DescriptorType;
-	struct Descriptor;
 	class Sampler;
 	enum class Format;
 	enum class IndexFormat;
@@ -57,8 +57,8 @@ namespace ig
 	class Image;
 	enum class TextureUsage;
 	struct ClearValue;
+	enum class TextureFlags : uint32_t;
 	struct TextureDesc;
-	struct WrappedTextureDesc;
 	class Texture;
 	enum class BufferUsage;
 	enum class BufferType;
@@ -69,6 +69,7 @@ namespace ig
 	struct RenderTargetDesc;
 	struct PipelineDesc;
 	class Pipeline;
+	struct DescriptorLimits;
 	class DescriptorHeap;
 	enum class CommandListType;
 	struct Receipt;
@@ -99,7 +100,6 @@ namespace ig
 	class IGLOContext;
 
 	// -------------------- Constants --------------------//
-	constexpr uint32_t NUM_DESCRIPTOR_TYPES = 5;
 	constexpr uint32_t MAX_SIMULTANEOUS_RENDER_TARGETS = 8;
 	constexpr uint32_t MAX_QUEUED_BARRIERS_PER_TYPE = 16;
 	constexpr uint32_t MAX_VERTEX_BUFFER_BIND_SLOTS = 32;
@@ -109,9 +109,9 @@ namespace ig
 	// To ensure cross-compatibility, we cap the maximum at 128 bytes.
 	// Push constants should not be used for large data transfers anyway.
 	constexpr uint64_t MAX_PUSH_CONSTANTS_BYTE_SIZE = 128;
-}
 
-// -------------------- Backend Implementations --------------------//
+
+	// -------------------- Pick Graphics API --------------------//
 
 // Windows
 #ifdef _WIN32
@@ -120,24 +120,78 @@ namespace ig
 #else
 #define IGLO_D3D12
 #endif
-#include "backends/iglo_impl_win32.h"
 #endif
 
 // Linux
 #ifdef __linux__
 #define IGLO_VULKAN
-#include "backends/iglo_impl_x11.h"
 #endif
 
 // D3D12
 #ifdef IGLO_D3D12
 #define IGLO_GRAPHICS_API_STRING "D3D12"
-#include "backends/iglo_impl_d3d12.h"
 #endif
 
 // Vulkan
 #ifdef IGLO_VULKAN
 #define IGLO_GRAPHICS_API_STRING "Vulkan"
+#endif
+
+// -------------------- Backend Header Dependencies --------------------//
+
+	enum class DescriptorType
+	{
+		Resource = 0, // CBV, SRV, UAV. Shader-visible.
+		Sampler, // Shader-visible.
+#ifdef IGLO_D3D12
+		RenderTexture, // RTV. Non-shader-visible.
+		DepthBuffer, // DSV. Non-shader-visible.
+#endif
+	};
+
+	struct Descriptor
+	{
+		Descriptor()
+		{
+			SetToNull(); // Construct a null descriptor
+			type = DescriptorType::Resource; // dummy value
+		}
+		Descriptor(uint32_t heapIndex, DescriptorType type)
+		{
+			this->heapIndex = heapIndex;
+			this->type = type;
+		}
+
+		bool IsNull() const { return (heapIndex == IGLO_UINT32_MAX); }
+		void SetToNull() { heapIndex = IGLO_UINT32_MAX; }
+
+		explicit operator bool() const { return !IsNull(); }
+
+		uint32_t heapIndex;
+		DescriptorType type;
+	};
+
+}
+
+// -------------------- Backends --------------------//
+
+// Windows
+#ifdef _WIN32
+#include "backends/iglo_impl_win32.h"
+#endif
+
+// Linux
+#ifdef __linux__
+#include "backends/iglo_impl_x11.h"
+#endif
+
+// D3D12
+#ifdef IGLO_D3D12
+#include "backends/iglo_impl_d3d12.h"
+#endif
+
+// Vulkan
+#ifdef IGLO_VULKAN
 #include "backends/iglo_impl_vulkan.h"
 #endif
 
@@ -621,39 +675,6 @@ namespace ig
 		static const SamplerDesc SmoothClampSampler;
 	};
 
-	enum class DescriptorType
-	{
-		ConstantBuffer_CBV = 0, // CBV
-		RawOrStructuredBuffer_SRV_UAV = 1, // SRV or UAV
-		Texture_SRV = 2, // SRV
-		Texture_UAV = 3, // UAV
-		Sampler = 4,
-	};
-	static_assert((uint32_t)DescriptorType::Sampler + 1 == NUM_DESCRIPTOR_TYPES,
-		"NUM_DESCRIPTOR_TYPES must match number of DescriptorType enum values.");
-
-	struct Descriptor
-	{
-		Descriptor()
-		{
-			SetToNull(); // Construct a null descriptor
-			type = DescriptorType::ConstantBuffer_CBV; // dummy value
-		}
-		Descriptor(uint32_t heapIndex, DescriptorType type)
-		{
-			this->heapIndex = heapIndex;
-			this->type = type;
-		}
-
-		bool IsNull() const { return (heapIndex == IGLO_UINT32_MAX); }
-		void SetToNull() { heapIndex = IGLO_UINT32_MAX; }
-
-		explicit operator bool() const { return !IsNull(); }
-
-		uint32_t heapIndex;
-		DescriptorType type;
-	};
-
 	class Sampler
 	{
 	private:
@@ -830,8 +851,8 @@ namespace ig
 	{
 		Extent2D extent;
 		Format format = Format::None;
-		uint32_t mipLevels = 1; // The lowest number of mip levels an image can have is 1.
 		uint32_t numFaces = 1; // The lowest number of faces an image can have is 1.
+		uint32_t mipLevels = 1; // The lowest number of mip levels an image can have is 1.
 		bool isCubemap = false;
 
 		DetailedResult Validate() const;
@@ -972,6 +993,8 @@ namespace ig
 		// RenderTexture and DepthBuffer usage allows the texture to be used as a render target.
 		RenderTexture,
 		DepthBuffer,
+
+		UnorderedAccessRenderTexture,
 	};
 
 	struct ClearValue
@@ -983,6 +1006,27 @@ namespace ig
 		float depth = 1.0f;
 		byte stencil = 255;
 	};
+
+	enum class TextureFlags : uint32_t
+	{
+		None = 0,
+
+		// By default, iglo creates descriptors based on texture usage (SRV for Default, SRV+UAV for UnorderedAccess, etc).
+		// Enable this flag to skip this (useful if you create descriptors manually or if the texture doesn't need descriptors).
+		// If you need descriptors for individual mip levels or faces, then you will need to create your own descriptors.
+		SkipDescriptorCreation = 1 << 0,
+
+		// Enable this flag to allow for different formats between SRV, UAV, RTV, DSV and the texture resource itself.
+		// This allows you to manually create descriptors for this texture with differing formats.
+		// (The formats must still be compatible.)
+		AllowMultiFormat = 1 << 1,
+
+		// Prevents this depth buffer from being sampled in shaders (no SRV will be created).
+		// This allows the driver to potentially use better depth compression.
+		// DepthBuffer usage is required.
+		DepthBuffer_DenyShaderResource = 1 << 2,
+	};
+	IGLO_DEFINE_FLAG_OPERATORS(TextureFlags, uint32_t);
 
 	struct TextureDesc
 	{
@@ -997,31 +1041,7 @@ namespace ig
 		// Only relevant for render texture and depth buffer usage.
 		ClearValue optimizedClearValue = ClearValue();
 
-		// The format to use for the shader resource view (SRV).
-		// Optional. If set to Format::None, the texture's main format is used for the SRV.
-		// It can be useful to use different formats for the SRV and RTV of a render texture,
-		// like for example to avoid automatic sRGB conversions by using a non-sRGB RTV and an sRGB SRV.
-		Format overrideSRVFormat = Format::None;
-
-		// If true, iglo creates descriptors based on texture usage (SRV for Default, SRV+UAV for UnorderedAccess, etc).
-		// Set to false to skip this (useful if you create descriptors manually or if the texture doesn't need descriptors).
-		// If you need descriptors for individual mip levels or faces, then you will need to create your own descriptors.
-		bool createDescriptors = true;
-	};
-
-	struct WrappedTextureDesc
-	{
-		TextureDesc textureDesc;
-
-		Descriptor srvDescriptor; // [Optional] Can be a null descriptor.
-		Descriptor uavDescriptor; // [Optional] Can be a null descriptor.
-
-		std::vector<void*> readMapped; // Per-frame if Readable; otherwise not used.
-
-		// All vectors in 'impl' must be sized based on texture usage.
-		// Tip: If the texture is not Readable, all vectors must have size 1.
-		// The contents themselves are optional. For example, resource[0] or image[0] can be nullptr or VK_NULL_HANDLE.
-		Impl_Texture impl;
+		TextureFlags flags = TextureFlags::None;
 	};
 
 	class Texture
@@ -1054,7 +1074,8 @@ namespace ig
 		// NOTE: This texture has no ownership over its resources/descriptors, and will not free them when destroyed.
 		// You must ensure the given resources/descriptors are valid during the lifetime of this texture.
 		// You are responsible for freeing the given resources/descriptors yourself.
-		static std::unique_ptr<Texture> CreateWrapped(const IGLOContext&, const WrappedTextureDesc&);
+		// All variables in the given 'Impl_Texture' are optional. For example, resource/image can be nullptr/VK_NULL_HANDLE.
+		static std::unique_ptr<Texture> CreateWrapped(const IGLOContext&, const TextureDesc&, const Impl_Texture&);
 
 		// Updates the contents of this texture.
 		// Usage must not be Readable.
@@ -1090,36 +1111,39 @@ namespace ig
 		Descriptor GetUnorderedAccessDescriptor() const;
 
 #ifdef IGLO_D3D12
-		ID3D12Resource* GetD3D12Resource() const;
-		const D3D12_RENDER_TARGET_VIEW_DESC& GetD3D12Desc_RTV() const;
-		const D3D12_DEPTH_STENCIL_VIEW_DESC& GetD3D12Desc_DSV() const;
-		const D3D12_UNORDERED_ACCESS_VIEW_DESC& GetD3D12Desc_UAV() const;
+		// Gets the RTV or DSV descriptor for this texture (determined by texture usage).
+		// Aborts if texture doesn't have an RTV or DSV descriptor.
+		Descriptor GetRenderDescriptor() const;
 
+		ID3D12Resource* GetD3D12Resource() const;
+
+		static D3D12_SHADER_RESOURCE_VIEW_DESC GenerateD3D12Desc_SRV_AllMips(Format, MSAA, uint32_t mipLevels, uint32_t numFaces, bool isCubemap);
+		static D3D12_UNORDERED_ACCESS_VIEW_DESC GenerateD3D12Desc_UAV(Format, MSAA, uint32_t numFaces);
 		static D3D12_RENDER_TARGET_VIEW_DESC GenerateD3D12Desc_RTV(Format, MSAA, uint32_t numFaces);
 		static D3D12_DEPTH_STENCIL_VIEW_DESC GenerateD3D12Desc_DSV(Format, MSAA, uint32_t numFaces);
-		static D3D12_UNORDERED_ACCESS_VIEW_DESC GenerateD3D12Desc_UAV(Format, MSAA, uint32_t numFaces);
 #endif
 #ifdef IGLO_VULKAN
 		VkImage GetVulkanImage() const;
 		VkDeviceMemory GetVulkanMemory() const;
-		VkImageView GetVulkanImageView_SRV() const { return impl.imageView_SRV; }
-		VkImageView GetVulkanImageView_UAV() const { return impl.imageView_UAV; }
-		VkImageView GetVulkanImageView_RTV_DSV() const { return impl.imageView_RTV_DSV; }
+		VkImageView GetVulkanImageView_SRV() const { return impl.view_srv; }
+		VkImageView GetVulkanImageView_UAV_RTV_DSV() const { return impl.view_uav_rtv_dsv; }
+
+		static VkImageView CreateImageView(VkDevice, VkImage, VkImageAspectFlags, Format, bool isCubemap, uint32_t numFaces,
+			uint32_t baseMip = 0, uint32_t mipLevels = VK_REMAINING_MIP_LEVELS);
 #endif
 
 	private:
 		const IGLOContext& context;
 		const TextureDesc desc;
 		const bool isWrapped = false;
-		Descriptor srvDescriptor;
-		Descriptor uavDescriptor;
-		std::vector<void*> readMapped; // Per-frame if Readable; otherwise not used.
 
 		Impl_Texture impl;
+		std::unique_ptr<Impl_PerFrameTexture[]> implPerFrame; // For Readable usage
 
 		void Impl_Destroy();
 		DetailedResult Impl_Create();
 		DetailedResult GenerateMips(CommandList& cmd, const Image& image);
+		uint32_t GetPerFrameArrayLength() const;
 		static DetailedResult ValidateMipGeneration(CommandListType, const Image& image);
 	};
 
@@ -1142,15 +1166,15 @@ namespace ig
 		// The contents of a readable buffer is not persistent and becomes stale the next frame.
 		Readable,
 
-		// 'Temporary' is another buffer usage type that exists, but it's not defined in this enum
-		// because the 'Buffer' class doesn't handle temporary buffers by itself.
-		// Temporary buffers are created by IGLOContext and get stale after 1 frame.
-
 		// Unordered access is commonly used in compute shaders for read-write operations.
 		// A buffer with this usage will have both an SRV (for read-only) and a UAV (for read-write or write-only).
 		// Use the SRV descriptor for read operations, and the UAV for read-write or write only operations in shaders.
 		// Remember to use buffer barriers to transition between unordered access and shader resource states as needed.
 		UnorderedAccess,
+
+		// 'Temporary' is another buffer usage type that exists, but it's not defined in this enum
+		// because the 'Buffer' class doesn't handle temporary buffers by itself.
+		// Temporary buffers are created by IGLOContext and get stale after 1 frame.
 	};
 
 	enum class BufferType
@@ -1220,9 +1244,11 @@ namespace ig
 
 #ifdef IGLO_D3D12
 		ID3D12Resource* GetD3D12Resource() const;
-		const D3D12_UNORDERED_ACCESS_VIEW_DESC& GetD3D12Desc_UAV() const;
-		static D3D12_UNORDERED_ACCESS_VIEW_DESC GenerateD3D12Desc_UAV_Structured(uint32_t numElements, uint32_t stride);
-		static D3D12_UNORDERED_ACCESS_VIEW_DESC GenerateD3D12Desc_UAV_Raw(uint64_t size);
+		static D3D12_CONSTANT_BUFFER_VIEW_DESC GenerateD3D12Desc_CBV(ID3D12Resource* bufferLocation, const BufferPlacementAlignments&, uint64_t sizeOfData);
+		static D3D12_SHADER_RESOURCE_VIEW_DESC GenerateD3D12Desc_SRV_Structured(uint32_t numElements, uint32_t stride, uint64_t firstElement = 0);
+		static D3D12_SHADER_RESOURCE_VIEW_DESC GenerateD3D12Desc_SRV_Raw(uint64_t dataSize, uint64_t firstElement = 0);
+		static D3D12_UNORDERED_ACCESS_VIEW_DESC GenerateD3D12Desc_UAV_Structured(uint32_t numElements, uint32_t stride, uint64_t firstElement = 0);
+		static D3D12_UNORDERED_ACCESS_VIEW_DESC GenerateD3D12Desc_UAV_Raw(uint64_t dataSize, uint64_t firstElement = 0);
 #endif
 #ifdef IGLO_VULKAN
 		VkBuffer GetVulkanBuffer() const;
@@ -1233,13 +1259,12 @@ namespace ig
 		const IGLOContext& context;
 		const BufferDesc desc;
 
-		std::vector<Descriptor> descriptor_SRV_or_CBV; // Per-frame if Dynamic.
-		Descriptor descriptor_UAV;
 		uint32_t dynamicSetCounter = 0; // Increases by 1 when setting dynamic data. Capped at number of frames in flight.
-		std::vector<void*> mapped;
 
 		Impl_Buffer impl;
+		std::unique_ptr<Impl_PerFrameBuffer[]> implPerFrame; // For Dynamic and Readable usage
 
+		uint32_t GetPerFrameArrayLength() const;
 		static std::unique_ptr<Buffer> InternalCreate(const IGLOContext& context, const BufferDesc& desc);
 		void Impl_Destroy();
 		DetailedResult Impl_Create();
@@ -1389,12 +1414,23 @@ namespace ig
 		DetailedResult Impl_CreateCompute(const Shader& CS);
 	};
 
+	struct DescriptorLimits
+	{
+		uint32_t persistentResources = 32768; // CBV SRV UAV
+		uint32_t tempResourcesPerFrame = 4096; // CBV SRV UAV
+		uint32_t samplers = 512;
+#ifdef IGLO_D3D12
+		uint32_t renderTextures = 4096; // RTV
+		uint32_t depthBuffers = 1024; // DSV
+#endif
+	};
+
 	// Manages the allocation of descriptors
 	class DescriptorHeap
 	{
 	private:
-		DescriptorHeap(const IGLOContext& context, uint32_t maxFramesInFlight)
-			: context(context), maxFramesInFlight(maxFramesInFlight) {};
+		DescriptorHeap(const IGLOContext& context, const DescriptorLimits& limits, uint32_t maxFramesInFlight)
+			: context(context), limits(limits), maxFramesInFlight(maxFramesInFlight) {};
 
 		DescriptorHeap& operator=(const DescriptorHeap&) = delete;
 		DescriptorHeap(const DescriptorHeap&) = delete;
@@ -1403,7 +1439,7 @@ namespace ig
 		~DescriptorHeap();
 
 		static std::pair<std::unique_ptr<DescriptorHeap>, DetailedResult> Create(const IGLOContext&,
-			uint32_t maxPersistentResources, uint32_t maxTempResourcesPerFrame, uint32_t maxSamplers, uint32_t maxFramesInFlight);
+			const DescriptorLimits&, uint32_t maxFramesInFlight);
 
 		void NextFrame();
 
@@ -1413,28 +1449,29 @@ namespace ig
 		// Aborts on failure
 		[[nodiscard]] Descriptor AllocatePersistent(DescriptorType);
 
-		// Aborts on failure
-		[[nodiscard]] Descriptor AllocateTemp(DescriptorType);
+		// Allocates a temporary resource descriptor (CBV SRV UAV).
+		// Aborts on failure.
+		[[nodiscard]] Descriptor AllocateTempResource();
 
 		// Aborts on failure
 		void FreePersistent(Descriptor);
 
 		struct Stats
 		{
-			uint32_t maxPersistentResources = 0;
-			uint32_t maxTempResources = 0;
-			uint32_t maxSamplers = 0;
-			uint32_t livePersistentResources = 0;
-			uint32_t liveTempResources = 0;
-			uint32_t liveSamplers = 0;
+			DescriptorLimits max;
+			DescriptorLimits live;
 
 			std::string ToString() const
 			{
 				return ig::ToString
 				(
-					"Persistent Resource Descriptors: ", livePersistentResources, "/", maxPersistentResources, "\n",
-					"Temp Resource Descriptors: ", liveTempResources, "/", maxTempResources, "\n"
-					"Sampler Descriptors: ", liveSamplers, "/", maxSamplers
+					"Persistent Resource Descriptors: ", live.persistentResources, "/", max.persistentResources, "\n",
+					"Temp Resource Descriptors: ", live.tempResourcesPerFrame, "/", max.tempResourcesPerFrame, "\n",
+					"Sampler Descriptors: ", live.samplers, "/", max.samplers, "\n"
+#ifdef IGLO_D3D12
+					, "Render Texture Descriptors: ", live.renderTextures, "/", max.renderTextures, "\n",
+					"Depth Buffer Descriptors: ", live.depthBuffers, "/", max.depthBuffers
+#endif
 				);
 			}
 		};
@@ -1442,68 +1479,21 @@ namespace ig
 		Stats GetLastFrameStats() const { return lastFrameStats; }
 
 #ifdef IGLO_D3D12
-
-		// These handles belong to small CPU-only descriptor heaps.
-		D3D12_CPU_DESCRIPTOR_HANDLE GetD3D12CPUHandle_NonShaderVisible_RTV() const;
-		D3D12_CPU_DESCRIPTOR_HANDLE GetD3D12CPUHandle_NonShaderVisible_DSV() const;
-		D3D12_CPU_DESCRIPTOR_HANDLE GetD3D12CPUHandle_NonShaderVisible_UAV() const;
-
-		// These handles belong to shader visible descriptor heaps.
 		D3D12_CPU_DESCRIPTOR_HANDLE GetD3D12CPUHandle(Descriptor) const;
 		D3D12_GPU_DESCRIPTOR_HANDLE GetD3D12GPUHandle(Descriptor) const;
-
-		ID3D12DescriptorHeap* GetD3D12DescriptorHeap_Resources() const { return impl.descriptorHeap_Resources.Get(); }
-		ID3D12DescriptorHeap* GetD3D12DescriptorHeap_Samplers() const { return impl.descriptorHeap_Samplers.Get(); }
-
+		D3D12_CPU_DESCRIPTOR_HANDLE GetD3D12CPUHandle_Reusable_UAV() const;
+		ID3D12DescriptorHeap* GetD3D12DescriptorHeap(DescriptorType) const;
 		ID3D12RootSignature* GetD3D12BindlessRootSignature() const { return impl.bindlessRootSignature.Get(); }
-
-		uint32_t GetD3D12DescriptorSize_RTV() const { return impl.descriptorSize_RTV; }
-		uint32_t GetD3D12DescriptorSize_DSV() const { return impl.descriptorSize_DSV; }
-		uint32_t GetD3D12DescriptorSize_Sampler() const { return impl.descriptorSize_Sampler; }
-		uint32_t GetD3D12DescriptorSize_CBV_SRV_UAV() const { return impl.descriptorSize_CBV_SRV_UAV; }
+		uint32_t GetD3D12DescriptorSize(DescriptorType) const;
 #endif
 #ifdef IGLO_VULKAN
-
-		// Must map directly to 'DescriptorType'
-		inline static constexpr VkDescriptorType vkDescriptorTypeTable[] =
-		{
-			VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-			VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-			VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-			VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-			VK_DESCRIPTOR_TYPE_SAMPLER
-		};
-		static_assert(std::size(vkDescriptorTypeTable) == NUM_DESCRIPTOR_TYPES,
-			"vkDescriptorTypeTable size must match NUM_DESCRIPTOR_TYPES.");
-
-		// Must map directly to 'DescriptorType'
-		inline static constexpr uint32_t vkDescriptorBindingTable[] =
-		{
-			0,
-			0,
-			0,
-			0,
-			1
-		};
-		static_assert(std::size(vkDescriptorBindingTable) == NUM_DESCRIPTOR_TYPES,
-			"vkDescriptorBindingTable size must match NUM_DESCRIPTOR_TYPES.");
-
-		// Must map directly to 'DescriptorType'
-		static std::array<uint32_t, NUM_DESCRIPTOR_TYPES> GetVulkanPropsMaxDescriptors(VkPhysicalDevice);
-
 		VkDescriptorSetLayout GetVulkanDescriptorSetLayout() const { return impl.descriptorSetLayout; }
 		VkDescriptorSet GetVulkanDescriptorSet() const { return impl.descriptorSet; }
 		VkPipelineLayout GetVulkanBindlessPipelineLayout() const { return impl.bindlessPipelineLayout; }
 
-		void WriteBufferDescriptor(Descriptor descriptor, VkBuffer buffer, VkDeviceSize offset, VkDeviceSize range);
-		void WriteImageDescriptor(Descriptor descriptor, VkImageView imageView, VkImageLayout imageLayout);
-		void WriteSamplerDescriptor(Descriptor descriptor, VkSampler sampler);
-
-		// Creates a temporary VkImageView that is valid for 1 frame.
-		// NOTE: Don't destroy this VkImageView yourself!
-		VkResult CreateTempVulkanImageView(VkDevice device, const VkImageViewCreateInfo* pCreateInfo,
-			const VkAllocationCallbacks* pAllocator, VkImageView* pView);
-
+		void WriteBufferDescriptor(Descriptor, VulkanDescriptorType, VkBuffer, VkDeviceSize offset, VkDeviceSize range);
+		void WriteImageDescriptor(Descriptor, VulkanDescriptorType, VkImageView, VkImageLayout);
+		void WriteSamplerDescriptor(Descriptor, VkSampler);
 #endif
 
 	private:
@@ -1513,7 +1503,6 @@ namespace ig
 			PersistentIndexAllocator() = default;
 
 			void Reset(uint32_t maxIndices);
-			void Clear();
 			uint32_t Allocate(); // Aborts on failure
 			void Free(uint32_t index);
 			uint32_t GetAllocationCount() const { return allocationCount; }
@@ -1531,7 +1520,6 @@ namespace ig
 			TempIndexAllocator() = default;
 
 			void Reset(uint32_t maxIndices, uint32_t offset);
-			void Clear();
 			uint32_t Allocate(); // Aborts on failure
 			void FreeAllIndices();
 			uint32_t GetAllocationCount() const { return allocationCount; }
@@ -1544,20 +1532,23 @@ namespace ig
 
 	private:
 		const IGLOContext& context;
+		const DescriptorLimits limits;
 		const uint32_t maxFramesInFlight = 0;
 		uint32_t frameIndex = 0;
 		PersistentIndexAllocator persResourceIndices;
 		PersistentIndexAllocator persSamplerIndices;
+#ifdef IGLO_D3D12
+		PersistentIndexAllocator persRenderTextureIndices;
+		PersistentIndexAllocator persDepthBufferIndices;
+#endif
 		std::vector<TempIndexAllocator> tempResourceIndices; // Per-frame
 		Stats lastFrameStats;
 
 		Impl_DescriptorHeap impl;
 
 		void Impl_Destroy();
-		DetailedResult Impl_Create(uint32_t maxPersistentResources, uint32_t maxTempResourcesPerFrame, uint32_t maxSamplers);
-		void Impl_NextFrame();
-		void Impl_FreeAllTempResources();
-		static uint32_t CalcTotalResDescriptors(uint32_t maxPersistent, uint32_t maxTempPerFrame, uint32_t maxFramesInFlight);
+		DetailedResult Impl_Create();
+		static uint32_t CalcTotalDescriptors(uint32_t maxPersistent, uint32_t maxTempPerFrame, uint32_t maxFramesInFlight);
 	};
 
 	enum class CommandListType
@@ -2313,11 +2304,9 @@ namespace ig
 		uint64_t uploadHeapPageSize = IGLO_MEGABYTE * 32;
 
 		// Running out of descriptors will cause the app to abort.
-		// So make sure these values are large enough for what the app will use.
+		// So make sure these max values are large enough for what the app will use.
 		// (Modern GPUs allow these to be very large)
-		uint32_t maxPersistentResourceDescriptors = 16384;
-		uint32_t maxTempResourceDescriptorsPerFrame = 4096;
-		uint32_t maxSamplerDescriptors = 512;
+		DescriptorLimits descriptorLimits;
 	};
 
 	struct WindowState
@@ -2600,6 +2589,9 @@ namespace ig
 		// Passing nullptr is safe and has no effect.
 		void DelayedDestroyTexture(std::unique_ptr<Texture> texture) const;
 		void DelayedDestroyBuffer(std::unique_ptr<Buffer> buffer) const;
+#ifdef IGLO_VULKAN
+		void DelayedDestroyVulkanImageView(VkImageView) const;
+#endif
 
 		// Aborts on failure
 		Descriptor CreateTempConstant(const void* data, uint64_t numBytes) const;
@@ -2725,6 +2717,11 @@ namespace ig
 			Receipt copyReceipt;
 			mutable std::vector<std::unique_ptr<Texture>> delayedDestroyTextures;
 			mutable std::vector<std::unique_ptr<Buffer>> delayedDestroyBuffers;
+#ifdef IGLO_VULKAN
+			mutable std::vector<VkImageView> delayedDestroyVulkanImageViews;
+#endif
+
+			void DestroyResources(const IGLOContext&);
 		};
 		std::vector<EndOfFrame> endOfFrame;
 

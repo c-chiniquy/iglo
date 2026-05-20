@@ -27,6 +27,7 @@ namespace ig
 		D3D12TextureFilter out;
 		out.filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
 		out.maxAnisotropy = 0;
+
 		switch (filter)
 		{
 		case TextureFilter::Point:			out.filter = D3D12_FILTER_MIN_MAG_MIP_POINT;		out.maxAnisotropy = 1;	break;
@@ -64,6 +65,7 @@ namespace ig
 		default:
 			Fatal("Invalid texture filter.");
 		}
+
 		return out;
 	}
 
@@ -71,6 +73,7 @@ namespace ig
 	{
 		DXGI_FORMAT dxgi = DXGI_FORMAT_UNKNOWN;
 		DXGI_FORMAT typeless = DXGI_FORMAT_UNKNOWN;
+
 		switch (format)
 		{
 		case Format::FLOAT_FLOAT_FLOAT_FLOAT:			dxgi = DXGI_FORMAT_R32G32B32A32_FLOAT;	typeless = DXGI_FORMAT_R32G32B32A32_TYPELESS; break;
@@ -138,7 +141,10 @@ namespace ig
 		case Format::DEPTHFORMAT_UINT24_BYTE:					dxgi = DXGI_FORMAT_D24_UNORM_S8_UINT;		typeless = DXGI_FORMAT_R24G8_TYPELESS; break;
 		case Format::DEPTHFORMAT_FLOAT_BYTE:					dxgi = DXGI_FORMAT_D32_FLOAT_S8X24_UINT;	typeless = DXGI_FORMAT_R32G8X24_TYPELESS; break;
 
+		default:
+			break;
 		}
+
 		FormatInfoDXGI out = FormatInfoDXGI();
 		out.dxgiFormat = dxgi;
 		out.typeless = typeless;
@@ -544,8 +550,8 @@ namespace ig
 		{
 			ID3D12DescriptorHeap* heaps[] =
 			{
-				heap.GetD3D12DescriptorHeap_Resources(),
-				heap.GetD3D12DescriptorHeap_Samplers()
+				heap.GetD3D12DescriptorHeap(DescriptorType::Resource),
+				heap.GetD3D12DescriptorHeap(DescriptorType::Sampler)
 			};
 			impl.graphicsCommandList->SetDescriptorHeaps(2, heaps);
 			if (commandListType == CommandListType::Graphics)
@@ -692,23 +698,17 @@ namespace ig
 		const Texture* depthBuffer, bool optimizedClear)
 	{
 		DescriptorHeap& heap = context.GetDescriptorHeap();
-		auto device = context.GetD3D12Device();
 
-		D3D12_CPU_DESCRIPTOR_HANDLE rtvStart = heap.GetD3D12CPUHandle_NonShaderVisible_RTV();
+		D3D12_CPU_DESCRIPTOR_HANDLE rtvHandles[MAX_SIMULTANEOUS_RENDER_TARGETS] = {};
 		for (uint32_t i = 0; i < numRenderTextures; i++)
 		{
-			const D3D12_RENDER_TARGET_VIEW_DESC* rtvDesc = &renderTextures[i]->GetD3D12Desc_RTV();
-			const UINT rtvDescriptorSize = heap.GetD3D12DescriptorSize_RTV();
-			D3D12_CPU_DESCRIPTOR_HANDLE rtvCurrent = { rtvStart.ptr + ((SIZE_T)rtvDescriptorSize * (SIZE_T)i) };
-			device->CreateRenderTargetView(renderTextures[i]->GetD3D12Resource(), rtvDesc, rtvCurrent);
+			rtvHandles[i] = heap.GetD3D12CPUHandle(renderTextures[i]->GetRenderDescriptor());
 		}
-		D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = heap.GetD3D12CPUHandle_NonShaderVisible_DSV();
-		if (depthBuffer)
-		{
-			const D3D12_DEPTH_STENCIL_VIEW_DESC* dsvDesc = &depthBuffer->GetD3D12Desc_DSV();
-			device->CreateDepthStencilView(depthBuffer->GetD3D12Resource(), dsvDesc, dsvHandle);
-		}
-		impl.graphicsCommandList->OMSetRenderTargets(numRenderTextures, &rtvStart, TRUE, depthBuffer ? &dsvHandle : nullptr);
+
+		D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = {};
+		if (depthBuffer) dsvHandle = heap.GetD3D12CPUHandle(depthBuffer->GetRenderDescriptor());
+
+		impl.graphicsCommandList->OMSetRenderTargets(numRenderTextures, rtvHandles, FALSE, depthBuffer ? &dsvHandle : nullptr);
 
 		if (optimizedClear)
 		{
@@ -726,18 +726,14 @@ namespace ig
 
 	void CommandList::Impl_ClearColor(const Texture& renderTexture, Color color, uint32_t numRects, const IntRect* rects)
 	{
-		const D3D12_RENDER_TARGET_VIEW_DESC* rtvDesc = &renderTexture.GetD3D12Desc_RTV();
-		D3D12_CPU_DESCRIPTOR_HANDLE rtvStart = context.GetDescriptorHeap().GetD3D12CPUHandle_NonShaderVisible_RTV();
-		context.GetD3D12Device()->CreateRenderTargetView(renderTexture.GetD3D12Resource(), rtvDesc, rtvStart);
-		impl.graphicsCommandList->ClearRenderTargetView(rtvStart, (FLOAT*)&color, numRects, (D3D12_RECT*)rects);
+		D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = context.GetDescriptorHeap().GetD3D12CPUHandle(renderTexture.GetRenderDescriptor());
+		impl.graphicsCommandList->ClearRenderTargetView(rtvHandle, (FLOAT*)&color, numRects, (D3D12_RECT*)rects);
 	}
 
 	void CommandList::Impl_ClearDepth(const Texture& depthBuffer, float depth, byte stencil, bool clearDepth, bool clearStencil,
 		uint32_t numRects, const IntRect* rects)
 	{
-		const D3D12_DEPTH_STENCIL_VIEW_DESC* dsvDesc = &depthBuffer.GetD3D12Desc_DSV();
-		D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = context.GetDescriptorHeap().GetD3D12CPUHandle_NonShaderVisible_DSV();
-		context.GetD3D12Device()->CreateDepthStencilView(depthBuffer.GetD3D12Resource(), dsvDesc, dsvHandle);
+		D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = context.GetDescriptorHeap().GetD3D12CPUHandle(depthBuffer.GetRenderDescriptor());
 		D3D12_CLEAR_FLAGS flags = (D3D12_CLEAR_FLAGS)0;
 		if (clearDepth) flags |= D3D12_CLEAR_FLAG_DEPTH;
 		if (clearStencil) flags |= D3D12_CLEAR_FLAG_STENCIL;
@@ -749,9 +745,12 @@ namespace ig
 		DescriptorHeap& heap = context.GetDescriptorHeap();
 		auto device = context.GetD3D12Device();
 
-		const D3D12_UNORDERED_ACCESS_VIEW_DESC* uavDesc = &buffer.GetD3D12Desc_UAV();
-		D3D12_CPU_DESCRIPTOR_HANDLE uavHandle = heap.GetD3D12CPUHandle_NonShaderVisible_UAV();
-		device->CreateUnorderedAccessView(buffer.GetD3D12Resource(), nullptr, uavDesc, uavHandle);
+		// This non-shader-visible uav needs to be identical the buffer's shader-visible uav
+		D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = (buffer.GetType() == BufferType::StructuredBuffer)
+			? Buffer::GenerateD3D12Desc_UAV_Structured(buffer.GetNumElements(), buffer.GetStride())
+			: Buffer::GenerateD3D12Desc_UAV_Raw(buffer.GetSize());
+		D3D12_CPU_DESCRIPTOR_HANDLE uavHandle = heap.GetD3D12CPUHandle_Reusable_UAV();
+		device->CreateUnorderedAccessView(buffer.GetD3D12Resource(), nullptr, &uavDesc, uavHandle);
 
 		const UINT clearValues[4] = { value, value, value, value };
 
@@ -764,9 +763,10 @@ namespace ig
 		DescriptorHeap& heap = context.GetDescriptorHeap();
 		auto device = context.GetD3D12Device();
 
-		const D3D12_UNORDERED_ACCESS_VIEW_DESC* uavDesc = &texture.GetD3D12Desc_UAV();
-		D3D12_CPU_DESCRIPTOR_HANDLE uavHandle = heap.GetD3D12CPUHandle_NonShaderVisible_UAV();
-		device->CreateUnorderedAccessView(texture.GetD3D12Resource(), nullptr, uavDesc, uavHandle);
+		// This non-shader-visible uav needs to be identical to the texture's shader-visible uav
+		D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = Texture::GenerateD3D12Desc_UAV(texture.GetFormat(), texture.GetMSAA(), texture.GetNumFaces());
+		D3D12_CPU_DESCRIPTOR_HANDLE uavHandle = heap.GetD3D12CPUHandle_Reusable_UAV();
+		device->CreateUnorderedAccessView(texture.GetD3D12Resource(), nullptr, &uavDesc, uavHandle);
 
 		impl.graphicsCommandList->ClearUnorderedAccessViewFloat(heap.GetD3D12GPUHandle(texture.GetUnorderedAccessDescriptor()),
 			uavHandle, texture.GetD3D12Resource(), values, 0, nullptr);
@@ -777,9 +777,10 @@ namespace ig
 		DescriptorHeap& heap = context.GetDescriptorHeap();
 		auto device = context.GetD3D12Device();
 
-		const D3D12_UNORDERED_ACCESS_VIEW_DESC* uavDesc = &texture.GetD3D12Desc_UAV();
-		D3D12_CPU_DESCRIPTOR_HANDLE uavHandle = heap.GetD3D12CPUHandle_NonShaderVisible_UAV();
-		device->CreateUnorderedAccessView(texture.GetD3D12Resource(), nullptr, uavDesc, uavHandle);
+		// This non-shader-visible uav needs to be identical to the texture's shader-visible uav
+		D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = Texture::GenerateD3D12Desc_UAV(texture.GetFormat(), texture.GetMSAA(), texture.GetNumFaces());
+		D3D12_CPU_DESCRIPTOR_HANDLE uavHandle = heap.GetD3D12CPUHandle_Reusable_UAV();
+		device->CreateUnorderedAccessView(texture.GetD3D12Resource(), nullptr, &uavDesc, uavHandle);
 
 		impl.graphicsCommandList->ClearUnorderedAccessViewUint(heap.GetD3D12GPUHandle(texture.GetUnorderedAccessDescriptor()),
 			uavHandle, texture.GetD3D12Resource(), values, 0, nullptr);
@@ -970,58 +971,120 @@ namespace ig
 
 	void Texture::Impl_Destroy()
 	{
-		for (size_t i = 0; i < readMapped.size(); i++)
+		DescriptorHeap& heap = context.GetDescriptorHeap();
+		if (impl.srv)
 		{
-			D3D12_RANGE writeRange = { 0, 0 };
-			impl.resource[i]->Unmap(0, &writeRange);
+			heap.FreePersistent(impl.srv);
+			impl.srv.SetToNull();
 		}
-		impl.resource.clear();
+		if (impl.uav)
+		{
+			heap.FreePersistent(impl.uav);
+			impl.uav.SetToNull();
+		}
+		if (impl.rtv_dsv)
+		{
+			heap.FreePersistent(impl.rtv_dsv);
+			impl.rtv_dsv.SetToNull();
+		}
+
+		if (implPerFrame)
+		{
+			const uint32_t arrayLength = GetPerFrameArrayLength();
+			for (uint32_t i = 0; i < arrayLength; i++)
+			{
+				auto& frame = implPerFrame[i];
+				if (frame.mapped)
+				{
+					D3D12_RANGE noWrite = { 0, 0 };
+					frame.resource->Unmap(0, &noWrite);
+					frame.mapped = nullptr;
+				}
+				frame.resource = nullptr;
+			}
+			implPerFrame = nullptr;
+		}
+
+		impl.resource = nullptr;
 	}
 
 	DetailedResult Texture::Impl_Create()
 	{
-		FormatInfo formatInfo = GetFormatInfo(desc.format);
-		bool isMultisampledCubemap = (desc.isCubemap && desc.msaa != MSAA::Disabled);
-
 		auto device = context.GetD3D12Device();
 		DescriptorHeap& heap = context.GetDescriptorHeap();
 
-		FormatInfoDXGI formatInfoD3D = GetFormatInfoDXGI(desc.format);
+		const uint32_t perFrameArrayLength = GetPerFrameArrayLength();
+		const bool isMultisampledCubemap = (desc.isCubemap && desc.msaa != MSAA::Disabled);
+		const FormatInfoDXGI formatInfoD3D = GetFormatInfoDXGI(desc.format);
+		const bool useTypeless =
+			HasFlag(desc.flags, TextureFlags::AllowMultiFormat) ||
+			(!HasFlag(desc.flags, TextureFlags::DepthBuffer_DenyShaderResource) && desc.usage == TextureUsage::DepthBuffer);
+
 		if (formatInfoD3D.dxgiFormat == DXGI_FORMAT_UNKNOWN)
 		{
 			return DetailedResult::Fail(ToString("This iglo format is not supported in D3D12: ", GetFormatName(desc.format)));
 		}
+		if (desc.usage == TextureUsage::Readable)
+		{
+			implPerFrame = std::make_unique<Impl_PerFrameTexture[]>(perFrameArrayLength);
+		}
 
-		uint32_t numResources = (desc.usage == TextureUsage::Readable) ? context.GetMaxFramesInFlight() : 1;
-
-		impl.resource.resize(numResources, nullptr);
+		const uint32_t numResources = implPerFrame ? perFrameArrayLength : 1;
 
 		for (uint32_t i = 0; i < numResources; i++)
 		{
-			D3D12_RESOURCE_DESC1 resDesc = {};
+			auto& currentResource = implPerFrame ? implPerFrame[i].resource : impl.resource;
 
-			DXGI_FORMAT resourceFormat = formatInfoD3D.dxgiFormat;
-			if (formatInfo.isDepthFormat) resourceFormat = formatInfoD3D.typeless;
+			assert(desc.numFaces <= IGLO_UINT16_MAX);
+			assert(desc.mipLevels <= IGLO_UINT16_MAX);
+			D3D12_RESOURCE_DESC1 resDesc =
+			{
+				.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D,
+				.Alignment = 0,
+				.Width = desc.extent.width,
+				.Height = desc.extent.height,
+				.DepthOrArraySize = (UINT16)desc.numFaces,
+				.MipLevels = (UINT16)desc.mipLevels,
+				.Format = useTypeless ? formatInfoD3D.typeless : formatInfoD3D.dxgiFormat,
+				.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN,
+			};
 
-			resDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-			resDesc.Alignment = 0;
-			resDesc.Width = desc.extent.width;
-			resDesc.Height = desc.extent.height;
-			resDesc.DepthOrArraySize = desc.numFaces;
-			resDesc.MipLevels = desc.mipLevels;
-			resDesc.Format = resourceFormat;
-			resDesc.SampleDesc.Count = (UINT)desc.msaa;
-			resDesc.SampleDesc.Quality = 0;  // 0 = MSAA. Driver specific.
-			resDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+			resDesc.SampleDesc =
+			{
+				.Count = (UINT)desc.msaa,
+				.Quality = 0, // Quality = 0 uses standard MSAA. Higher values are vendor-specific.
+			};
+
 
 			resDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
-			if (desc.usage == TextureUsage::UnorderedAccess) resDesc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
-			if (desc.usage == TextureUsage::RenderTexture) resDesc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
-			if (desc.usage == TextureUsage::DepthBuffer) resDesc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
+			switch (desc.usage)
+			{
+			case TextureUsage::UnorderedAccess:
+				resDesc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+				break;
 
-			resDesc.SamplerFeedbackMipRegion.Width = 0;
-			resDesc.SamplerFeedbackMipRegion.Height = 0;
-			resDesc.SamplerFeedbackMipRegion.Depth = 0;
+			case TextureUsage::RenderTexture:
+				resDesc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+				break;
+
+			case TextureUsage::DepthBuffer:
+				resDesc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
+				if (HasFlag(desc.flags, TextureFlags::DepthBuffer_DenyShaderResource))
+				{
+					resDesc.Flags |= D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
+				}
+				break;
+
+			case TextureUsage::UnorderedAccessRenderTexture:
+				resDesc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+				resDesc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+				break;
+
+			default:
+				break;
+			}
+
+			resDesc.SamplerFeedbackMipRegion = { .Width = 0, .Height = 0, .Depth = 0 };
 
 			if (desc.usage == TextureUsage::Readable)
 			{
@@ -1040,22 +1103,20 @@ namespace ig
 				resDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
 			}
 
-			D3D12_HEAP_PROPERTIES heapProp = {};
-			heapProp.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
-			heapProp.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
-			heapProp.CreationNodeMask = 1;
-			heapProp.VisibleNodeMask = 1;
-
-			heapProp.Type = D3D12_HEAP_TYPE_DEFAULT;
-			if (desc.usage == TextureUsage::Readable) heapProp.Type = D3D12_HEAP_TYPE_READBACK;
-
-			D3D12_BARRIER_LAYOUT initLayout = D3D12_BARRIER_LAYOUT_UNDEFINED;
+			D3D12_HEAP_PROPERTIES heapProp =
+			{
+				.Type = (desc.usage == TextureUsage::Readable) ? D3D12_HEAP_TYPE_READBACK : D3D12_HEAP_TYPE_DEFAULT,
+				.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
+				.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN,
+				.CreationNodeMask = 1,
+				.VisibleNodeMask = 1,
+			};
 
 			const D3D12_CLEAR_VALUE* ptrClearValue = nullptr;
 			D3D12_CLEAR_VALUE clear = {};
-			if (desc.usage == TextureUsage::RenderTexture)
+			if (desc.usage == TextureUsage::RenderTexture || desc.usage == TextureUsage::UnorderedAccessRenderTexture)
 			{
-				clear.Format = resDesc.Format;
+				clear.Format = formatInfoD3D.dxgiFormat;
 				clear.Color[0] = desc.optimizedClearValue.color.red;
 				clear.Color[1] = desc.optimizedClearValue.color.green;
 				clear.Color[2] = desc.optimizedClearValue.color.blue;
@@ -1071,163 +1132,198 @@ namespace ig
 			}
 
 			HRESULT hr = device->CreateCommittedResource3(&heapProp, D3D12_HEAP_FLAG_NONE, &resDesc,
-				initLayout, ptrClearValue, nullptr, 0, nullptr, IID_PPV_ARGS(&impl.resource[i]));
+				D3D12_BARRIER_LAYOUT_UNDEFINED, ptrClearValue, nullptr, 0, nullptr, IID_PPV_ARGS(&currentResource));
 			if (FAILED(hr))
 			{
 				return DetailedResult::Fail(D3D12ErrorMsg("ID3D12Device10::CreateCommittedResource3", hr));
 			}
 
-			// Map resources
 			if (desc.usage == TextureUsage::Readable)
 			{
-				void* mappedPtr = nullptr;
-				hr = impl.resource[i]->Map(0, nullptr, &mappedPtr);
+				hr = currentResource->Map(0, nullptr, &implPerFrame[i].mapped);
 				if (FAILED(hr))
 				{
 					return DetailedResult::Fail(D3D12ErrorMsg("ID3D12Resource::Map", hr));
 				}
-
-				readMapped.push_back(mappedPtr);
 			}
 		}
 
-		// Multisampled cubemaps and readable textures can't have SRVs
-		bool createSRV = (!isMultisampledCubemap && desc.usage != TextureUsage::Readable);
-		bool createUAV = (desc.usage == TextureUsage::UnorderedAccess);
+		bool createSRV = desc.usage != TextureUsage::Readable;
+		bool createUAV =
+			desc.usage == TextureUsage::UnorderedAccess ||
+			desc.usage == TextureUsage::UnorderedAccessRenderTexture;
+		bool createRTV_DSV =
+			desc.usage == TextureUsage::RenderTexture ||
+			desc.usage == TextureUsage::UnorderedAccessRenderTexture ||
+			desc.usage == TextureUsage::DepthBuffer;
 
-		if (!desc.createDescriptors)
+		if (HasFlag(desc.flags, TextureFlags::SkipDescriptorCreation))
 		{
 			createSRV = false;
 			createUAV = false;
+			createRTV_DSV = false;
+		}
+
+		if (desc.usage == TextureUsage::DepthBuffer && HasFlag(desc.flags, TextureFlags::DepthBuffer_DenyShaderResource))
+		{
+			createSRV = false;
+		}
+
+		if (isMultisampledCubemap) // Multisampled cubemaps can't have SRVs
+		{
+			createSRV = false;
 		}
 
 		if (createSRV)
 		{
-			// Allocate descriptor
-			srvDescriptor = heap.AllocatePersistent(DescriptorType::Texture_SRV);
-
-			D3D12_SHADER_RESOURCE_VIEW_DESC srv = {};
-			srv.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-
-			srv.ViewDimension = D3D12_SRV_DIMENSION_UNKNOWN;
-			if (desc.msaa == MSAA::Disabled)
-			{
-				if (desc.isCubemap)
-				{
-					if (desc.numFaces == 6)
-					{
-						srv.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;
-						srv.TextureCube.MipLevels = desc.mipLevels;
-					}
-					else
-					{
-						srv.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBEARRAY;
-						srv.TextureCubeArray.MipLevels = desc.mipLevels;
-						srv.TextureCubeArray.NumCubes = desc.numFaces / 6;
-					}
-				}
-				else
-				{
-					if (desc.numFaces == 1)
-					{
-						srv.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-						srv.Texture2D.MipLevels = desc.mipLevels;
-					}
-					else
-					{
-						srv.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DARRAY;
-						srv.Texture2DArray.MipLevels = desc.mipLevels;
-						srv.Texture2DArray.ArraySize = desc.numFaces;
-					}
-				}
-			}
-			else
-			{
-				if (desc.numFaces == 1)
-				{
-					srv.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DMS;
-				}
-				else
-				{
-					srv.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DMSARRAY;
-					srv.Texture2DMSArray.ArraySize = desc.numFaces;
-				}
-			}
-
-			srv.Format = formatInfoD3D.dxgiFormat;
-			if (desc.overrideSRVFormat != Format::None)
-			{
-				srv.Format = GetFormatInfoDXGI(desc.overrideSRVFormat).dxgiFormat;
-			}
-
-			// Format for depth component
-			if (srv.Format == DXGI_FORMAT_D16_UNORM) srv.Format = DXGI_FORMAT_R16_UNORM;
-			else if (srv.Format == DXGI_FORMAT_D24_UNORM_S8_UINT) srv.Format = DXGI_FORMAT_R24_UNORM_X8_TYPELESS;
-			else if (srv.Format == DXGI_FORMAT_D32_FLOAT) srv.Format = DXGI_FORMAT_R32_FLOAT;
-			else if (srv.Format == DXGI_FORMAT_D32_FLOAT_S8X24_UINT) srv.Format = DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS;
-
-			// Create SRV
-			device->CreateShaderResourceView(impl.resource[0].Get(), &srv, heap.GetD3D12CPUHandle(srvDescriptor));
+			impl.srv = heap.AllocatePersistent(DescriptorType::Resource);
+			D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = GenerateD3D12Desc_SRV_AllMips(desc.format, desc.msaa, desc.mipLevels, desc.numFaces, desc.isCubemap);
+			device->CreateShaderResourceView(impl.resource.Get(), &srvDesc, heap.GetD3D12CPUHandle(impl.srv));
 		}
 
 		if (createUAV)
 		{
-			// Allocate descriptor
-			uavDescriptor = heap.AllocatePersistent(DescriptorType::Texture_UAV);
-
-			D3D12_UNORDERED_ACCESS_VIEW_DESC uav = GenerateD3D12Desc_UAV(desc.format, desc.msaa, desc.numFaces);
-			device->CreateUnorderedAccessView(impl.resource[0].Get(), nullptr, &uav, heap.GetD3D12CPUHandle(uavDescriptor));
+			impl.uav = heap.AllocatePersistent(DescriptorType::Resource);
+			D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = GenerateD3D12Desc_UAV(desc.format, desc.msaa, desc.numFaces);
+			device->CreateUnorderedAccessView(impl.resource.Get(), nullptr, &uavDesc, heap.GetD3D12CPUHandle(impl.uav));
 		}
 
-		// Generate CPU-only descriptor descriptions
-		impl.desc_cpu = D3D12ViewDescUnion_RTV_DSV_UAV(); // zero memory
-		if (desc.usage == TextureUsage::RenderTexture)
+		if (createRTV_DSV)
 		{
-			impl.desc_cpu.rtv = GenerateD3D12Desc_RTV(desc.format, desc.msaa, desc.numFaces);
-		}
-		else if (desc.usage == TextureUsage::DepthBuffer)
-		{
-			impl.desc_cpu.dsv = GenerateD3D12Desc_DSV(desc.format, desc.msaa, desc.numFaces);
-		}
-		else if (desc.usage == TextureUsage::UnorderedAccess)
-		{
-			// Needed for clearing UAV texture
-			impl.desc_cpu.uav = GenerateD3D12Desc_UAV(desc.format, desc.msaa, desc.numFaces);
+			if (desc.usage == TextureUsage::RenderTexture || desc.usage == TextureUsage::UnorderedAccessRenderTexture)
+			{
+				impl.rtv_dsv = heap.AllocatePersistent(DescriptorType::RenderTexture);
+				D3D12_RENDER_TARGET_VIEW_DESC rtvDesc = GenerateD3D12Desc_RTV(desc.format, desc.msaa, desc.numFaces);
+				device->CreateRenderTargetView(impl.resource.Get(), &rtvDesc, heap.GetD3D12CPUHandle(impl.rtv_dsv));
+			}
+			else if (desc.usage == TextureUsage::DepthBuffer)
+			{
+				impl.rtv_dsv = heap.AllocatePersistent(DescriptorType::DepthBuffer);
+				D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc = GenerateD3D12Desc_DSV(desc.format, desc.msaa, desc.numFaces);
+				device->CreateDepthStencilView(impl.resource.Get(), &dsvDesc, heap.GetD3D12CPUHandle(impl.rtv_dsv));
+			}
 		}
 
 		return DetailedResult::Success();
 	}
 
-	ID3D12Resource* Texture::GetD3D12Resource() const
+	Descriptor Texture::GetRenderDescriptor() const
 	{
-		switch (desc.usage)
-		{
-		case TextureUsage::Default:
-		case TextureUsage::UnorderedAccess:
-		case TextureUsage::RenderTexture:
-		case TextureUsage::DepthBuffer:
-			return impl.resource.at(0).Get();
-		case TextureUsage::Readable:
-			return impl.resource.at(context.GetFrameIndex()).Get();
-		default:
-			Fatal("Invalid texture usage.");
-		}
+		if (!impl.rtv_dsv) Fatal("Texture has no RTV or DSV.");
+		return impl.rtv_dsv;
 	}
 
-	const D3D12_RENDER_TARGET_VIEW_DESC& Texture::GetD3D12Desc_RTV() const
+	ID3D12Resource* Texture::GetD3D12Resource() const
 	{
-		assert(desc.usage == TextureUsage::RenderTexture);
-		return impl.desc_cpu.rtv;
+		if (desc.usage == TextureUsage::Readable)
+		{
+			assert(implPerFrame);
+			assert(context.GetFrameIndex() < GetPerFrameArrayLength());
+			return implPerFrame[context.GetFrameIndex()].resource.Get();
+		}
+		return impl.resource.Get();
 	}
-	const D3D12_DEPTH_STENCIL_VIEW_DESC& Texture::GetD3D12Desc_DSV() const
+
+	D3D12_SHADER_RESOURCE_VIEW_DESC Texture::GenerateD3D12Desc_SRV_AllMips(Format format, MSAA msaa,
+		uint32_t mipLevels, uint32_t numFaces, bool isCubemap)
 	{
-		assert(desc.usage == TextureUsage::DepthBuffer);
-		return impl.desc_cpu.dsv;
+		assert((!isCubemap || numFaces % 6 == 0) && "If cubemap, numFaces must be a multiple of 6");
+
+		D3D12_SHADER_RESOURCE_VIEW_DESC out = {};
+		out.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+
+		out.ViewDimension = D3D12_SRV_DIMENSION_UNKNOWN;
+		if (msaa == MSAA::Disabled)
+		{
+			if (isCubemap)
+			{
+				if (numFaces == 6)
+				{
+					out.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;
+					out.TextureCube.MipLevels = mipLevels;
+				}
+				else
+				{
+					out.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBEARRAY;
+					out.TextureCubeArray.MipLevels = mipLevels;
+					out.TextureCubeArray.NumCubes = numFaces / 6;
+				}
+			}
+			else
+			{
+				if (numFaces == 1)
+				{
+					out.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+					out.Texture2D.MipLevels = mipLevels;
+				}
+				else
+				{
+					out.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DARRAY;
+					out.Texture2DArray.MipLevels = mipLevels;
+					out.Texture2DArray.ArraySize = numFaces;
+				}
+			}
+		}
+		else
+		{
+			if (numFaces == 1)
+			{
+				out.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DMS;
+			}
+			else
+			{
+				out.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DMSARRAY;
+				out.Texture2DMSArray.ArraySize = numFaces;
+			}
+		}
+
+		out.Format = GetFormatInfoDXGI(format).dxgiFormat;
+
+		// Translate Depth to Red (D -> R)
+		if (out.Format == DXGI_FORMAT_D16_UNORM) out.Format = DXGI_FORMAT_R16_UNORM;
+		else if (out.Format == DXGI_FORMAT_D24_UNORM_S8_UINT) out.Format = DXGI_FORMAT_R24_UNORM_X8_TYPELESS;
+		else if (out.Format == DXGI_FORMAT_D32_FLOAT) out.Format = DXGI_FORMAT_R32_FLOAT;
+		else if (out.Format == DXGI_FORMAT_D32_FLOAT_S8X24_UINT) out.Format = DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS;
+
+		return out;
 	}
-	const D3D12_UNORDERED_ACCESS_VIEW_DESC& Texture::GetD3D12Desc_UAV() const
+
+	D3D12_UNORDERED_ACCESS_VIEW_DESC Texture::GenerateD3D12Desc_UAV(Format format, MSAA msaa, uint32_t numFaces)
 	{
-		assert(desc.usage == TextureUsage::UnorderedAccess);
-		return impl.desc_cpu.uav;
+		D3D12_UNORDERED_ACCESS_VIEW_DESC out = {};
+		out.Format = GetFormatInfoDXGI(format).dxgiFormat;
+
+		out.ViewDimension = D3D12_UAV_DIMENSION_UNKNOWN;
+		if (numFaces > 1)
+		{
+			if (msaa == MSAA::Disabled)
+			{
+				out.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2DARRAY;
+				out.Texture2DArray.ArraySize = numFaces;
+				out.Texture2DArray.MipSlice = 0;
+				out.Texture2DArray.FirstArraySlice = 0;
+			}
+			else
+			{
+				out.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2DMSARRAY;
+				out.Texture2DMSArray.ArraySize = numFaces;
+				out.Texture2DMSArray.FirstArraySlice = 0;
+			}
+		}
+		else
+		{
+			if (msaa == MSAA::Disabled)
+			{
+				out.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
+				out.Texture2D.MipSlice = 0;
+			}
+			else
+			{
+				out.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2DMS;
+			}
+		}
+
+		return out;
 	}
 
 	D3D12_RENDER_TARGET_VIEW_DESC Texture::GenerateD3D12Desc_RTV(Format format, MSAA msaa, uint32_t numFaces)
@@ -1309,94 +1405,93 @@ namespace ig
 		return out;
 	}
 
-	D3D12_UNORDERED_ACCESS_VIEW_DESC Texture::GenerateD3D12Desc_UAV(Format format, MSAA msaa, uint32_t numFaces)
-	{
-		D3D12_UNORDERED_ACCESS_VIEW_DESC out = {};
-		out.Format = GetFormatInfoDXGI(format).dxgiFormat;
-
-		out.ViewDimension = D3D12_UAV_DIMENSION_UNKNOWN;
-		if (numFaces > 1)
-		{
-			if (msaa == MSAA::Disabled)
-			{
-				out.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2DARRAY;
-				out.Texture2DArray.ArraySize = numFaces;
-				out.Texture2DArray.MipSlice = 0;
-				out.Texture2DArray.FirstArraySlice = 0;
-			}
-			else
-			{
-				out.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2DMSARRAY;
-				out.Texture2DMSArray.ArraySize = numFaces;
-				out.Texture2DMSArray.FirstArraySlice = 0;
-			}
-		}
-		else
-		{
-			if (msaa == MSAA::Disabled)
-			{
-				out.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
-				out.Texture2D.MipSlice = 0;
-			}
-			else
-			{
-				out.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2DMS;
-			}
-		}
-
-		return out;
-	}
-
 	void Buffer::Impl_Destroy()
 	{
-		for (size_t i = 0; i < mapped.size(); i++)
+		DescriptorHeap& heap = context.GetDescriptorHeap();
+		if (impl.cbv_srv)
 		{
-			if (desc.usage == BufferUsage::Dynamic)
-			{
-				impl.resource[i]->Unmap(0, nullptr);
-			}
-			else if (desc.usage == BufferUsage::Readable)
-			{
-				D3D12_RANGE noWrite = { 0, 0 };
-				impl.resource[i]->Unmap(0, &noWrite);
-			}
-			else
-			{
-				Fatal("Unexpected buffer usage detected.");
-			}
+			heap.FreePersistent(impl.cbv_srv);
+			impl.cbv_srv.SetToNull();
 		}
-		impl.resource.clear();
+		if (impl.uav)
+		{
+			heap.FreePersistent(impl.uav);
+			impl.uav.SetToNull();
+		}
+
+		if (implPerFrame)
+		{
+			const uint32_t arrayLength = GetPerFrameArrayLength();
+			for (uint32_t i = 0; i < arrayLength; i++)
+			{
+				auto& frame = implPerFrame[i];
+
+				if (frame.mapped)
+				{
+					if (desc.usage == BufferUsage::Dynamic)
+					{
+						frame.resource->Unmap(0, nullptr);
+					}
+					else if (desc.usage == BufferUsage::Readable)
+					{
+						D3D12_RANGE noWrite = { 0, 0 };
+						frame.resource->Unmap(0, &noWrite);
+					}
+					else
+					{
+						Fatal("Unexpected buffer usage for mapped ptr.");
+					}
+					frame.mapped = nullptr;
+				}
+
+				if (frame.cbv_srv)
+				{
+					heap.FreePersistent(frame.cbv_srv);
+					frame.cbv_srv.SetToNull();
+				}
+				if (frame.uav)
+				{
+					heap.FreePersistent(frame.uav);
+					frame.uav.SetToNull();
+				}
+
+				frame.resource = nullptr;
+			}
+			implPerFrame = nullptr;
+		}
+
+		impl.resource = nullptr;
 	}
 
 	DetailedResult Buffer::Impl_Create()
 	{
 		auto device = context.GetD3D12Device();
 		DescriptorHeap& heap = context.GetDescriptorHeap();
+		const uint32_t perFrameArrayLength = GetPerFrameArrayLength();
 
-		uint32_t numBuffers = 1;
 		if (desc.usage == BufferUsage::Readable ||
 			desc.usage == BufferUsage::Dynamic)
 		{
-			numBuffers = context.GetMaxFramesInFlight();
+			implPerFrame = std::make_unique<Impl_PerFrameBuffer[]>(perFrameArrayLength);
 		}
 
-		impl.resource.resize(numBuffers, nullptr);
-
+		uint32_t numBuffers = implPerFrame ? perFrameArrayLength : 1;
 		for (uint32_t i = 0; i < numBuffers; i++)
 		{
-			D3D12_RESOURCE_DESC1 resDesc = {};
-			resDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-			resDesc.Alignment = 0;
-			resDesc.Height = 1;
-			resDesc.DepthOrArraySize = 1;
-			resDesc.MipLevels = 1;
-			resDesc.Format = DXGI_FORMAT_UNKNOWN;
-			resDesc.SampleDesc.Count = 1;
-			resDesc.SampleDesc.Quality = 0;
-			resDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-			resDesc.SamplerFeedbackMipRegion.Width = 0;
-			resDesc.SamplerFeedbackMipRegion.Height = 0;
-			resDesc.SamplerFeedbackMipRegion.Depth = 0;
+			auto& currentResource = implPerFrame ? implPerFrame[i].resource : impl.resource;
+
+			D3D12_RESOURCE_DESC1 resDesc =
+			{
+				.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER,
+				.Alignment = 0,
+				.Height = 1,
+				.DepthOrArraySize = 1,
+				.MipLevels = 1,
+				.Format = DXGI_FORMAT_UNKNOWN,
+				.SampleDesc = {.Count = 1, .Quality = 0},
+				.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
+				.SamplerFeedbackMipRegion = {.Width = 0, .Height = 0, .Depth = 0},
+			};
 
 			resDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
 			if (desc.usage == BufferUsage::UnorderedAccess) resDesc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
@@ -1407,11 +1502,13 @@ namespace ig
 				resDesc.Width = AlignUp(desc.size, context.GetGraphicsSpecs().bufferPlacementAlignments.constant);
 			}
 
-			D3D12_HEAP_PROPERTIES heapProp = {};
-			heapProp.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
-			heapProp.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
-			heapProp.CreationNodeMask = 1;
-			heapProp.VisibleNodeMask = 1;
+			D3D12_HEAP_PROPERTIES heapProp =
+			{
+				.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
+				.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN,
+				.CreationNodeMask = 1,
+				.VisibleNodeMask = 1,
+			};
 
 			heapProp.Type = D3D12_HEAP_TYPE_DEFAULT;
 			if (desc.usage == BufferUsage::Dynamic) heapProp.Type = D3D12_HEAP_TYPE_UPLOAD;
@@ -1420,7 +1517,7 @@ namespace ig
 			D3D12_BARRIER_LAYOUT barrierLayout = D3D12_BARRIER_LAYOUT_UNDEFINED;
 
 			HRESULT hr = device->CreateCommittedResource3(&heapProp, D3D12_HEAP_FLAG_NONE, &resDesc, barrierLayout,
-				nullptr, nullptr, 0, nullptr, IID_PPV_ARGS(&impl.resource[i]));
+				nullptr, nullptr, 0, nullptr, IID_PPV_ARGS(&currentResource));
 			if (FAILED(hr))
 			{
 				return DetailedResult::Fail(D3D12ErrorMsg("ID3D12Device10::CreateCommittedResource3", hr));
@@ -1429,93 +1526,59 @@ namespace ig
 			if (desc.usage == BufferUsage::Dynamic ||
 				desc.usage == BufferUsage::Readable)
 			{
+				assert(implPerFrame);
 				D3D12_RANGE noRead = { 0, 0 };
-				void* mappedPtr = nullptr;
-				hr = impl.resource[i]->Map(0, (desc.usage == BufferUsage::Readable) ? nullptr : &noRead, &mappedPtr);
+				hr = currentResource->Map(0, (desc.usage == BufferUsage::Readable) ? nullptr : &noRead, &implPerFrame[i].mapped);
 				if (FAILED(hr))
 				{
 					return DetailedResult::Fail(D3D12ErrorMsg("ID3D12Resource::Map", hr));
 				}
-
-				mapped.push_back(mappedPtr);
 			}
 		}
 
-		uint32_t numDescriptors = 0;
-		if (desc.usage == BufferUsage::Default) numDescriptors = 1;
-		else if (desc.usage == BufferUsage::UnorderedAccess) numDescriptors = 1;
-		else if (desc.usage == BufferUsage::Dynamic) numDescriptors = context.GetMaxFramesInFlight();
-
-		for (uint32_t i = 0; i < numDescriptors; i++)
+		if (desc.usage != BufferUsage::Readable)
 		{
-			if (desc.type == BufferType::StructuredBuffer ||
-				desc.type == BufferType::RawBuffer ||
-				desc.type == BufferType::ShaderConstant)
+			const uint32_t numDescriptors = implPerFrame ? perFrameArrayLength : 1;
+			for (uint32_t i = 0; i < numDescriptors; i++)
 			{
-				DescriptorType descriptorType = (desc.type == BufferType::ShaderConstant)
-					? DescriptorType::ConstantBuffer_CBV
-					: DescriptorType::RawOrStructuredBuffer_SRV_UAV;
-
-				Descriptor allocatedDescriptor = heap.AllocatePersistent(descriptorType);
+				auto& currentResource = implPerFrame ? implPerFrame[i].resource : impl.resource;
+				auto& currentCBV_SRV = implPerFrame ? implPerFrame[i].cbv_srv : impl.cbv_srv;
+				auto& currentUAV = implPerFrame ? implPerFrame[i].uav : impl.uav;
 
 				if (desc.type == BufferType::ShaderConstant)
 				{
-					D3D12_CONSTANT_BUFFER_VIEW_DESC cbv = {};
-					cbv.BufferLocation = impl.resource[i]->GetGPUVirtualAddress();
-					cbv.SizeInBytes = (UINT)AlignUp(desc.size, context.GetGraphicsSpecs().bufferPlacementAlignments.constant);
-
-					device->CreateConstantBufferView(&cbv, heap.GetD3D12CPUHandle(allocatedDescriptor));
+					currentCBV_SRV = heap.AllocatePersistent(DescriptorType::Resource);
+					D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = GenerateD3D12Desc_CBV(currentResource.Get(),
+						context.GetGraphicsSpecs().bufferPlacementAlignments, desc.size);
+					device->CreateConstantBufferView(&cbvDesc, heap.GetD3D12CPUHandle(currentCBV_SRV));
 				}
-				else
+				else if (desc.type == BufferType::StructuredBuffer)
 				{
-					D3D12_SHADER_RESOURCE_VIEW_DESC srv = {};
+					currentCBV_SRV = heap.AllocatePersistent(DescriptorType::Resource);
+					D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = GenerateD3D12Desc_SRV_Structured(desc.numElements, desc.stride);
+					device->CreateShaderResourceView(currentResource.Get(), &srvDesc, heap.GetD3D12CPUHandle(currentCBV_SRV));
 
-					if (desc.type == BufferType::StructuredBuffer)
+					if (desc.usage == BufferUsage::UnorderedAccess)
 					{
-						srv.Format = DXGI_FORMAT_UNKNOWN;
-						srv.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
-						srv.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-						srv.Buffer.FirstElement = 0;
-						srv.Buffer.NumElements = desc.numElements;
-						srv.Buffer.StructureByteStride = desc.stride;
-						srv.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
+						currentUAV = heap.AllocatePersistent(DescriptorType::Resource);
+						D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = GenerateD3D12Desc_UAV_Structured(desc.numElements, desc.stride);
+						device->CreateUnorderedAccessView(currentResource.Get(), nullptr, &uavDesc, heap.GetD3D12CPUHandle(currentUAV));
 					}
-					else if (desc.type == BufferType::RawBuffer)
-					{
-						srv.Format = DXGI_FORMAT_R32_TYPELESS;
-						srv.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
-						srv.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-						srv.Buffer.FirstElement = 0;
-						srv.Buffer.NumElements = uint32_t(desc.size) / sizeof(uint32_t);
-						srv.Buffer.StructureByteStride = 0;
-						srv.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_RAW;
-					}
-
-					device->CreateShaderResourceView(impl.resource[i].Get(), &srv, heap.GetD3D12CPUHandle(allocatedDescriptor));
 				}
-				descriptor_SRV_or_CBV.push_back(allocatedDescriptor);
-			}
-		}
+				else if (desc.type == BufferType::RawBuffer)
+				{
+					currentCBV_SRV = heap.AllocatePersistent(DescriptorType::Resource);
+					D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = GenerateD3D12Desc_SRV_Raw(desc.size);
+					device->CreateShaderResourceView(currentResource.Get(), &srvDesc, heap.GetD3D12CPUHandle(currentCBV_SRV));
 
-		impl.desc_cpu_uav = {};
-		if (desc.usage == BufferUsage::UnorderedAccess)
-		{
-			descriptor_UAV = heap.AllocatePersistent(DescriptorType::RawOrStructuredBuffer_SRV_UAV);
-
-			if (desc.type == BufferType::StructuredBuffer)
-			{
-				impl.desc_cpu_uav = GenerateD3D12Desc_UAV_Structured(desc.numElements, desc.stride);
+					if (desc.usage == BufferUsage::UnorderedAccess)
+					{
+						currentUAV = heap.AllocatePersistent(DescriptorType::Resource);
+						D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = GenerateD3D12Desc_UAV_Raw(desc.size);
+						device->CreateUnorderedAccessView(currentResource.Get(), nullptr, &uavDesc, heap.GetD3D12CPUHandle(currentUAV));
+					}
+				}
 			}
-			else if (desc.type == BufferType::RawBuffer)
-			{
-				impl.desc_cpu_uav = GenerateD3D12Desc_UAV_Raw(desc.size);
-			}
-			else
-			{
-				Fatal("Impossible buffer usage detected.");
-			}
-
-			device->CreateUnorderedAccessView(impl.resource[0].Get(), nullptr, &impl.desc_cpu_uav, heap.GetD3D12CPUHandle(descriptor_UAV));
 		}
 
 		return DetailedResult::Success();
@@ -1527,46 +1590,99 @@ namespace ig
 		{
 		case BufferUsage::Default:
 		case BufferUsage::UnorderedAccess:
-			return impl.resource.at(0).Get();
+			return impl.resource.Get();
 		case BufferUsage::Readable:
-			return impl.resource.at(context.GetFrameIndex()).Get();
+			return implPerFrame[context.GetFrameIndex()].resource.Get();
 		case BufferUsage::Dynamic:
-			return impl.resource.at(dynamicSetCounter).Get();
+			return implPerFrame[dynamicSetCounter].resource.Get();
 		default:
-			Fatal("Unexpected buffer usage.");
+			Fatal("Invalid buffer usage.");
 		}
 	}
 
-	const D3D12_UNORDERED_ACCESS_VIEW_DESC& Buffer::GetD3D12Desc_UAV() const
+	D3D12_CONSTANT_BUFFER_VIEW_DESC Buffer::GenerateD3D12Desc_CBV(ID3D12Resource* bufferLocation,
+		const BufferPlacementAlignments& bufferPlacementAlignments, uint64_t sizeOfData)
 	{
-		assert(desc.usage == BufferUsage::UnorderedAccess);
-		assert(desc.type == BufferType::StructuredBuffer || desc.type == BufferType::RawBuffer);
-		return impl.desc_cpu_uav;
-	}
-
-	D3D12_UNORDERED_ACCESS_VIEW_DESC Buffer::GenerateD3D12Desc_UAV_Structured(uint32_t numElements, uint32_t stride)
-	{
-		D3D12_UNORDERED_ACCESS_VIEW_DESC out = {};
-		out.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
-		out.Format = DXGI_FORMAT_UNKNOWN;
-		out.Buffer.FirstElement = 0;
-		out.Buffer.NumElements = numElements;
-		out.Buffer.StructureByteStride = stride;
-		out.Buffer.CounterOffsetInBytes = 0;
-		out.Buffer.Flags = D3D12_BUFFER_UAV_FLAG_NONE;
+		assert(bufferLocation);
+		D3D12_CONSTANT_BUFFER_VIEW_DESC out =
+		{
+			.BufferLocation = bufferLocation->GetGPUVirtualAddress(),
+			.SizeInBytes = (UINT)AlignUp(sizeOfData, bufferPlacementAlignments.constant),
+		};
 		return out;
 	}
 
-	D3D12_UNORDERED_ACCESS_VIEW_DESC Buffer::GenerateD3D12Desc_UAV_Raw(uint64_t size)
+	D3D12_SHADER_RESOURCE_VIEW_DESC Buffer::GenerateD3D12Desc_SRV_Structured(uint32_t numElements, uint32_t stride, uint64_t firstElement)
 	{
-		D3D12_UNORDERED_ACCESS_VIEW_DESC out = {};
-		out.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
-		out.Format = DXGI_FORMAT_R32_TYPELESS;
-		out.Buffer.FirstElement = 0;
-		out.Buffer.NumElements = uint32_t(size / sizeof(uint32_t));
-		out.Buffer.StructureByteStride = 0;
-		out.Buffer.CounterOffsetInBytes = 0;
-		out.Buffer.Flags = D3D12_BUFFER_UAV_FLAG_RAW;
+		D3D12_SHADER_RESOURCE_VIEW_DESC out =
+		{
+			.Format = DXGI_FORMAT_UNKNOWN,
+			.ViewDimension = D3D12_SRV_DIMENSION_BUFFER,
+			.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+			.Buffer =
+			{
+				.FirstElement = firstElement,
+				.NumElements = numElements,
+				.StructureByteStride = stride,
+				.Flags = D3D12_BUFFER_SRV_FLAG_NONE,
+			},
+		};
+		return out;
+	}
+
+	D3D12_SHADER_RESOURCE_VIEW_DESC Buffer::GenerateD3D12Desc_SRV_Raw(uint64_t dataSize, uint64_t firstElement)
+	{
+		assert(dataSize % 4 == 0 && "size must be a multiple of 4");
+		D3D12_SHADER_RESOURCE_VIEW_DESC out =
+		{
+			.Format = DXGI_FORMAT_R32_TYPELESS,
+			.ViewDimension = D3D12_SRV_DIMENSION_BUFFER,
+			.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+			.Buffer =
+			{
+				.FirstElement = firstElement,
+				.NumElements = UINT(dataSize / sizeof(uint32_t)),
+				.StructureByteStride = 0,
+				.Flags = D3D12_BUFFER_SRV_FLAG_RAW,
+			},
+		};
+		return out;
+	}
+
+	D3D12_UNORDERED_ACCESS_VIEW_DESC Buffer::GenerateD3D12Desc_UAV_Structured(uint32_t numElements, uint32_t stride, uint64_t firstElement)
+	{
+		D3D12_UNORDERED_ACCESS_VIEW_DESC out =
+		{
+			.Format = DXGI_FORMAT_UNKNOWN,
+			.ViewDimension = D3D12_UAV_DIMENSION_BUFFER,
+			.Buffer =
+			{
+				.FirstElement = firstElement,
+				.NumElements = numElements,
+				.StructureByteStride = stride,
+				.CounterOffsetInBytes = 0,
+				.Flags = D3D12_BUFFER_UAV_FLAG_NONE,
+			},
+		};
+		return out;
+	}
+
+	D3D12_UNORDERED_ACCESS_VIEW_DESC Buffer::GenerateD3D12Desc_UAV_Raw(uint64_t dataSize, uint64_t firstElement)
+	{
+		assert(dataSize % 4 == 0 && "size must be a multiple of 4");
+		D3D12_UNORDERED_ACCESS_VIEW_DESC out =
+		{
+			.Format = DXGI_FORMAT_R32_TYPELESS,
+			.ViewDimension = D3D12_UAV_DIMENSION_BUFFER,
+			.Buffer =
+			{
+				.FirstElement = 0,
+				.NumElements = UINT(dataSize / sizeof(uint32_t)),
+				.StructureByteStride = 0,
+				.CounterOffsetInBytes = 0,
+				.Flags = D3D12_BUFFER_UAV_FLAG_RAW,
+			},
+		};
 		return out;
 	}
 
@@ -1579,20 +1695,25 @@ namespace ig
 
 		D3D12TextureFilter filterD3D = ToD3D12TextureFilter(desc.filter);
 
-		D3D12_SAMPLER_DESC samplerDesc = {};
-		samplerDesc.Filter = filterD3D.filter;
-		samplerDesc.MaxAnisotropy = filterD3D.maxAnisotropy;
-		samplerDesc.AddressU = (D3D12_TEXTURE_ADDRESS_MODE)desc.wrapU;
-		samplerDesc.AddressV = (D3D12_TEXTURE_ADDRESS_MODE)desc.wrapV;
-		samplerDesc.AddressW = (D3D12_TEXTURE_ADDRESS_MODE)desc.wrapW;
-		samplerDesc.ComparisonFunc = (D3D12_COMPARISON_FUNC)desc.comparisonFunc;
-		samplerDesc.MinLOD = desc.minLOD;
-		samplerDesc.MaxLOD = desc.maxLOD;
-		samplerDesc.MipLODBias = desc.mipMapLODBias;
-		samplerDesc.BorderColor[0] = desc.borderColor.red;
-		samplerDesc.BorderColor[1] = desc.borderColor.green;
-		samplerDesc.BorderColor[2] = desc.borderColor.blue;
-		samplerDesc.BorderColor[3] = desc.borderColor.alpha;
+		D3D12_SAMPLER_DESC samplerDesc =
+		{
+			.Filter = filterD3D.filter,
+			.AddressU = (D3D12_TEXTURE_ADDRESS_MODE)desc.wrapU,
+			.AddressV = (D3D12_TEXTURE_ADDRESS_MODE)desc.wrapV,
+			.AddressW = (D3D12_TEXTURE_ADDRESS_MODE)desc.wrapW,
+			.MipLODBias = desc.mipMapLODBias,
+			.MaxAnisotropy = filterD3D.maxAnisotropy,
+			.ComparisonFunc = (D3D12_COMPARISON_FUNC)desc.comparisonFunc,
+			.BorderColor =
+			{
+				desc.borderColor.red,
+				desc.borderColor.green,
+				desc.borderColor.blue,
+				desc.borderColor.alpha,
+			},
+			.MinLOD = desc.minLOD,
+			.MaxLOD = desc.maxLOD,
+		};
 		device->CreateSampler(&samplerDesc, heap.GetD3D12CPUHandle(descriptor));
 
 		return DetailedResult::Success();
@@ -1611,28 +1732,29 @@ namespace ig
 	{
 		Page out;
 
-		D3D12_RESOURCE_DESC1 desc = {};
-		desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-		desc.Alignment = 0;
-		desc.Width = sizeInBytes;
-		desc.Height = 1;
-		desc.DepthOrArraySize = 1;
-		desc.MipLevels = 1;
-		desc.Format = DXGI_FORMAT_UNKNOWN;
-		desc.SampleDesc.Count = 1;
-		desc.SampleDesc.Quality = 0;
-		desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-		desc.Flags = D3D12_RESOURCE_FLAG_NONE;
-		desc.SamplerFeedbackMipRegion.Width = 0;
-		desc.SamplerFeedbackMipRegion.Height = 0;
-		desc.SamplerFeedbackMipRegion.Depth = 0;
+		D3D12_RESOURCE_DESC1 desc =
+		{
+			.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER,
+			.Alignment = 0,
+			.Width = sizeInBytes,
+			.Height = 1,
+			.DepthOrArraySize = 1,
+			.MipLevels = 1,
+			.Format = DXGI_FORMAT_UNKNOWN,
+			.SampleDesc = {.Count = 1, .Quality = 0},
+			.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
+			.Flags = D3D12_RESOURCE_FLAG_NONE,
+			.SamplerFeedbackMipRegion = {.Width = 0, .Height = 0, .Depth = 0},
+		};
 
-		D3D12_HEAP_PROPERTIES heapProp = {};
-		heapProp.Type = D3D12_HEAP_TYPE_UPLOAD;
-		heapProp.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
-		heapProp.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
-		heapProp.CreationNodeMask = 1;
-		heapProp.VisibleNodeMask = 1;
+		D3D12_HEAP_PROPERTIES heapProp =
+		{
+			.Type = D3D12_HEAP_TYPE_UPLOAD,
+			.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
+			.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN,
+			.CreationNodeMask = 1,
+			.VisibleNodeMask = 1,
+		};
 
 		D3D12_BARRIER_LAYOUT barrierLayout = D3D12_BARRIER_LAYOUT_UNDEFINED;
 
@@ -1650,67 +1772,21 @@ namespace ig
 
 	void DescriptorHeap::Impl_Destroy()
 	{
-		impl.descriptorHeap_NonShaderVisible_RTV = nullptr;
-		impl.descriptorHeap_NonShaderVisible_DSV = nullptr;
-		impl.descriptorHeap_NonShaderVisible_UAV = nullptr;
-
-		impl.descriptorHeap_Resources = nullptr;
-		impl.descriptorHeap_Samplers = nullptr;
-
 		impl.bindlessRootSignature = nullptr;
+
+		impl.heap_CBV_SRV_UAV = nullptr;
+		impl.heap_Samplers = nullptr;
+		impl.heap_RTV = nullptr;
+		impl.heap_DSV = nullptr;
+
+		impl.heap_Reusable_UAV = nullptr;
 	}
 
-	DetailedResult DescriptorHeap::Impl_Create(uint32_t maxPersistentResources, uint32_t maxTempResourcesPerFrame, uint32_t maxSamplers)
+	DetailedResult DescriptorHeap::Impl_Create()
 	{
 		auto device = context.GetD3D12Device();
 
-		// Create small CPU-only descriptor heaps
-		{
-			D3D12_DESCRIPTOR_HEAP_DESC rtvDesc = {};
-			rtvDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
-			rtvDesc.NumDescriptors = MAX_SIMULTANEOUS_RENDER_TARGETS;
-
-			D3D12_DESCRIPTOR_HEAP_DESC dsvDesc = {};
-			dsvDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
-			dsvDesc.NumDescriptors = 1;
-
-			D3D12_DESCRIPTOR_HEAP_DESC uavDesc = {};
-			uavDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-			uavDesc.NumDescriptors = 1;
-
-			HRESULT hrRTV = device->CreateDescriptorHeap(&rtvDesc, IID_PPV_ARGS(&impl.descriptorHeap_NonShaderVisible_RTV));
-			HRESULT hrDSV = device->CreateDescriptorHeap(&dsvDesc, IID_PPV_ARGS(&impl.descriptorHeap_NonShaderVisible_DSV));
-			HRESULT hrUAV = device->CreateDescriptorHeap(&uavDesc, IID_PPV_ARGS(&impl.descriptorHeap_NonShaderVisible_UAV));
-
-			if (FAILED(hrRTV) || FAILED(hrDSV) || FAILED(hrUAV))
-			{
-				return DetailedResult::Fail("Failed to create CPU-only descriptor heaps.");
-			}
-		}
-
-		// Create shader visible descriptor heaps
-		{
-			// Resources
-			D3D12_DESCRIPTOR_HEAP_DESC resHeap = {};
-			resHeap.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-			resHeap.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-			resHeap.NumDescriptors = CalcTotalResDescriptors(maxPersistentResources, maxTempResourcesPerFrame, maxFramesInFlight);
-			HRESULT hrRes = device->CreateDescriptorHeap(&resHeap, IID_PPV_ARGS(&impl.descriptorHeap_Resources));
-
-			// Samplers
-			D3D12_DESCRIPTOR_HEAP_DESC samplerHeap = {};
-			samplerHeap.Type = D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER;
-			samplerHeap.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-			samplerHeap.NumDescriptors = maxSamplers;
-			HRESULT hrSampler = device->CreateDescriptorHeap(&samplerHeap, IID_PPV_ARGS(&impl.descriptorHeap_Samplers));
-
-			if (FAILED(hrRes) || FAILED(hrSampler))
-			{
-				return DetailedResult::Fail("Failed to create shader visible descriptor heaps.");
-			}
-		}
-
-		// Create Bindless Root Signature
+		// Bindless root signature
 		{
 			D3D12_ROOT_PARAMETER1 rootConstants = {};
 			rootConstants.ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
@@ -1748,65 +1824,115 @@ namespace ig
 			}
 		}
 
-		// Get descriptor sizes
+		// Shader-visible descriptor heaps
+		{
+			// Resources
+			D3D12_DESCRIPTOR_HEAP_DESC resHeap = {};
+			resHeap.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+			resHeap.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+			resHeap.NumDescriptors = CalcTotalDescriptors(limits.persistentResources, limits.tempResourcesPerFrame, maxFramesInFlight);
+			HRESULT hrRes = device->CreateDescriptorHeap(&resHeap, IID_PPV_ARGS(&impl.heap_CBV_SRV_UAV));
+
+			// Samplers
+			D3D12_DESCRIPTOR_HEAP_DESC samplerHeap = {};
+			samplerHeap.Type = D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER;
+			samplerHeap.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+			samplerHeap.NumDescriptors = limits.samplers;
+			HRESULT hrSampler = device->CreateDescriptorHeap(&samplerHeap, IID_PPV_ARGS(&impl.heap_Samplers));
+
+			if (FAILED(hrRes) || FAILED(hrSampler))
+			{
+				return DetailedResult::Fail("Failed to create shader-visible descriptor heaps.");
+			}
+		}
+
+		// Non-shader-visible descriptor heaps
+		{
+			D3D12_DESCRIPTOR_HEAP_DESC rtvDesc = {};
+			rtvDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
+			rtvDesc.NumDescriptors = limits.renderTextures;
+
+			D3D12_DESCRIPTOR_HEAP_DESC dsvDesc = {};
+			dsvDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
+			dsvDesc.NumDescriptors = limits.depthBuffers;
+
+			HRESULT hrRTV = device->CreateDescriptorHeap(&rtvDesc, IID_PPV_ARGS(&impl.heap_RTV));
+			HRESULT hrDSV = device->CreateDescriptorHeap(&dsvDesc, IID_PPV_ARGS(&impl.heap_DSV));
+
+			if (FAILED(hrRTV) || FAILED(hrDSV))
+			{
+				return DetailedResult::Fail("Failed to create non-shader-visible descriptor heaps.");
+			}
+		}
+
+		// Reusable non-shader-visible descriptor heaps
+		{
+			D3D12_DESCRIPTOR_HEAP_DESC uavDesc = {};
+			uavDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV; // We just need the UAV
+			uavDesc.NumDescriptors = 1;
+
+			HRESULT hrUAV = device->CreateDescriptorHeap(&uavDesc, IID_PPV_ARGS(&impl.heap_Reusable_UAV));
+
+			if (FAILED(hrUAV))
+			{
+				return DetailedResult::Fail("Failed to create reusable descriptor heaps.");
+			}
+		}
+
+		impl.descriptorSize_CBV_SRV_UAV = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+		impl.descriptorSize_Sampler = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
 		impl.descriptorSize_RTV = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 		impl.descriptorSize_DSV = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
-		impl.descriptorSize_Sampler = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
-		impl.descriptorSize_CBV_SRV_UAV = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
 		return DetailedResult::Success();
 	}
 
-	void DescriptorHeap::Impl_NextFrame()
-	{
-
-	}
-
-	void DescriptorHeap::Impl_FreeAllTempResources()
-	{
-
-	}
-
-	D3D12_CPU_DESCRIPTOR_HANDLE DescriptorHeap::GetD3D12CPUHandle_NonShaderVisible_RTV() const
-	{
-		return impl.descriptorHeap_NonShaderVisible_RTV->GetCPUDescriptorHandleForHeapStart();
-	}
-	D3D12_CPU_DESCRIPTOR_HANDLE DescriptorHeap::GetD3D12CPUHandle_NonShaderVisible_DSV() const
-	{
-		return impl.descriptorHeap_NonShaderVisible_DSV->GetCPUDescriptorHandleForHeapStart();
-	}
-	D3D12_CPU_DESCRIPTOR_HANDLE DescriptorHeap::GetD3D12CPUHandle_NonShaderVisible_UAV() const
-	{
-		return impl.descriptorHeap_NonShaderVisible_UAV->GetCPUDescriptorHandleForHeapStart();
-	}
 	D3D12_CPU_DESCRIPTOR_HANDLE DescriptorHeap::GetD3D12CPUHandle(Descriptor descriptor) const
 	{
-		if (descriptor.type == DescriptorType::Sampler)
-		{
-			D3D12_CPU_DESCRIPTOR_HANDLE handle = impl.descriptorHeap_Samplers->GetCPUDescriptorHandleForHeapStart();
-			handle.ptr += ((SIZE_T)impl.descriptorSize_Sampler * (SIZE_T)descriptor.heapIndex);
-			return handle;
-		}
-		else
-		{
-			D3D12_CPU_DESCRIPTOR_HANDLE handle = impl.descriptorHeap_Resources->GetCPUDescriptorHandleForHeapStart();
-			handle.ptr += ((SIZE_T)impl.descriptorSize_CBV_SRV_UAV * (SIZE_T)descriptor.heapIndex);
-			return handle;
-		}
+		ID3D12DescriptorHeap* targetHeap = GetD3D12DescriptorHeap(descriptor.type);
+		D3D12_CPU_DESCRIPTOR_HANDLE handle = targetHeap->GetCPUDescriptorHandleForHeapStart();
+		handle.ptr += ((SIZE_T)GetD3D12DescriptorSize(descriptor.type) * (SIZE_T)descriptor.heapIndex);
+		return handle;
 	}
+
 	D3D12_GPU_DESCRIPTOR_HANDLE DescriptorHeap::GetD3D12GPUHandle(Descriptor descriptor) const
 	{
-		if (descriptor.type == DescriptorType::Sampler)
+		ID3D12DescriptorHeap* targetHeap = GetD3D12DescriptorHeap(descriptor.type);
+		D3D12_GPU_DESCRIPTOR_HANDLE handle = targetHeap->GetGPUDescriptorHandleForHeapStart();
+		handle.ptr += ((UINT64)GetD3D12DescriptorSize(descriptor.type) * (UINT64)descriptor.heapIndex);
+		return handle;
+	}
+
+	D3D12_CPU_DESCRIPTOR_HANDLE DescriptorHeap::GetD3D12CPUHandle_Reusable_UAV() const
+	{
+		return impl.heap_Reusable_UAV->GetCPUDescriptorHandleForHeapStart();
+	}
+
+	ID3D12DescriptorHeap* DescriptorHeap::GetD3D12DescriptorHeap(DescriptorType type) const
+	{
+		switch (type)
 		{
-			D3D12_GPU_DESCRIPTOR_HANDLE handle = impl.descriptorHeap_Samplers->GetGPUDescriptorHandleForHeapStart();
-			handle.ptr += ((UINT64)impl.descriptorSize_Sampler * (UINT64)descriptor.heapIndex);
-			return handle;
+		case DescriptorType::Resource: return impl.heap_CBV_SRV_UAV.Get();
+		case DescriptorType::Sampler: return impl.heap_Samplers.Get();
+		case DescriptorType::RenderTexture: return impl.heap_RTV.Get();
+		case DescriptorType::DepthBuffer: return impl.heap_DSV.Get();
+
+		default:
+			Fatal("Invalid DescriptorType");
 		}
-		else
+	}
+
+	uint32_t DescriptorHeap::GetD3D12DescriptorSize(DescriptorType type) const
+	{
+		switch (type)
 		{
-			D3D12_GPU_DESCRIPTOR_HANDLE handle = impl.descriptorHeap_Resources->GetGPUDescriptorHandleForHeapStart();
-			handle.ptr += ((UINT64)impl.descriptorSize_CBV_SRV_UAV * (UINT64)descriptor.heapIndex);
-			return handle;
+		case DescriptorType::Resource: return impl.descriptorSize_CBV_SRV_UAV;
+		case DescriptorType::Sampler: return impl.descriptorSize_Sampler;
+		case DescriptorType::RenderTexture: return impl.descriptorSize_RTV;
+		case DescriptorType::DepthBuffer: return impl.descriptorSize_DSV;
+
+		default:
+			Fatal("Invalid DescriptorType");
 		}
 	}
 
@@ -1861,6 +1987,15 @@ namespace ig
 
 	void IGLOContext::DestroySwapChainResources()
 	{
+		for (const auto& surface : swapChain.wrapped)
+		{
+			descriptorHeap->FreePersistent(surface->GetRenderDescriptor());
+		}
+		for (const auto& surface : swapChain.wrapped_sRGB_opposite)
+		{
+			descriptorHeap->FreePersistent(surface->GetRenderDescriptor());
+		}
+
 		swapChain = SwapChainInfo();
 	}
 
@@ -1930,21 +2065,41 @@ namespace ig
 				return DetailedResult::Fail(D3D12ErrorMsg("IDXGISwapChain3::GetBuffer", hr));
 			}
 
-			WrappedTextureDesc desc;
-			desc.textureDesc.extent = extent;
-			desc.textureDesc.format = format;
-			desc.textureDesc.usage = TextureUsage::RenderTexture;
-			desc.impl.resource = { res };
-			desc.impl.desc_cpu.rtv = Texture::GenerateD3D12Desc_RTV(format, MSAA::Disabled, 1);
+			const TextureDesc desc =
+			{
+				.extent = extent,
+				.format = format,
+				.usage = TextureUsage::RenderTexture,
+				.numFaces = 1,
+				.mipLevels = 1,
+			};
 
-			swapChain.wrapped.push_back(std::move(Texture::CreateWrapped(*this, desc)));
+			Impl_Texture impl;
+			impl.resource = res;
+			impl.rtv_dsv = descriptorHeap->AllocatePersistent(DescriptorType::RenderTexture);
+
+			// Write to RTV
+			{
+				D3D12_RENDER_TARGET_VIEW_DESC rtvDesc = Texture::GenerateD3D12Desc_RTV(format, MSAA::Disabled, 1);
+				D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = descriptorHeap->GetD3D12CPUHandle(impl.rtv_dsv);
+				graphics.device->CreateRenderTargetView(res.Get(), &rtvDesc, rtvHandle);
+			}
+
+			swapChain.wrapped.push_back(std::move(Texture::CreateWrapped(*this, desc, impl)));
 
 			// sRGB opposite views
 			if (formatInfo.sRGB_opposite != Format::None)
 			{
-				desc.impl.desc_cpu.rtv = Texture::GenerateD3D12Desc_RTV(formatInfo.sRGB_opposite, MSAA::Disabled, 1);
+				impl.rtv_dsv = descriptorHeap->AllocatePersistent(DescriptorType::RenderTexture);
 
-				swapChain.wrapped_sRGB_opposite.push_back(std::move(Texture::CreateWrapped(*this, desc)));
+				// Write to RTV
+				{
+					D3D12_RENDER_TARGET_VIEW_DESC rtvDesc = Texture::GenerateD3D12Desc_RTV(formatInfo.sRGB_opposite, MSAA::Disabled, 1);
+					D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = descriptorHeap->GetD3D12CPUHandle(impl.rtv_dsv);
+					graphics.device->CreateRenderTargetView(res.Get(), &rtvDesc, rtvHandle);
+				}
+
+				swapChain.wrapped_sRGB_opposite.push_back(std::move(Texture::CreateWrapped(*this, desc, impl)));
 			}
 		}
 
@@ -2001,21 +2156,41 @@ namespace ig
 				return false;
 			}
 
-			WrappedTextureDesc desc;
-			desc.textureDesc.extent = extent;
-			desc.textureDesc.format = swapChain.format;
-			desc.textureDesc.usage = TextureUsage::RenderTexture;
-			desc.impl.resource = { res };
-			desc.impl.desc_cpu.rtv = Texture::GenerateD3D12Desc_RTV(swapChain.format, MSAA::Disabled, 1);
+			const TextureDesc desc =
+			{
+				.extent = extent,
+				.format = swapChain.format,
+				.usage = TextureUsage::RenderTexture,
+				.numFaces = 1,
+				.mipLevels = 1,
+			};
 
-			swapChain.wrapped.push_back(std::move(Texture::CreateWrapped(*this, desc)));
+			Impl_Texture impl;
+			impl.resource = res;
+			impl.rtv_dsv = descriptorHeap->AllocatePersistent(DescriptorType::RenderTexture);
+
+			// Write to RTV
+			{
+				D3D12_RENDER_TARGET_VIEW_DESC rtvDesc = Texture::GenerateD3D12Desc_RTV(swapChain.format, MSAA::Disabled, 1);
+				D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = descriptorHeap->GetD3D12CPUHandle(impl.rtv_dsv);
+				graphics.device->CreateRenderTargetView(res.Get(), &rtvDesc, rtvHandle);
+			}
+
+			swapChain.wrapped.push_back(std::move(Texture::CreateWrapped(*this, desc, impl)));
 
 			// sRGB opposite views
 			if (formatInfo.sRGB_opposite != Format::None)
 			{
-				desc.impl.desc_cpu.rtv = Texture::GenerateD3D12Desc_RTV(formatInfo.sRGB_opposite, MSAA::Disabled, 1);
+				impl.rtv_dsv = descriptorHeap->AllocatePersistent(DescriptorType::RenderTexture);
 
-				swapChain.wrapped_sRGB_opposite.push_back(std::move(Texture::CreateWrapped(*this, desc)));
+				// Write to RTV
+				{
+					D3D12_RENDER_TARGET_VIEW_DESC rtvDesc = Texture::GenerateD3D12Desc_RTV(formatInfo.sRGB_opposite, MSAA::Disabled, 1);
+					D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = descriptorHeap->GetD3D12CPUHandle(impl.rtv_dsv);
+					graphics.device->CreateRenderTargetView(res.Get(), &rtvDesc, rtvHandle);
+				}
+
+				swapChain.wrapped_sRGB_opposite.push_back(std::move(Texture::CreateWrapped(*this, desc, impl)));
 			}
 		}
 

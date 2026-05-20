@@ -30,8 +30,26 @@
 #define IGLO_UINT64_MAX (0xffffffffffffffff)
 #define IGLO_MEGABYTE (1024 * 1024)
 
+#define IGLO_DEFINE_FLAG_OPERATORS(EnumType, UnderlyingType) \
+    constexpr inline EnumType operator|(EnumType a, EnumType b) \
+    { \
+        return static_cast<EnumType>(static_cast<UnderlyingType>(a) | static_cast<UnderlyingType>(b)); \
+    } \
+    constexpr inline EnumType operator&(EnumType a, EnumType b) \
+    { \
+        return static_cast<EnumType>(static_cast<UnderlyingType>(a) & static_cast<UnderlyingType>(b)); \
+    } \
+    constexpr inline EnumType operator~(EnumType a) \
+    { \
+        return static_cast<EnumType>(~static_cast<UnderlyingType>(a)); \
+    } \
+    constexpr inline bool HasFlag(EnumType value, EnumType test) \
+    { \
+        return (value & test) == test; \
+    }
+
 // 'byte' is a more intuitive name than 'uint8_t'.
-typedef uint8_t byte;
+using byte = uint8_t;
 
 namespace ig
 {

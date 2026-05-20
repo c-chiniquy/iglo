@@ -504,8 +504,8 @@ namespace ig
 		{
 			.extent = Extent2D(header->imageWidth, header->imageHeight),
 			.format = (Format)header->imageFormat,
-			.mipLevels = header->imageMipLevels,
 			.numFaces = header->imageNumFaces,
+			.mipLevels = header->imageMipLevels,
 		};
 		this->image = Image::Create(imageDesc);
 		if (!this->image)

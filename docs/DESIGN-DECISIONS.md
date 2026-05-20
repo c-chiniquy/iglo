@@ -6,24 +6,26 @@ This document contains my personal thoughts behind various design decisions I ha
 - iglo's design philosophy is to **not be an engine**.
   Engines often limit your freedom and hide the interesting parts of graphics programming from you, while raw APIs have too much boilerplate.
   The goal is to reduce boilerplate as much as possible in such a way that you still have full knowledge and control over what's going on.
+  Generalized engines pay a performance cost for their generality.
+  Specialized engines written to solve a specific problem will almost always be faster.
+  iglo helps you write your own specialized engine.
 
-- iglo should use the native D3D12/Vulkan command buffers directly.
-  Don't use command buffer abstractions on top of the native API ones.
-  ([I'm following the advice from this post](https://alextardif.com/RenderingAbstractionLayers.html))
+- iglo should be lightweight, low level and easy to setup and use.
 
 - It should be possible to interact with the graphics API (D3D12/Vulkan) directly.
   This is useful for when you want to use functionality that iglo doesn't support.
 
-- iglo should be lightweight, low level and easy to setup and use.
-  iglo can't be perfect at everything. It must have a purpose and be good at achieving its purpose.
-
-- I prefer the name 'IGLOContext' over 'RenderWindow', but I'm open to feedback on this issue.
+- iglo should use the native D3D12/Vulkan command buffers directly.
+  Don't use command buffer abstractions on top of the native API ones.
+  ([I'm following the advice from this post](https://alextardif.com/RenderingAbstractionLayers.html))
 
 - iglo shouldn't support runtime shader compilation, it's a bad practice imo (needless waste of CPU).
   Windows Store doesn't support apps that compile shaders at runtime.
 
 - Exclusive fullscreen mode is a thing of the past, and iglo should not support it.
   D3D12 doesn't support it, and windows 10 will "pretend" to be in exclusive fullscreen mode for games that try to enter exclusive fullscreen mode.
+
+- I prefer the name 'IGLOContext' over 'RenderWindow', but I'm open to feedback on this issue.
 
 # Coding guidelines
 

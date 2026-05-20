@@ -116,8 +116,8 @@ private:
 	const ig::Color lightAmbientColor = ig::Color(0.02f, 0.02f, 0.02f);
 	const ig::Color lightDiffuseColor = ig::Colors::White;
 
-	// While shadows don't require a stencil, i have included an option to use a stencil format here
-	// to demonstrate how to draw the stencil component of a depthbuffer (which can be useful for debugging).
+	// While a stencil isn't needed in this demo, I have included an option to use a stencil format here
+	// to demonstrate how to draw the stencil component of a depth buffer (which can be useful for debugging).
 	const bool useStencilFormat = false;
 	std::unique_ptr<ig::StencilTextureView> stencilView;
 
@@ -811,7 +811,7 @@ private:
 					"Light rotates [R]: ", lightRotates ? "True" : "False");
 
 				ig::SDFEffect sdfEffect;
-				sdfEffect.sdfEffectFlags = (uint32_t)ig::SDFEffectFlags::Outline | (uint32_t)ig::SDFEffectFlags::Glow;
+				sdfEffect.flags = ig::SDFEffectFlags::Outline | ig::SDFEffectFlags::Glow;
 				r->SetSDFEffect(sdfEffect);
 
 				float bottomStrHeight = r->MeasureString(strBottom, *trimSDF).y;

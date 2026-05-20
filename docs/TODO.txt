@@ -21,11 +21,4 @@ TODO: In D3D12, using CreatePlacedResource() is faster than using CreateCommitte
       Since iglo D3D12 currently uses CreateCommittedResource(), it creates textures/buffers a bit slower than it could.
       To make it faster, we need to write a resource heap memory manager from scratch.
 
-TODO: The D3D12 ig::Texture implementation should hold a CPU-only non-shader-visible descriptor for use with
-      rendertexture / depthbuffer / unordered access clear. Maybe call this struct ig::NonShaderDescriptor? For D3D12 only.
-      Since these descriptors are CPU-only, i think we can allocate multiple CPU-only descriptor heaps in chunks as needed,
-      maybe 1000 descriptors at once. Not having to create new RTV/DSV descriptors every time you set or clear a render target
-      would provide a small performance boost and would reduce the size of ig::Texture since it wouldn't have to contain
-      a large RTV/DSV desc struct.
-
 TODO: Ability for window to fully capture mouse. This is required for first person shooter games.

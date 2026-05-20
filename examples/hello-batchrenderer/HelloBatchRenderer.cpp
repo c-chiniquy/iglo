@@ -612,7 +612,7 @@ private:
 				if (currentDemo == 0)
 				{
 					ig::SDFEffect sdfEffect;
-					sdfEffect.sdfEffectFlags = (uint32_t)ig::SDFEffectFlags::Outline | (uint32_t)ig::SDFEffectFlags::Glow;
+					sdfEffect.flags = ig::SDFEffectFlags::Outline | ig::SDFEffectFlags::Glow;
 					r.SetSDFEffect(sdfEffect);
 
 					std::string str =
@@ -908,22 +908,22 @@ private:
 					ig::Matrix4x4 oldProj = r.GetProjectionMatrix();
 
 					ig::SDFEffect sdfEffect;
-					sdfEffect.sdfEffectFlags = (uint32_t)ig::SDFEffectFlags::Outline | (uint32_t)ig::SDFEffectFlags::Glow;
+					sdfEffect.flags = ig::SDFEffectFlags::Outline | ig::SDFEffectFlags::Glow;
 					if (context->IsMouseButtonDown(ig::MouseButton::Right)) // Hard drop shadow
 					{
-						sdfEffect.sdfEffectFlags = (uint32_t)ig::SDFEffectFlags::Glow;
+						sdfEffect.flags = ig::SDFEffectFlags::Glow;
 						sdfEffect.glowSize = 0.1f;
 						sdfEffect.glowOffset = ig::Vector2(2.5f, 2.5f);
 						sdfEffect.glowColor = ig::Colors::Black;
 					}
 					if (context->IsMouseButtonDown(ig::MouseButton::Left))
 					{
-						sdfEffect.sdfEffectFlags = (uint32_t)ig::SDFEffectFlags::Glow;
+						sdfEffect.flags = ig::SDFEffectFlags::Glow;
 					}
 					if (context->IsMouseButtonDown(ig::MouseButton::Left) &&
 						context->IsMouseButtonDown(ig::MouseButton::Right))
 					{
-						sdfEffect.sdfEffectFlags = (uint32_t)ig::SDFEffectFlags::NoEffects;
+						sdfEffect.flags = ig::SDFEffectFlags::None;
 					}
 					r.SetSDFEffect(sdfEffect);
 

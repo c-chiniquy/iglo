@@ -538,26 +538,7 @@ namespace ig
 		return size;
 	}
 
-	VkResult CreateVulkanImageViewForSwapChain(VkDevice device, VkImage swapChainImage, VkFormat swapChainFormat, VkImageView* out_pView)
-	{
-		VkImageViewCreateInfo viewInfo = {};
-		viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-		viewInfo.image = swapChainImage;
-		viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-		viewInfo.format = swapChainFormat;
-		viewInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
-		viewInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
-		viewInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
-		viewInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
-		viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-		viewInfo.subresourceRange.baseMipLevel = 0;
-		viewInfo.subresourceRange.levelCount = 1;
-		viewInfo.subresourceRange.baseArrayLayer = 0;
-		viewInfo.subresourceRange.layerCount = 1;
-		return vkCreateImageView(device, &viewInfo, nullptr, out_pView);
-	}
-
-	VkImageAspectFlags GetVulkanImageAspect(Format format)
+	VkImageAspectFlags GetFullImageAspect(Format format)
 	{
 		FormatInfo formatInfo = GetFormatInfo(format);
 		VkImageAspectFlags aspect = formatInfo.isDepthFormat ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT;
@@ -568,15 +549,6 @@ namespace ig
 	void DescriptorHeap::Impl_Destroy()
 	{
 		VkDevice device = context.GetVulkanDevice();
-
-		for (auto& tempViews : impl.tempImageViews)
-		{
-			for (VkImageView imageView : tempViews)
-			{
-				if (imageView) vkDestroyImageView(device, imageView, nullptr);
-			}
-		}
-		impl.tempImageViews.clear();
 
 		if (impl.descriptorPool)
 		{
@@ -593,22 +565,20 @@ namespace ig
 			vkDestroyPipelineLayout(device, impl.bindlessPipelineLayout, nullptr);
 			impl.bindlessPipelineLayout = VK_NULL_HANDLE;
 		}
-
 	}
 
-	DetailedResult DescriptorHeap::Impl_Create(uint32_t maxPersistentResources, uint32_t maxTempResourcesPerFrame, uint32_t maxSamplers)
+	DetailedResult DescriptorHeap::Impl_Create()
 	{
 		VkDevice device = context.GetVulkanDevice();
-		uint32_t totalResDescriptors = CalcTotalResDescriptors(maxPersistentResources, maxTempResourcesPerFrame, maxFramesInFlight);
+		const uint32_t totalResDescriptors = CalcTotalDescriptors(limits.persistentResources,
+			limits.tempResourcesPerFrame, maxFramesInFlight);
 
-		impl.tempImageViews.resize(maxFramesInFlight, {});
-
-		std::array<uint32_t, NUM_DESCRIPTOR_TYPES> propMax = GetVulkanPropsMaxDescriptors(context.GetVulkanPhysicalDevice());
+		std::array<uint32_t, NUM_VK_DESCRIPTOR_TYPES> propMax = GetVulkanPropsMaxDescriptors(context.GetVulkanPhysicalDevice());
 
 		// Check max descriptor count
-		for (uint32_t i = 0; i < NUM_DESCRIPTOR_TYPES; i++)
+		for (uint32_t i = 0; i < NUM_VK_DESCRIPTOR_TYPES; i++)
 		{
-			uint32_t totalAlloc = (i == (uint32_t)DescriptorType::Sampler) ? maxSamplers : totalResDescriptors;
+			uint32_t totalAlloc = (i == (uint32_t)DescriptorType::Sampler) ? limits.samplers : totalResDescriptors;
 			if (totalAlloc > propMax[i])
 			{
 				/*
@@ -638,15 +608,15 @@ namespace ig
 			std::array<VkDescriptorSetLayoutBinding, 2> bindings = {};
 
 			// Binding 0: Resources
-			bindings[0].binding = 0;
+			bindings[0].binding = VK_BINDING_NON_SAMPLER;
 			bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_MUTABLE_EXT;
 			bindings[0].descriptorCount = totalResDescriptors;
 			bindings[0].stageFlags = VK_SHADER_STAGE_ALL;
 
 			// Binding 1: Samplers
-			bindings[1].binding = 1;
+			bindings[1].binding = VK_BINDING_SAMPLER;
 			bindings[1].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER;
-			bindings[1].descriptorCount = maxSamplers;
+			bindings[1].descriptorCount = limits.samplers;
 			bindings[1].stageFlags = VK_SHADER_STAGE_ALL;
 
 			std::array<VkDescriptorBindingFlags, 2> bindingFlags = {};
@@ -659,7 +629,7 @@ namespace ig
 
 			VkMutableDescriptorTypeListEXT typeList = {};
 			typeList.descriptorTypeCount = 4; // The first 4 elements in the table are resource descriptors which we want mutable.
-			typeList.pDescriptorTypes = vkDescriptorTypeTable;
+			typeList.pDescriptorTypes = vkDescriptorTypeTable.data();
 
 			VkMutableDescriptorTypeCreateInfoEXT mutableInfo = {};
 			mutableInfo.sType = VK_STRUCTURE_TYPE_MUTABLE_DESCRIPTOR_TYPE_CREATE_INFO_EXT;
@@ -690,7 +660,7 @@ namespace ig
 		{
 			std::array<VkDescriptorPoolSize, 2> poolSizes = {};
 			poolSizes[0] = { VK_DESCRIPTOR_TYPE_MUTABLE_EXT, totalResDescriptors };
-			poolSizes[1] = { VK_DESCRIPTOR_TYPE_SAMPLER, maxSamplers };
+			poolSizes[1] = { VK_DESCRIPTOR_TYPE_SAMPLER, limits.samplers };
 
 			VkDescriptorPoolCreateInfo poolInfo = {};
 			poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
@@ -745,37 +715,14 @@ namespace ig
 		return DetailedResult::Success();
 	}
 
-	void DescriptorHeap::Impl_NextFrame()
-	{
-		assert(frameIndex < impl.tempImageViews.size());
-		auto& tempViews = impl.tempImageViews[frameIndex];
-		for (VkImageView imageView : tempViews)
-		{
-			if (imageView) vkDestroyImageView(context.GetVulkanDevice(), imageView, nullptr);
-		}
-		tempViews.clear();
-	}
-
-	void DescriptorHeap::Impl_FreeAllTempResources()
-	{
-		for (auto& tempViews : impl.tempImageViews)
-		{
-			for (VkImageView imageView : tempViews)
-			{
-				if (imageView) vkDestroyImageView(context.GetVulkanDevice(), imageView, nullptr);
-			}
-			tempViews.clear();
-		}
-	}
-
-	std::array<uint32_t, NUM_DESCRIPTOR_TYPES> DescriptorHeap::GetVulkanPropsMaxDescriptors(VkPhysicalDevice device)
+	std::array<uint32_t,NUM_VK_DESCRIPTOR_TYPES> GetVulkanPropsMaxDescriptors(VkPhysicalDevice device)
 	{
 		VkPhysicalDeviceProperties2 props2 = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2 };
 		VkPhysicalDeviceDescriptorIndexingProperties indexingProps = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_PROPERTIES };
 		props2.pNext = &indexingProps;
 		vkGetPhysicalDeviceProperties2(device, &props2);
 
-		std::array<uint32_t, NUM_DESCRIPTOR_TYPES> out =
+		std::array<uint32_t, NUM_VK_DESCRIPTOR_TYPES> out =
 		{
 			indexingProps.maxPerStageDescriptorUpdateAfterBindUniformBuffers,
 			indexingProps.maxPerStageDescriptorUpdateAfterBindStorageBuffers,
@@ -786,44 +733,53 @@ namespace ig
 		return out;
 	}
 
-	void DescriptorHeap::WriteBufferDescriptor(Descriptor descriptor, VkBuffer buffer, VkDeviceSize offset, VkDeviceSize range)
+	void DescriptorHeap::WriteBufferDescriptor(Descriptor descriptor, VulkanDescriptorType type,
+		VkBuffer buffer, VkDeviceSize offset, VkDeviceSize range)
 	{
 		assert(descriptor);
+		assert(type == VulkanDescriptorType::ConstantBuffer_CBV || type == VulkanDescriptorType::RawOrStructuredBuffer_SRV_UAV);
 
-		VkDescriptorBufferInfo bufferInfo = {};
-		bufferInfo.buffer = buffer;
-		bufferInfo.offset = offset;
-		bufferInfo.range = range;
-
-		VkWriteDescriptorSet write = {};
-		write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-		write.dstSet = impl.descriptorSet;
-		write.dstBinding = vkDescriptorBindingTable[(uint32_t)descriptor.type];
-		write.dstArrayElement = descriptor.heapIndex;
-		write.descriptorCount = 1;
-		write.descriptorType = vkDescriptorTypeTable[(uint32_t)descriptor.type];
-		write.pBufferInfo = &bufferInfo;
+		VkDescriptorBufferInfo bufferInfo =
+		{
+			.buffer = buffer,
+			.offset = offset,
+			.range = range,
+		};
+		VkWriteDescriptorSet write =
+		{
+			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+			.dstSet = impl.descriptorSet,
+			.dstBinding = VK_BINDING_NON_SAMPLER,
+			.dstArrayElement = descriptor.heapIndex,
+			.descriptorCount = 1,
+			.descriptorType = (VkDescriptorType)type,
+			.pBufferInfo = &bufferInfo,
+		};
 
 		vkUpdateDescriptorSets(context.GetVulkanDevice(), 1, &write, 0, nullptr);
 	}
 
-	void DescriptorHeap::WriteImageDescriptor(Descriptor descriptor, VkImageView imageView, VkImageLayout imageLayout)
+	void DescriptorHeap::WriteImageDescriptor(Descriptor descriptor, VulkanDescriptorType type, VkImageView view, VkImageLayout layout)
 	{
 		assert(descriptor);
+		assert(type == VulkanDescriptorType::Texture_SRV || type == VulkanDescriptorType::Texture_UAV);
 
-		VkDescriptorImageInfo imageInfo = {};
-		imageInfo.imageView = imageView;
-		imageInfo.imageLayout = imageLayout;
-		imageInfo.sampler = VK_NULL_HANDLE;
-
-		VkWriteDescriptorSet write = {};
-		write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-		write.dstSet = impl.descriptorSet;
-		write.dstBinding = vkDescriptorBindingTable[(uint32_t)descriptor.type];
-		write.dstArrayElement = descriptor.heapIndex;
-		write.descriptorType = vkDescriptorTypeTable[(uint32_t)descriptor.type];
-		write.descriptorCount = 1;
-		write.pImageInfo = &imageInfo;
+		VkDescriptorImageInfo imageInfo =
+		{
+			.sampler = VK_NULL_HANDLE,
+			.imageView = view,
+			.imageLayout = layout,
+		};
+		VkWriteDescriptorSet write =
+		{
+			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+			.dstSet = impl.descriptorSet,
+			.dstBinding = VK_BINDING_NON_SAMPLER,
+			.dstArrayElement = descriptor.heapIndex,
+			.descriptorCount = 1,
+			.descriptorType = (VkDescriptorType)type,
+			.pImageInfo = &imageInfo,
+		};
 
 		vkUpdateDescriptorSets(context.GetVulkanDevice(), 1, &write, 0, nullptr);
 	}
@@ -832,32 +788,22 @@ namespace ig
 	{
 		assert(descriptor);
 
-		VkDescriptorImageInfo imageInfo = {};
-		imageInfo.sampler = sampler;
-
-		VkWriteDescriptorSet write = {};
-		write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-		write.dstSet = impl.descriptorSet;
-		write.dstBinding = vkDescriptorBindingTable[(uint32_t)descriptor.type];
-		write.dstArrayElement = descriptor.heapIndex;
-		write.descriptorCount = 1;
-		write.descriptorType = vkDescriptorTypeTable[(uint32_t)descriptor.type];
-		write.pImageInfo = &imageInfo;
+		VkDescriptorImageInfo imageInfo =
+		{
+			.sampler = sampler,
+		};
+		VkWriteDescriptorSet write =
+		{
+			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+			.dstSet = impl.descriptorSet,
+			.dstBinding = VK_BINDING_SAMPLER,
+			.dstArrayElement = descriptor.heapIndex,
+			.descriptorCount = 1,
+			.descriptorType = (VkDescriptorType)VulkanDescriptorType::Sampler,
+			.pImageInfo = &imageInfo,
+		};
 
 		vkUpdateDescriptorSets(context.GetVulkanDevice(), 1, &write, 0, nullptr);
-	}
-
-	VkResult DescriptorHeap::CreateTempVulkanImageView(VkDevice device, const VkImageViewCreateInfo* pCreateInfo,
-		const VkAllocationCallbacks* pAllocator, VkImageView* pView)
-	{
-		VkResult result = vkCreateImageView(device, pCreateInfo, pAllocator, pView);
-
-		if (result == VK_SUCCESS)
-		{
-			impl.tempImageViews[frameIndex].push_back(*pView);
-		}
-
-		return result;
 	}
 
 	void Pipeline::Impl_Destroy()
@@ -1606,7 +1552,7 @@ namespace ig
 		barrier.oldLayout = (VkImageLayout)layoutBefore;
 		barrier.newLayout = (VkImageLayout)layoutAfter;
 		barrier.image = texture.GetVulkanImage();
-		barrier.subresourceRange.aspectMask = GetVulkanImageAspect(texture.GetFormat());
+		barrier.subresourceRange.aspectMask = GetFullImageAspect(texture.GetFormat());
 		barrier.subresourceRange.baseMipLevel = 0;
 		barrier.subresourceRange.levelCount = texture.GetMipLevels();
 		barrier.subresourceRange.baseArrayLayer = 0;
@@ -1643,7 +1589,7 @@ namespace ig
 		barrier.oldLayout = (VkImageLayout)layoutBefore;
 		barrier.newLayout = (VkImageLayout)layoutAfter;
 		barrier.image = texture.GetVulkanImage();
-		barrier.subresourceRange.aspectMask = GetVulkanImageAspect(texture.GetFormat());
+		barrier.subresourceRange.aspectMask = GetFullImageAspect(texture.GetFormat());
 		barrier.subresourceRange.baseMipLevel = mipIndex;
 		barrier.subresourceRange.levelCount = 1;
 		barrier.subresourceRange.baseArrayLayer = faceIndex;
@@ -1690,7 +1636,7 @@ namespace ig
 			{
 				VkRenderingAttachmentInfo& attachment = impl.renderInfo.colorAttachments[i];
 				attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-				attachment.imageView = renderTextures[i]->GetVulkanImageView_RTV_DSV();
+				attachment.imageView = renderTextures[i]->GetVulkanImageView_UAV_RTV_DSV();
 				attachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 				attachment.loadOp = optimizedClear ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD;
 				attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
@@ -1712,7 +1658,7 @@ namespace ig
 				impl.renderInfo.depthAttachment =
 				{
 					.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-					.imageView = depthBuffer->GetVulkanImageView_RTV_DSV(),
+					.imageView = depthBuffer->GetVulkanImageView_UAV_RTV_DSV(),
 					.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
 					.loadOp = optimizedClear ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD,
 					.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
@@ -1722,7 +1668,7 @@ namespace ig
 					impl.renderInfo.stencilAttachment =
 					{
 						 .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-						 .imageView = depthBuffer->GetVulkanImageView_RTV_DSV(),
+						 .imageView = depthBuffer->GetVulkanImageView_UAV_RTV_DSV(),
 						 .imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
 						 .loadOp = optimizedClear ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD,
 						 .storeOp = VK_ATTACHMENT_STORE_OP_STORE
@@ -1907,7 +1853,7 @@ namespace ig
 		}
 
 		VkImageSubresourceRange range = {};
-		range.aspectMask = GetVulkanImageAspect(texture.GetFormat());
+		range.aspectMask = GetFullImageAspect(texture.GetFormat());
 		range.baseMipLevel = 0;
 		range.levelCount = texture.GetMipLevels();
 		range.baseArrayLayer = 0;
@@ -1926,7 +1872,7 @@ namespace ig
 		}
 
 		VkImageSubresourceRange range = {};
-		range.aspectMask = GetVulkanImageAspect(texture.GetFormat());
+		range.aspectMask = GetFullImageAspect(texture.GetFormat());
 		range.baseMipLevel = 0;
 		range.levelCount = texture.GetMipLevels();
 		range.baseArrayLayer = 0;
@@ -2034,12 +1980,12 @@ namespace ig
 		{
 			VkImageCopy region = {};
 
-			region.srcSubresource.aspectMask = GetVulkanImageAspect(source.GetFormat());
+			region.srcSubresource.aspectMask = GetFullImageAspect(source.GetFormat());
 			region.srcSubresource.mipLevel = mip;
 			region.srcSubresource.baseArrayLayer = 0;
 			region.srcSubresource.layerCount = source.GetNumFaces();
 
-			region.dstSubresource.aspectMask = GetVulkanImageAspect(destination.GetFormat());
+			region.dstSubresource.aspectMask = GetFullImageAspect(destination.GetFormat());
 			region.dstSubresource.mipLevel = mip;
 			region.dstSubresource.baseArrayLayer = 0;
 			region.dstSubresource.layerCount = destination.GetNumFaces();
@@ -2066,12 +2012,12 @@ namespace ig
 		const Texture& destination, uint32_t destFaceIndex, uint32_t destMipIndex)
 	{
 		VkImageCopy region = {};
-		region.srcSubresource.aspectMask = GetVulkanImageAspect(source.GetFormat());
+		region.srcSubresource.aspectMask = GetFullImageAspect(source.GetFormat());
 		region.srcSubresource.mipLevel = sourceMipIndex;
 		region.srcSubresource.baseArrayLayer = sourceFaceIndex;
 		region.srcSubresource.layerCount = 1;
 
-		region.dstSubresource.aspectMask = GetVulkanImageAspect(destination.GetFormat());
+		region.dstSubresource.aspectMask = GetFullImageAspect(destination.GetFormat());
 		region.dstSubresource.mipLevel = destMipIndex;
 		region.dstSubresource.baseArrayLayer = destFaceIndex;
 		region.dstSubresource.layerCount = 1;
@@ -2103,12 +2049,12 @@ namespace ig
 			for (uint32_t mip = 0; mip < numMips; mip++)
 			{
 				VkImageCopy region = {};
-				region.srcSubresource.aspectMask = GetVulkanImageAspect(source.GetFormat());
+				region.srcSubresource.aspectMask = GetFullImageAspect(source.GetFormat());
 				region.srcSubresource.mipLevel = mip;
 				region.srcSubresource.baseArrayLayer = face;
 				region.srcSubresource.layerCount = 1;
 
-				region.dstSubresource.aspectMask = GetVulkanImageAspect(destination.GetFormat());
+				region.dstSubresource.aspectMask = GetFullImageAspect(destination.GetFormat());
 				region.dstSubresource.mipLevel = mip;
 				region.dstSubresource.baseArrayLayer = face;
 				region.dstSubresource.layerCount = 1;
@@ -2164,7 +2110,7 @@ namespace ig
 				region.bufferOffset = vkBufferOffset;
 				region.bufferRowLength = (uint32_t)AlignUp(mipExtent.width, texelBlockSize);
 				region.bufferImageHeight = (uint32_t)AlignUp(mipExtent.height, texelBlockSize);
-				region.imageSubresource.aspectMask = GetVulkanImageAspect(destination.GetFormat());
+				region.imageSubresource.aspectMask = GetFullImageAspect(destination.GetFormat());
 				region.imageSubresource.mipLevel = mip;
 				region.imageSubresource.baseArrayLayer = face;
 				region.imageSubresource.layerCount = 1;
@@ -2200,7 +2146,7 @@ namespace ig
 		region.bufferOffset = source.offset;
 		region.bufferRowLength = (uint32_t)AlignUp(mipExtent.width, texelBlockSize);
 		region.bufferImageHeight = (uint32_t)AlignUp(mipExtent.height, texelBlockSize);
-		region.imageSubresource.aspectMask = GetVulkanImageAspect(destination.GetFormat());
+		region.imageSubresource.aspectMask = GetFullImageAspect(destination.GetFormat());
 		region.imageSubresource.mipLevel = destMipIndex;
 		region.imageSubresource.baseArrayLayer = destFaceIndex;
 		region.imageSubresource.layerCount = 1;
@@ -2373,63 +2319,87 @@ namespace ig
 
 	void Texture::Impl_Destroy()
 	{
+		DescriptorHeap& heap = context.GetDescriptorHeap();
+		if (impl.srv)
+		{
+			heap.FreePersistent(impl.srv);
+			impl.srv.SetToNull();
+		}
+		if (impl.uav)
+		{
+			heap.FreePersistent(impl.uav);
+			impl.uav.SetToNull();
+		}
+
 		VkDevice device = context.GetVulkanDevice();
-
-		if (impl.imageView_SRV)
+		if (impl.view_srv)
 		{
-			vkDestroyImageView(device, impl.imageView_SRV, nullptr);
-			impl.imageView_SRV = VK_NULL_HANDLE;
+			vkDestroyImageView(device, impl.view_srv, nullptr);
+			impl.view_srv = VK_NULL_HANDLE;
 		}
-		if (impl.imageView_UAV)
+		if (impl.view_uav_rtv_dsv)
 		{
-			vkDestroyImageView(device, impl.imageView_UAV, nullptr);
-			impl.imageView_UAV = VK_NULL_HANDLE;
-		}
-		if (impl.imageView_RTV_DSV)
-		{
-			vkDestroyImageView(device, impl.imageView_RTV_DSV, nullptr);
-			impl.imageView_RTV_DSV = VK_NULL_HANDLE;
+			vkDestroyImageView(device, impl.view_uav_rtv_dsv, nullptr);
+			impl.view_uav_rtv_dsv = VK_NULL_HANDLE;
 		}
 
-		for (size_t i = 0; i < readMapped.size(); i++)
+		if (implPerFrame)
 		{
-			vkUnmapMemory(device, impl.memory.at(i));
+			const uint32_t arrayLength = GetPerFrameArrayLength();
+			for (uint32_t i = 0; i < arrayLength; i++)
+			{
+				auto& frame = implPerFrame[i];
+				if (frame.mapped)
+				{
+					vkUnmapMemory(device, frame.memory);
+					frame.mapped = nullptr;
+				}
+				if (frame.image)
+				{
+					vkDestroyImage(device, frame.image, nullptr);
+					frame.image = VK_NULL_HANDLE;
+				}
+				if (frame.memory)
+				{
+					vkFreeMemory(device, frame.memory, nullptr);
+					frame.memory = VK_NULL_HANDLE;
+				}
+			}
+			implPerFrame = nullptr;
 		}
-		readMapped.clear();
 
-		for (const auto& img : impl.image)
+		if (impl.image)
 		{
-			if (img) vkDestroyImage(device, img, nullptr);
+			vkDestroyImage(device, impl.image, nullptr);
+			impl.image = VK_NULL_HANDLE;
 		}
-		impl.image.clear();
-
-		for (const auto& mem : impl.memory)
+		if (impl.memory)
 		{
-			if (mem) vkFreeMemory(device, mem, nullptr);
+			vkFreeMemory(device, impl.memory, nullptr);
+			impl.memory = VK_NULL_HANDLE;
 		}
-		impl.memory.clear();
-
 	}
 
 	DetailedResult Texture::Impl_Create()
 	{
-		FormatInfo formatInfo = GetFormatInfo(desc.format);
-		bool isMultisampledCubemap = (desc.isCubemap && desc.msaa != MSAA::Disabled);
-
 		VkDevice device = context.GetVulkanDevice();
 		VkPhysicalDevice physicalDevice = context.GetVulkanPhysicalDevice();
 		DescriptorHeap& heap = context.GetDescriptorHeap();
+
+		const uint32_t perFrameArrayLength = GetPerFrameArrayLength();
+		const FormatInfo formatInfo = GetFormatInfo(desc.format);
+		const bool isMultisampledCubemap = (desc.isCubemap && desc.msaa != MSAA::Disabled);
+		const bool useMutableFormat = HasFlag(desc.flags, TextureFlags::AllowMultiFormat);
 
 		VkFormat vkFormat = ToVulkanFormat(desc.format);
 		if (vkFormat == VK_FORMAT_UNDEFINED)
 		{
 			return DetailedResult::Fail(ToString("This iglo format is not supported in Vulkan: ", GetFormatName(desc.format)));
 		}
-
-		uint32_t numImages = (desc.usage == TextureUsage::Readable) ? context.GetMaxFramesInFlight() : 1;
-
-		impl.image.resize(numImages, VK_NULL_HANDLE);
-		impl.memory.resize(numImages, VK_NULL_HANDLE);
+		if (desc.usage == TextureUsage::Readable)
+		{
+			implPerFrame = std::make_unique<Impl_PerFrameTexture[]>(perFrameArrayLength);
+		}
 
 		VkImageUsageFlags imageUsage = 0;
 		switch (desc.usage)
@@ -2460,7 +2430,18 @@ namespace ig
 
 		case TextureUsage::DepthBuffer:
 			imageUsage |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+			if (!HasFlag(desc.flags, TextureFlags::DepthBuffer_DenyShaderResource))
+			{
+				imageUsage |= VK_IMAGE_USAGE_SAMPLED_BIT;
+			}
+			imageUsage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+			imageUsage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+			break;
+
+		case TextureUsage::UnorderedAccessRenderTexture:
+			imageUsage |= VK_IMAGE_USAGE_STORAGE_BIT;
 			imageUsage |= VK_IMAGE_USAGE_SAMPLED_BIT;
+			imageUsage |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 			imageUsage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
 			imageUsage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
 			break;
@@ -2480,9 +2461,13 @@ namespace ig
 			memProperties |= VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 		}
 
+		const uint32_t numImages = implPerFrame ? perFrameArrayLength : 1;
 
 		for (uint32_t i = 0; i < numImages; i++)
 		{
+			auto& currentImage = implPerFrame ? implPerFrame[i].image : impl.image;
+			auto& currentMemory = implPerFrame ? implPerFrame[i].memory : impl.memory;
+
 			VkImageCreateInfo imageInfo = { VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO };
 			imageInfo.imageType = VK_IMAGE_TYPE_2D;
 			imageInfo.extent.width = desc.extent.width;
@@ -2499,16 +2484,16 @@ namespace ig
 
 			imageInfo.flags = 0;
 			if (desc.isCubemap) imageInfo.flags |= VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
-			if (desc.overrideSRVFormat != Format::None) imageInfo.flags |= VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT;
+			if (useMutableFormat) imageInfo.flags |= VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT;
 
-			VkResult result = vkCreateImage(device, &imageInfo, nullptr, &impl.image[i]);
+			VkResult result = vkCreateImage(device, &imageInfo, nullptr, &currentImage);
 			if (result != VK_SUCCESS)
 			{
 				return DetailedResult::Fail(VulkanErrorMsg("vkCreateImage", result));
 			}
 
 			VkMemoryRequirements memRequirements;
-			vkGetImageMemoryRequirements(device, impl.image[i], &memRequirements);
+			vkGetImageMemoryRequirements(device, currentImage, &memRequirements);
 
 			VkMemoryAllocateInfo allocInfo = { VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO };
 			allocInfo.allocationSize = memRequirements.size;
@@ -2519,194 +2504,209 @@ namespace ig
 			}
 			allocInfo.memoryTypeIndex = memoryType.value();
 
-			result = vkAllocateMemory(device, &allocInfo, nullptr, &impl.memory[i]);
+			result = vkAllocateMemory(device, &allocInfo, nullptr, &currentMemory);
 			if (result != VK_SUCCESS)
 			{
 				return DetailedResult::Fail(VulkanErrorMsg("vkAllocateMemory", result));
 			}
 
-			vkBindImageMemory(device, impl.image[i], impl.memory[i], 0);
+			result = vkBindImageMemory(device, currentImage, currentMemory, 0);
+			if (result != VK_SUCCESS)
+			{
+				return DetailedResult::Fail(VulkanErrorMsg("vkBindImageMemory", result));
+			}
 
-			// Map memory for readable textures
 			if (desc.usage == TextureUsage::Readable)
 			{
-				void* mappedPtr = nullptr;
-
-				result = vkMapMemory(device, impl.memory[i], 0, memRequirements.size, 0, &mappedPtr);
+				result = vkMapMemory(device, currentMemory, 0, memRequirements.size, 0, &implPerFrame[i].mapped);
 				if (result != VK_SUCCESS)
 				{
 					return DetailedResult::Fail(VulkanErrorMsg("vkMapMemory", result));
 				}
-
-				readMapped.push_back(mappedPtr);
 			}
 		}
 
-		bool createSRV = (!isMultisampledCubemap && desc.usage != TextureUsage::Readable);
-		bool createUAV = (desc.usage == TextureUsage::UnorderedAccess);
+		bool createSRV = desc.usage != TextureUsage::Readable;
+		bool createUAV =
+			desc.usage == TextureUsage::UnorderedAccess ||
+			desc.usage == TextureUsage::UnorderedAccessRenderTexture;
+		bool createRTV_DSV =
+			desc.usage == TextureUsage::RenderTexture ||
+			desc.usage == TextureUsage::UnorderedAccessRenderTexture ||
+			desc.usage == TextureUsage::DepthBuffer;
 
-		if (!desc.createDescriptors)
+		if (HasFlag(desc.flags, TextureFlags::SkipDescriptorCreation))
 		{
 			createSRV = false;
 			createUAV = false;
+			createRTV_DSV = false;
 		}
 
-		auto CreateImageView = [&](VkImage image, VkImageViewType viewType, VkFormat format,
-			VkImageAspectFlags aspect, uint32_t baseMip = 0, uint32_t mipCount = VK_REMAINING_MIP_LEVELS) -> VkImageView
+		if (desc.usage == TextureUsage::DepthBuffer && HasFlag(desc.flags, TextureFlags::DepthBuffer_DenyShaderResource))
 		{
-			VkImageViewCreateInfo viewInfo = {};
-			viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-			viewInfo.image = image;
-			viewInfo.viewType = viewType;
-			viewInfo.format = format;
-			viewInfo.subresourceRange.aspectMask = aspect;
-			viewInfo.subresourceRange.baseMipLevel = baseMip;
-			viewInfo.subresourceRange.levelCount = mipCount;
-			viewInfo.subresourceRange.baseArrayLayer = 0;
-			viewInfo.subresourceRange.layerCount = desc.numFaces;
-			viewInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
-			viewInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
-			viewInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
-			viewInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+			createSRV = false;
+		}
 
-			VkImageView imageView = VK_NULL_HANDLE;
-			if (vkCreateImageView(device, &viewInfo, nullptr, &imageView) != VK_SUCCESS)
-			{
-				return VK_NULL_HANDLE;
-			}
-			return imageView;
-		};
+		if (isMultisampledCubemap) // Multisampled cubemaps can't have SRVs
+		{
+			createSRV = false;
+		}
 
 		if (createSRV)
 		{
-			// Allocate descriptor
-			srvDescriptor = heap.AllocatePersistent(DescriptorType::Texture_SRV);
-
-			VkImageViewType srvViewType = VK_IMAGE_VIEW_TYPE_2D;
-			if (desc.isCubemap)
+			// Does not include stencil aspect
+			VkImageAspectFlags aspectFlags = formatInfo.isDepthFormat ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT;
+			impl.view_srv = CreateImageView(device, impl.image, aspectFlags, desc.format, desc.isCubemap, desc.numFaces);
+			if (!impl.view_srv)
 			{
-				srvViewType = (desc.numFaces == 6) ? VK_IMAGE_VIEW_TYPE_CUBE : VK_IMAGE_VIEW_TYPE_CUBE_ARRAY;
-			}
-			else if (desc.numFaces > 1)
-			{
-				srvViewType = VK_IMAGE_VIEW_TYPE_2D_ARRAY;
+				return DetailedResult::Fail("Failed to create SRV image view.");
 			}
 
-			VkFormat srvFormat = vkFormat;
-			VkImageAspectFlagBits srvAspect = formatInfo.isDepthFormat ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT;
+			impl.srv = heap.AllocatePersistent(DescriptorType::Resource);
+			heap.WriteImageDescriptor(impl.srv, VulkanDescriptorType::Texture_SRV, impl.view_srv, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+		}
 
-			if (desc.overrideSRVFormat != Format::None)
+		if (createUAV || createRTV_DSV)
+		{
+			// Includes stencil aspect if exists
+			VkImageAspectFlags aspect = GetFullImageAspect(desc.format);
+			const uint32_t baseMip = 0;
+			const uint32_t mipLevels = 1;
+			impl.view_uav_rtv_dsv = CreateImageView(device, impl.image, aspect, desc.format, desc.isCubemap, desc.numFaces, baseMip, mipLevels);
+			if (!impl.view_uav_rtv_dsv)
 			{
-				srvFormat = ToVulkanFormat(desc.overrideSRVFormat);
-				srvAspect = GetFormatInfo(desc.overrideSRVFormat).isDepthFormat ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT;
+				return DetailedResult::Fail("Failed to create UAV/RTV/DSV image view.");
 			}
-
-			// SRV
-			impl.imageView_SRV = CreateImageView(impl.image[0], srvViewType, srvFormat, srvAspect);
-			if (!impl.imageView_SRV) return DetailedResult::Fail("Failed to create SRV image view.");
-			heap.WriteImageDescriptor(srvDescriptor, impl.imageView_SRV, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 		}
 
 		if (createUAV)
 		{
-			// Allocate descriptor
-			uavDescriptor = heap.AllocatePersistent(DescriptorType::Texture_UAV);
-
-			VkImageViewType viewType = (desc.numFaces == 1) ? VK_IMAGE_VIEW_TYPE_2D : VK_IMAGE_VIEW_TYPE_2D_ARRAY;
-
-			// UAV
-			impl.imageView_UAV = CreateImageView(impl.image[0], viewType, vkFormat, VK_IMAGE_ASPECT_COLOR_BIT);
-			if (!impl.imageView_UAV) return DetailedResult::Fail("Failed to create UAV image view.");
-			heap.WriteImageDescriptor(uavDescriptor, impl.imageView_UAV, VK_IMAGE_LAYOUT_GENERAL);
-		}
-
-		if (desc.usage == TextureUsage::RenderTexture ||
-			desc.usage == TextureUsage::DepthBuffer)
-		{
-			VkImageViewType viewType = VK_IMAGE_VIEW_TYPE_2D;
-			if (desc.isCubemap)
-			{
-				viewType = (desc.numFaces == 6) ? VK_IMAGE_VIEW_TYPE_CUBE : VK_IMAGE_VIEW_TYPE_CUBE_ARRAY;
-			}
-			else if (desc.numFaces > 1)
-			{
-				viewType = VK_IMAGE_VIEW_TYPE_2D_ARRAY;
-			}
-
-			VkImageAspectFlags aspectFlags = 0;
-			if (desc.usage == TextureUsage::RenderTexture)
-			{
-				aspectFlags = VK_IMAGE_ASPECT_COLOR_BIT;
-				impl.imageView_RTV_DSV = CreateImageView(impl.image[0], viewType, vkFormat, aspectFlags);
-				if (!impl.imageView_RTV_DSV) return DetailedResult::Fail("Failed to create RTV image view.");
-			}
-			else if (desc.usage == TextureUsage::DepthBuffer)
-			{
-				aspectFlags = VK_IMAGE_ASPECT_DEPTH_BIT;
-				if (formatInfo.hasStencilComponent)
-				{
-					aspectFlags |= VK_IMAGE_ASPECT_STENCIL_BIT;
-				}
-				impl.imageView_RTV_DSV = CreateImageView(impl.image[0], viewType, vkFormat, aspectFlags);
-				if (!impl.imageView_RTV_DSV) return DetailedResult::Fail("Failed to create DSV image view.");
-			}
+			impl.uav = heap.AllocatePersistent(DescriptorType::Resource);
+			heap.WriteImageDescriptor(impl.uav, VulkanDescriptorType::Texture_UAV, impl.view_uav_rtv_dsv, VK_IMAGE_LAYOUT_GENERAL);
 		}
 
 		return DetailedResult::Success();
 	}
 
+	VkImageView Texture::CreateImageView(VkDevice device, VkImage image, VkImageAspectFlags aspect, Format format,
+		bool isCubemap, uint32_t numFaces, uint32_t baseMip, uint32_t mipLevels)
+	{
+		assert(numFaces != 0);
+		assert(mipLevels != 0);
+		VkImageViewType viewType = (numFaces > 1) ? VK_IMAGE_VIEW_TYPE_2D_ARRAY : VK_IMAGE_VIEW_TYPE_2D;
+		if (isCubemap)
+		{
+			assert(numFaces % 6 == 0);
+			viewType = (numFaces == 6) ? VK_IMAGE_VIEW_TYPE_CUBE : VK_IMAGE_VIEW_TYPE_CUBE_ARRAY;
+		}
+
+		VkFormat vulkanFormat = ToVulkanFormat(format);
+		VkImageViewCreateInfo viewInfo =
+		{
+			.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+			.image = image,
+			.viewType = viewType,
+			.format = vulkanFormat,
+			.components =
+				{
+					.r = VK_COMPONENT_SWIZZLE_IDENTITY,
+					.g = VK_COMPONENT_SWIZZLE_IDENTITY,
+					.b = VK_COMPONENT_SWIZZLE_IDENTITY,
+					.a = VK_COMPONENT_SWIZZLE_IDENTITY
+				},
+			.subresourceRange =
+				{
+					.aspectMask = aspect,
+					.baseMipLevel = baseMip,
+					.levelCount = mipLevels,
+					.baseArrayLayer = 0,
+					.layerCount = numFaces
+				},
+		};
+
+		VkImageView imageView = VK_NULL_HANDLE;
+		if (vkCreateImageView(device, &viewInfo, nullptr, &imageView) != VK_SUCCESS)
+		{
+			return VK_NULL_HANDLE;
+		}
+		return imageView;
+	}
+
 	VkImage Texture::GetVulkanImage() const
 	{
-		assert(impl.image.size() > 0);
-		switch (desc.usage)
+		if (desc.usage == TextureUsage::Readable)
 		{
-		case TextureUsage::Default:
-		case TextureUsage::UnorderedAccess:
-		case TextureUsage::RenderTexture:
-		case TextureUsage::DepthBuffer:
-			return impl.image[0];
-		case TextureUsage::Readable:
-			return impl.image[context.GetFrameIndex()];
-		default:
-			Fatal("Invalid texture usage.");
+			assert(implPerFrame);
+			assert(context.GetFrameIndex() < GetPerFrameArrayLength());
+			return implPerFrame[context.GetFrameIndex()].image;
 		}
+		return impl.image;
 	}
 
 	VkDeviceMemory Texture::GetVulkanMemory() const
 	{
-		assert(impl.memory.size() > 0);
-		switch (desc.usage)
+		if (desc.usage == TextureUsage::Readable)
 		{
-		case TextureUsage::Default:
-		case TextureUsage::UnorderedAccess:
-		case TextureUsage::RenderTexture:
-		case TextureUsage::DepthBuffer:
-			return impl.memory[0];
-		case TextureUsage::Readable:
-			return impl.memory[context.GetFrameIndex()];
-		default:
-			Fatal("Invalid texture usage.");
+			assert(implPerFrame);
+			assert(context.GetFrameIndex() < GetPerFrameArrayLength());
+			return implPerFrame[context.GetFrameIndex()].memory;
 		}
+		return impl.memory;
 	}
 
 	void Buffer::Impl_Destroy()
 	{
-		for (size_t i = 0; i < mapped.size(); i++)
+		DescriptorHeap& heap = context.GetDescriptorHeap();
+		if (impl.cbv_srv_uav)
 		{
-			vkUnmapMemory(context.GetVulkanDevice(), impl.memory.at(i));
+			heap.FreePersistent(impl.cbv_srv_uav);
+			impl.cbv_srv_uav.SetToNull();
 		}
 
-		for (const auto& buf : impl.buffer)
-		{
-			if (buf) vkDestroyBuffer(context.GetVulkanDevice(), buf, nullptr);
-		}
-		impl.buffer.clear();
+		VkDevice device = context.GetVulkanDevice();
 
-		for (const auto& mem : impl.memory)
+		if (implPerFrame)
 		{
-			if (mem) vkFreeMemory(context.GetVulkanDevice(), mem, nullptr);
+			const uint32_t arrayLength = GetPerFrameArrayLength();
+			for (uint32_t i = 0; i < arrayLength; i++)
+			{
+				auto& frame = implPerFrame[i];
+
+				if (frame.cbv_srv_uav)
+				{
+					heap.FreePersistent(frame.cbv_srv_uav);
+					frame.cbv_srv_uav.SetToNull();
+				}
+
+				if (frame.mapped)
+				{
+					vkUnmapMemory(device, frame.memory);
+					frame.mapped = nullptr;
+				}
+				if (frame.buffer)
+				{
+					vkDestroyBuffer(device, frame.buffer, nullptr);
+					frame.buffer = VK_NULL_HANDLE;
+				}
+				if (frame.memory)
+				{
+					vkFreeMemory(device, frame.memory, nullptr);
+					frame.memory = VK_NULL_HANDLE;
+				}
+			}
+			implPerFrame = nullptr;
 		}
-		impl.memory.clear();
+
+		if (impl.buffer)
+		{
+			vkDestroyBuffer(device, impl.buffer, nullptr);
+			impl.buffer = VK_NULL_HANDLE;
+		}
+		if (impl.memory)
+		{
+			vkFreeMemory(device, impl.memory, nullptr);
+			impl.memory = VK_NULL_HANDLE;
+		}
 	}
 
 	DetailedResult Buffer::Impl_Create()
@@ -2715,15 +2715,15 @@ namespace ig
 		VkPhysicalDevice physicalDevice = context.GetVulkanPhysicalDevice();
 		DescriptorHeap& heap = context.GetDescriptorHeap();
 
-		uint32_t numBuffers = 1;
+		const uint32_t perFrameArrayLength = GetPerFrameArrayLength();
+
 		if (desc.usage == BufferUsage::Readable ||
 			desc.usage == BufferUsage::Dynamic)
 		{
-			numBuffers = context.GetMaxFramesInFlight();
+			implPerFrame = std::make_unique<Impl_PerFrameBuffer[]>(perFrameArrayLength);
 		}
 
-		impl.buffer.resize(numBuffers, VK_NULL_HANDLE);
-		impl.memory.resize(numBuffers, VK_NULL_HANDLE);
+		const uint32_t numBuffers = implPerFrame ? perFrameArrayLength : 1;
 
 		uint64_t bufferSize = desc.size;
 		if (desc.type == BufferType::ShaderConstant)
@@ -2739,6 +2739,7 @@ namespace ig
 		case BufferType::StructuredBuffer: usageFlags |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT; break;
 		case BufferType::RawBuffer: usageFlags |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT; break;
 		case BufferType::ShaderConstant: usageFlags |= VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT; break;
+
 		default:
 			Fatal("Invalid buffer type.");
 		}
@@ -2746,6 +2747,7 @@ namespace ig
 		switch (desc.usage)
 		{
 		case BufferUsage::Default:
+			usageFlags |= VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
 			usageFlags |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
 			break;
 
@@ -2757,8 +2759,8 @@ namespace ig
 			break;
 
 		case BufferUsage::UnorderedAccess:
-			usageFlags |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
 			usageFlags |= VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+			usageFlags |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
 			break;
 
 		default:
@@ -2779,20 +2781,23 @@ namespace ig
 
 		for (uint32_t i = 0; i < numBuffers; i++)
 		{
+			auto& currentBuffer = implPerFrame ? implPerFrame[i].buffer : impl.buffer;
+			auto& currentMemory = implPerFrame ? implPerFrame[i].memory : impl.memory;
+
 			VkBufferCreateInfo bufferInfo = {};
 			bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
 			bufferInfo.size = bufferSize;
 			bufferInfo.usage = usageFlags;
 			bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
-			VkResult result = vkCreateBuffer(device, &bufferInfo, nullptr, &impl.buffer[i]);
+			VkResult result = vkCreateBuffer(device, &bufferInfo, nullptr, &currentBuffer);
 			if (result != VK_SUCCESS)
 			{
 				return DetailedResult::Fail(VulkanErrorMsg("vkCreateBuffer", result));
 			}
 
 			VkMemoryRequirements memRequirements;
-			vkGetBufferMemoryRequirements(device, impl.buffer[i], &memRequirements);
+			vkGetBufferMemoryRequirements(device, currentBuffer, &memRequirements);
 
 			std::optional<uint32_t> memType = FindVulkanMemoryType(physicalDevice, memRequirements.memoryTypeBits, memoryProperties);
 			if (!memType)
@@ -2805,59 +2810,48 @@ namespace ig
 			allocInfo.allocationSize = memRequirements.size;
 			allocInfo.memoryTypeIndex = memType.value();
 
-			result = vkAllocateMemory(device, &allocInfo, nullptr, &impl.memory[i]);
+			result = vkAllocateMemory(device, &allocInfo, nullptr, &currentMemory);
 			if (result != VK_SUCCESS)
 			{
 				return DetailedResult::Fail(VulkanErrorMsg("vkAllocateMemory", result));
 			}
 
-			vkBindBufferMemory(device, impl.buffer[i], impl.memory[i], 0);
+			result = vkBindBufferMemory(device, currentBuffer, currentMemory, 0);
+			if (result != VK_SUCCESS)
+			{
+				return DetailedResult::Fail(VulkanErrorMsg("vkBindBufferMemory", result));
+			}
 
 			if (desc.usage == BufferUsage::Dynamic ||
 				desc.usage == BufferUsage::Readable)
 			{
-				void* mappedPtr = nullptr;
-
-				result = vkMapMemory(device, impl.memory[i], 0, bufferSize, 0, &mappedPtr);
+				result = vkMapMemory(device, currentMemory, 0, bufferSize, 0, &implPerFrame[i].mapped);
 				if (result != VK_SUCCESS)
 				{
 					return DetailedResult::Fail(VulkanErrorMsg("vkMapMemory", result));
 				}
-
-				mapped.push_back(mappedPtr);
 			}
 		}
 
-		uint32_t numDescriptors = 0;
-		if (desc.usage == BufferUsage::Default) numDescriptors = 1;
-		else if (desc.usage == BufferUsage::UnorderedAccess) numDescriptors = 1;
-		else if (desc.usage == BufferUsage::Dynamic) numDescriptors = context.GetMaxFramesInFlight();
-
-		// SRV or CBV
-		for (uint32_t i = 0; i < numDescriptors; i++)
+		if (desc.usage != BufferUsage::Readable)
 		{
-			if (desc.type == BufferType::StructuredBuffer ||
-				desc.type == BufferType::RawBuffer ||
-				desc.type == BufferType::ShaderConstant)
+			const uint32_t numDescriptors = implPerFrame ? perFrameArrayLength : 1;
+			for (uint32_t i = 0; i < numDescriptors; i++)
 			{
-				DescriptorType descriptorType = (desc.type == BufferType::ShaderConstant)
-					? DescriptorType::ConstantBuffer_CBV
-					: DescriptorType::RawOrStructuredBuffer_SRV_UAV;
+				auto& currentBuffer = implPerFrame ? implPerFrame[i].buffer : impl.buffer;
+				auto& currentDescriptor = implPerFrame ? implPerFrame[i].cbv_srv_uav : impl.cbv_srv_uav;
 
-				Descriptor allocatedDescriptor = heap.AllocatePersistent(descriptorType);
-
-				heap.WriteBufferDescriptor(allocatedDescriptor, impl.buffer[i], 0, desc.size);
-
-				descriptor_SRV_or_CBV.push_back(allocatedDescriptor);
+				if (desc.type == BufferType::ShaderConstant)
+				{
+					currentDescriptor = heap.AllocatePersistent(DescriptorType::Resource);
+					heap.WriteBufferDescriptor(currentDescriptor, VulkanDescriptorType::ConstantBuffer_CBV, currentBuffer, 0, desc.size);
+				}
+				else if (desc.type == BufferType::StructuredBuffer || desc.type == BufferType::RawBuffer)
+				{
+					currentDescriptor = heap.AllocatePersistent(DescriptorType::Resource);
+					heap.WriteBufferDescriptor(currentDescriptor, VulkanDescriptorType::RawOrStructuredBuffer_SRV_UAV, currentBuffer, 0, desc.size);
+				}
 			}
-		}
-
-		// UAV
-		if (desc.usage == BufferUsage::UnorderedAccess)
-		{
-			descriptor_UAV = heap.AllocatePersistent(DescriptorType::RawOrStructuredBuffer_SRV_UAV);
-
-			heap.WriteBufferDescriptor(descriptor_UAV, impl.buffer[0], 0, desc.size);
 		}
 
 		return DetailedResult::Success();
@@ -2869,11 +2863,11 @@ namespace ig
 		{
 		case BufferUsage::Default:
 		case BufferUsage::UnorderedAccess:
-			return impl.buffer[0];
+			return impl.buffer;
 		case BufferUsage::Readable:
-			return impl.buffer[context.GetFrameIndex()];
+			return implPerFrame[context.GetFrameIndex()].buffer;
 		case BufferUsage::Dynamic:
-			return impl.buffer[dynamicSetCounter];
+			return implPerFrame[dynamicSetCounter].buffer;
 		default:
 			Fatal("Invalid buffer usage.");
 		}
@@ -2885,11 +2879,11 @@ namespace ig
 		{
 		case BufferUsage::Default:
 		case BufferUsage::UnorderedAccess:
-			return impl.memory[0];
+			return impl.memory;
 		case BufferUsage::Readable:
-			return impl.memory[context.GetFrameIndex()];
+			return implPerFrame[context.GetFrameIndex()].memory;
 		case BufferUsage::Dynamic:
-			return impl.memory[dynamicSetCounter];
+			return implPerFrame[dynamicSetCounter].memory;
 		default:
 			Fatal("Invalid buffer usage.");
 		}
@@ -3044,14 +3038,14 @@ namespace ig
 	{
 		// Wrapped textures don't destroy their resources, so we must do it manually.
 		// Don't free any VkImage from the wrapped textures though, because they belong to the swap chain.
-		for (size_t i = 0; i < swapChain.wrapped.size(); i++)
+		for (const auto& surface : swapChain.wrapped)
 		{
-			VkImageView imageView_RTV = swapChain.wrapped[i]->GetVulkanImageView_RTV_DSV();
+			VkImageView imageView_RTV = surface->GetVulkanImageView_UAV_RTV_DSV();
 			if (imageView_RTV) vkDestroyImageView(graphics.device, imageView_RTV, nullptr);
 		}
-		for (size_t i = 0; i < swapChain.wrapped_sRGB_opposite.size(); i++)
+		for (const auto& surface : swapChain.wrapped_sRGB_opposite)
 		{
-			VkImageView imageView_RTV = swapChain.wrapped_sRGB_opposite[i]->GetVulkanImageView_RTV_DSV();
+			VkImageView imageView_RTV = surface->GetVulkanImageView_UAV_RTV_DSV();
 			if (imageView_RTV) vkDestroyImageView(graphics.device, imageView_RTV, nullptr);
 		}
 		swapChain = SwapChainInfo();
@@ -3067,16 +3061,23 @@ namespace ig
 		// Handle resize
 		Extent2D cappedExtent = extent;
 		VkSurfaceCapabilitiesKHR caps;
-		vkGetPhysicalDeviceSurfaceCapabilitiesKHR(graphics.physicalDevice, graphics.surface, &caps);
-		if (extent.width != caps.minImageExtent.width ||
-			extent.height != caps.minImageExtent.height)
+		VkResult result = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(graphics.physicalDevice, graphics.surface, &caps);
+		if (result != VK_SUCCESS)
 		{
-			cappedExtent = Extent2D(caps.minImageExtent.width, caps.minImageExtent.height);
+			return DetailedResult::Fail(VulkanErrorMsg("vkGetPhysicalDeviceSurfaceCapabilitiesKHR", result));
+		}
+		if (extent.width < caps.minImageExtent.width ||
+			extent.height < caps.minImageExtent.height ||
+			extent.width > caps.maxImageExtent.width ||
+			extent.height > caps.maxImageExtent.height)
+		{
+			cappedExtent.width = std::clamp(extent.width, caps.minImageExtent.width, caps.maxImageExtent.width);
+			cappedExtent.height = std::clamp(extent.height, caps.minImageExtent.height, caps.maxImageExtent.height);
 
 			// If we can't create a valid swapchain yet
 			if (cappedExtent.width == 0 || cappedExtent.height == 0)
 			{
-				return DetailedResult::Fail("Min/max image caps are invalid.");
+				return DetailedResult::Fail("Swapchain min/max image extent is zero.");
 			}
 
 			Event resizeEvent;
@@ -3120,7 +3121,7 @@ namespace ig
 		}
 
 		VkSwapchainKHR newSwapchain = VK_NULL_HANDLE;
-		VkResult result = vkCreateSwapchainKHR(graphics.device, &createInfo, nullptr, &newSwapchain);
+		result = vkCreateSwapchainKHR(graphics.device, &createInfo, nullptr, &newSwapchain);
 		if (result != VK_SUCCESS)
 		{
 			return DetailedResult::Fail(VulkanErrorMsg("vkCreateSwapchainKHR", result));
@@ -3165,28 +3166,30 @@ namespace ig
 		// Wrap backbuffers
 		for (uint32_t i = 0; i < imageCount; i++)
 		{
-			VkImageView imageView = VK_NULL_HANDLE;
-			CreateVulkanImageViewForSwapChain(graphics.device, swapchainImages[i], createInfo.imageFormat, &imageView);
+			const TextureDesc desc =
+			{
+				.extent = cappedExtent,
+				.format = format,
+				.usage = TextureUsage::RenderTexture,
+				.numFaces = 1,
+				.mipLevels = 1,
+			};
 
-			WrappedTextureDesc desc;
-			desc.textureDesc.extent = cappedExtent;
-			desc.textureDesc.format = format;
-			desc.textureDesc.usage = TextureUsage::RenderTexture;
-			desc.impl.image = { swapchainImages[i] };
-			desc.impl.memory = { VK_NULL_HANDLE };
-			desc.impl.imageView_RTV_DSV = imageView;
+			Impl_Texture impl;
+			impl.image = swapchainImages[i];
+			impl.memory = VK_NULL_HANDLE;
+			impl.view_uav_rtv_dsv = Texture::CreateImageView(graphics.device, swapchainImages[i],
+				VK_IMAGE_ASPECT_COLOR_BIT, format, false, desc.numFaces, 0, desc.mipLevels);
 
-			swapChain.wrapped.push_back(std::move(Texture::CreateWrapped(*this, desc)));
+			swapChain.wrapped.push_back(std::move(Texture::CreateWrapped(*this, desc, impl)));
 
 			// sRGB opposite views
 			if (formatInfo.sRGB_opposite != Format::None)
 			{
-				VkImageView imageView_sRGB_opposite = VK_NULL_HANDLE;
-				CreateVulkanImageViewForSwapChain(graphics.device, swapchainImages[i],
-					ToVulkanFormat(formatInfo.sRGB_opposite), &imageView_sRGB_opposite);
-				desc.impl.imageView_RTV_DSV = imageView_sRGB_opposite;
+				impl.view_uav_rtv_dsv = Texture::CreateImageView(graphics.device, swapchainImages[i],
+					VK_IMAGE_ASPECT_COLOR_BIT, formatInfo.sRGB_opposite, false, desc.numFaces, 0, desc.mipLevels);
 
-				swapChain.wrapped_sRGB_opposite.push_back(std::move(Texture::CreateWrapped(*this, desc)));
+				swapChain.wrapped_sRGB_opposite.push_back(std::move(Texture::CreateWrapped(*this, desc, impl)));
 			}
 		}
 

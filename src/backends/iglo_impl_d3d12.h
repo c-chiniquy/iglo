@@ -70,51 +70,52 @@ namespace ig
 
 	struct Impl_DescriptorHeap
 	{
-		// Small CPU-only descriptor heaps.
-		ComPtr<ID3D12DescriptorHeap> descriptorHeap_NonShaderVisible_RTV; // For clearing and setting render textures
-		ComPtr<ID3D12DescriptorHeap> descriptorHeap_NonShaderVisible_DSV; // For clearing and setting depth buffers
-		ComPtr<ID3D12DescriptorHeap> descriptorHeap_NonShaderVisible_UAV; // For clearing unordered access textures/buffers
-
-		// Shader visible descriptor heaps
-		ComPtr<ID3D12DescriptorHeap> descriptorHeap_Resources; // SRV CBV UAV
-		ComPtr<ID3D12DescriptorHeap> descriptorHeap_Samplers;
-
 		ComPtr<ID3D12RootSignature> bindlessRootSignature;
 
+		// Shader-visible descriptor heaps
+		ComPtr<ID3D12DescriptorHeap> heap_CBV_SRV_UAV;
+		ComPtr<ID3D12DescriptorHeap> heap_Samplers;
+
+		// Non-shader-visible descriptor heaps
+		ComPtr<ID3D12DescriptorHeap> heap_RTV;
+		ComPtr<ID3D12DescriptorHeap> heap_DSV;
+
+		// Small reusable non-shader-visible descriptor heaps
+		ComPtr<ID3D12DescriptorHeap> heap_Reusable_UAV; // For clearing unordered access textures/buffers
+
+		uint32_t descriptorSize_CBV_SRV_UAV = 0;
+		uint32_t descriptorSize_Sampler = 0;
 		uint32_t descriptorSize_RTV = 0;
 		uint32_t descriptorSize_DSV = 0;
-		uint32_t descriptorSize_Sampler = 0;
-		uint32_t descriptorSize_CBV_SRV_UAV = 0;
 	};
 
-	struct D3D12ViewDescUnion_RTV_DSV_UAV
+	struct Impl_PerFrameTexture
 	{
-		D3D12ViewDescUnion_RTV_DSV_UAV()
-		{
-			std::memset(this, 0, sizeof(*this));
-		}
-
-		union
-		{
-			D3D12_RENDER_TARGET_VIEW_DESC rtv;
-			D3D12_DEPTH_STENCIL_VIEW_DESC dsv;
-			D3D12_UNORDERED_ACCESS_VIEW_DESC uav; // For clearing uav textures
-		};
+		void* mapped = nullptr;
+		ComPtr<ID3D12Resource> resource;
 	};
 
 	struct Impl_Texture
 	{
-		std::vector<ComPtr<ID3D12Resource>> resource; // Per-frame only if Readable; otherwise just one.
-		
-		// Info used to create RTVs, DSVs and UAVs when setting/clearing render targets and clearing unordered access textures.
-		// These CPU-only descriptors are created only when needed.
-		D3D12ViewDescUnion_RTV_DSV_UAV desc_cpu; 
+		Descriptor srv;
+		Descriptor uav;
+		Descriptor rtv_dsv;
+		ComPtr<ID3D12Resource> resource;
+	};
+
+	struct Impl_PerFrameBuffer
+	{
+		void* mapped = nullptr;
+		Descriptor cbv_srv;
+		Descriptor uav;
+		ComPtr<ID3D12Resource> resource;
 	};
 
 	struct Impl_Buffer
 	{
-		std::vector<ComPtr<ID3D12Resource>> resource;
-		D3D12_UNORDERED_ACCESS_VIEW_DESC desc_cpu_uav = {}; // For clearing uav buffers
+		Descriptor cbv_srv;
+		Descriptor uav;
+		ComPtr<ID3D12Resource> resource;
 	};
 
 	struct D3D12TextureFilter

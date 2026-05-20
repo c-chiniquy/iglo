@@ -27,7 +27,7 @@ float4 PSMain(float4 position : SV_POSITION, float4 color : COLOR, float2 texCoo
 	float4 finalColor;
 	
 	// Outline effect
-	if (sdf.sdfEffectFlags & 0x1) 
+	if (sdf.flags & 0x1) 
 	{
 		outerEdge -= sdf.outlineThickness;
 		baseAlpha = smoothstep(outerEdge - scaledSmoothing, outerEdge + scaledSmoothing, dist);
@@ -42,7 +42,7 @@ float4 PSMain(float4 position : SV_POSITION, float4 color : COLOR, float2 texCoo
 	}
 
 	// Glow effect
-	if (sdf.sdfEffectFlags & 0x2) 
+	if (sdf.flags & 0x2) 
 	{
 		if (baseAlpha < 1.0f)
 		{

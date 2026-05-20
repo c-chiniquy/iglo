@@ -107,29 +107,67 @@ namespace ig
 		VkSemaphore timelineSemaphore = VK_NULL_HANDLE;
 	};
 
+	//-------------------- Descriptor Heap --------------------//
+	static constexpr uint32_t NUM_VK_DESCRIPTOR_TYPES = 5;
+	static constexpr uint32_t VK_BINDING_NON_SAMPLER = 0;
+	static constexpr uint32_t VK_BINDING_SAMPLER = 1;
+	enum class VulkanDescriptorType
+	{
+		ConstantBuffer_CBV = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, // CBV
+		RawOrStructuredBuffer_SRV_UAV = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, // SRV or UAV
+		Texture_SRV = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, // SRV
+		Texture_UAV = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, // UAV
+		Sampler = VK_DESCRIPTOR_TYPE_SAMPLER,
+	};
+	static constexpr std::array<VkDescriptorType, NUM_VK_DESCRIPTOR_TYPES> vkDescriptorTypeTable =
+	{
+		VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+		VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+		VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+		VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+		VK_DESCRIPTOR_TYPE_SAMPLER
+	};
+	static std::array<uint32_t, NUM_VK_DESCRIPTOR_TYPES> GetVulkanPropsMaxDescriptors(VkPhysicalDevice);
+
 	struct Impl_DescriptorHeap
 	{
 		VkDescriptorPool descriptorPool = VK_NULL_HANDLE;
 		VkDescriptorSetLayout descriptorSetLayout = VK_NULL_HANDLE;
 		VkDescriptorSet descriptorSet = VK_NULL_HANDLE;
 		VkPipelineLayout bindlessPipelineLayout = VK_NULL_HANDLE;
+	};
+	//----------------------------------------//
 
-		std::vector<std::vector<VkImageView>> tempImageViews; // Per-frame
+	struct Impl_PerFrameTexture
+	{
+		void* mapped = nullptr;
+		VkImage image = VK_NULL_HANDLE;
+		VkDeviceMemory memory = VK_NULL_HANDLE;
 	};
 
 	struct Impl_Texture
 	{
-		std::vector<VkImage> image;  // Per-frame if Readable
-		std::vector<VkDeviceMemory> memory;  // Per-frame if Readable
-		VkImageView imageView_SRV = VK_NULL_HANDLE;
-		VkImageView imageView_UAV = VK_NULL_HANDLE;
-		VkImageView imageView_RTV_DSV = VK_NULL_HANDLE;
+		Descriptor srv;
+		Descriptor uav;
+		VkImageView view_srv = VK_NULL_HANDLE;
+		VkImageView view_uav_rtv_dsv = VK_NULL_HANDLE;
+		VkImage image = VK_NULL_HANDLE;
+		VkDeviceMemory memory = VK_NULL_HANDLE;
+	};
+
+	struct Impl_PerFrameBuffer
+	{
+		void* mapped = nullptr;
+		Descriptor cbv_srv_uav;
+		VkBuffer buffer = VK_NULL_HANDLE;
+		VkDeviceMemory memory = VK_NULL_HANDLE;
 	};
 
 	struct Impl_Buffer
 	{
-		std::vector<VkBuffer> buffer;
-		std::vector<VkDeviceMemory> memory;
+		Descriptor cbv_srv_uav;
+		VkBuffer buffer = VK_NULL_HANDLE;
+		VkDeviceMemory memory = VK_NULL_HANDLE;
 	};
 
 	struct VulkanQueueFamilies
@@ -173,7 +211,6 @@ namespace ig
 	std::optional<uint32_t> FindVulkanMemoryType(VkPhysicalDevice, uint32_t typeFilter, VkMemoryPropertyFlags properties);
 	DetailedResult IsVulkanPhysicalDeviceSuitable(VkPhysicalDevice, VkSurfaceKHR, const std::vector<const char*>& requiredDeviceExtensions);
 	uint64_t GetRequiredUploadBufferSize(const Image&, const BufferPlacementAlignments&);
-	VkResult CreateVulkanImageViewForSwapChain(VkDevice device, VkImage swapChainImage, VkFormat swapChainFormat, VkImageView* out_pView);
-	VkImageAspectFlags GetVulkanImageAspect(Format format);
+	VkImageAspectFlags GetFullImageAspect(Format format);
 
 }

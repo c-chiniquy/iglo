@@ -619,17 +619,6 @@ namespace ig
 		this->isAllocated.Resize(maxIndices, false);
 	}
 
-	void DescriptorHeap::PersistentIndexAllocator::Clear()
-	{
-		maxIndices = 0;
-		allocationCount = 0;
-
-		freed.clear();
-		freed.shrink_to_fit();
-
-		isAllocated.Clear();
-	}
-
 	uint32_t DescriptorHeap::PersistentIndexAllocator::Allocate()
 	{
 		if (allocationCount >= maxIndices)
@@ -680,12 +669,6 @@ namespace ig
 		this->offset = offset;
 	}
 
-	void DescriptorHeap::TempIndexAllocator::Clear()
-	{
-		maxIndices = 0;
-		allocationCount = 0;
-	}
-
 	uint32_t DescriptorHeap::TempIndexAllocator::Allocate()
 	{
 		if (allocationCount >= maxIndices)
@@ -693,7 +676,6 @@ namespace ig
 			Fatal(ToString("Failed to allocate temp descriptor. Reason: Ran out of temp descriptors ",
 				"(", allocationCount, "/", maxIndices, ")"));
 		}
-
 		uint32_t index = allocationCount;
 		allocationCount++;
 		return index + offset;
@@ -717,31 +699,37 @@ namespace ig
 				" unfreed sampler descriptor(s) detected."));
 		}
 
+		FreeAllTempResources();
+
 		Impl_Destroy();
 	}
 
-	uint32_t DescriptorHeap::CalcTotalResDescriptors(uint32_t maxPersistent, uint32_t maxTempPerFrame, uint32_t maxFramesInFlight)
+	uint32_t DescriptorHeap::CalcTotalDescriptors(uint32_t maxPersistent, uint32_t maxTempPerFrame, uint32_t maxFramesInFlight)
 	{
 		return maxPersistent + (maxTempPerFrame * maxFramesInFlight);
 	}
 
 	std::pair<std::unique_ptr<DescriptorHeap>, DetailedResult> DescriptorHeap::Create(const IGLOContext& context,
-		uint32_t maxPersistentResources, uint32_t maxTempResourcesPerFrame, uint32_t maxSamplers, uint32_t maxFramesInFlight)
+		const DescriptorLimits& limits, uint32_t maxFramesInFlight)
 	{
-		std::unique_ptr<DescriptorHeap> out = std::unique_ptr<DescriptorHeap>(new DescriptorHeap(context, maxFramesInFlight));
+		std::unique_ptr<DescriptorHeap> out = std::unique_ptr<DescriptorHeap>(new DescriptorHeap(context, limits, maxFramesInFlight));
 
 		// Resource descriptor indices are partitioned like this:
 		// [maxPersistent][maxTemporaryPerFrame frame 0][maxTemporaryPerFrame frame 1][maxTemporaryPerFrame frame N...]
-		out->persResourceIndices.Reset(maxPersistentResources);
-		out->persSamplerIndices.Reset(maxSamplers);
+		out->persResourceIndices.Reset(limits.persistentResources);
+		out->persSamplerIndices.Reset(limits.samplers);
+#ifdef IGLO_D3D12
+		out->persRenderTextureIndices.Reset(limits.renderTextures);
+		out->persDepthBufferIndices.Reset(limits.depthBuffers);
+#endif
 		out->tempResourceIndices.resize(maxFramesInFlight);
 		for (uint32_t i = 0; i < maxFramesInFlight; i++)
 		{
-			uint32_t offset = maxPersistentResources + (i * maxTempResourcesPerFrame);
-			out->tempResourceIndices[i].Reset(maxTempResourcesPerFrame, offset);
+			uint32_t offset = limits.persistentResources + (i * limits.tempResourcesPerFrame);
+			out->tempResourceIndices[i].Reset(limits.tempResourcesPerFrame, offset);
 		}
 
-		DetailedResult result = out->Impl_Create(maxPersistentResources, maxTempResourcesPerFrame, maxSamplers);
+		DetailedResult result = out->Impl_Create();
 		if (!result)
 		{
 			return { nullptr, result };
@@ -758,18 +746,14 @@ namespace ig
 
 		assert(frameIndex < tempResourceIndices.size());
 		tempResourceIndices[frameIndex].FreeAllIndices();
-
-		Impl_NextFrame();
 	}
 
 	void DescriptorHeap::FreeAllTempResources()
 	{
-		for (size_t i = 0; i < tempResourceIndices.size(); i++)
+		for (uint32_t i = 0; i < (uint32_t)tempResourceIndices.size(); i++)
 		{
-			tempResourceIndices[i].FreeAllIndices();
+			tempResourceIndices[frameIndex].FreeAllIndices();
 		}
-
-		Impl_FreeAllTempResources();
 	}
 
 	DescriptorHeap::Stats DescriptorHeap::GetCurrentStats() const
@@ -777,44 +761,67 @@ namespace ig
 		assert(frameIndex < tempResourceIndices.size());
 
 		Stats out;
-		out.maxPersistentResources = persResourceIndices.GetMaxIndices();
-		out.maxTempResources = tempResourceIndices[frameIndex].GetMaxIndices();
-		out.maxSamplers = persSamplerIndices.GetMaxIndices();
-		out.livePersistentResources = persResourceIndices.GetAllocationCount();
-		out.liveTempResources = tempResourceIndices[frameIndex].GetAllocationCount();
-		out.liveSamplers = persSamplerIndices.GetAllocationCount();
+
+		out.max.persistentResources = persResourceIndices.GetMaxIndices();
+		out.max.tempResourcesPerFrame = tempResourceIndices[frameIndex].GetMaxIndices();
+		out.max.samplers = persSamplerIndices.GetMaxIndices();
+#ifdef IGLO_D3D12
+		out.max.renderTextures = persRenderTextureIndices.GetMaxIndices();
+		out.max.depthBuffers = persDepthBufferIndices.GetMaxIndices();
+#endif
+
+		out.live.persistentResources = persResourceIndices.GetAllocationCount();
+		out.live.tempResourcesPerFrame = tempResourceIndices[frameIndex].GetAllocationCount();
+		out.live.samplers = persSamplerIndices.GetAllocationCount();
+#ifdef IGLO_D3D12
+		out.live.renderTextures = persRenderTextureIndices.GetAllocationCount();
+		out.live.depthBuffers = persDepthBufferIndices.GetAllocationCount();
+#endif
+
 		return out;
 	}
 
-	Descriptor DescriptorHeap::AllocatePersistent(DescriptorType descriptorType)
+	Descriptor DescriptorHeap::AllocatePersistent(DescriptorType type)
 	{
-		PersistentIndexAllocator& allocator = (descriptorType == DescriptorType::Sampler) ? persSamplerIndices : persResourceIndices;
-		uint32_t out = allocator.Allocate();
-		return Descriptor(out, descriptorType);
+		switch (type)
+		{
+		case DescriptorType::Resource: return Descriptor(persResourceIndices.Allocate(), type);
+		case DescriptorType::Sampler: return Descriptor(persSamplerIndices.Allocate(), type);
+#ifdef IGLO_D3D12
+		case DescriptorType::RenderTexture: return Descriptor(persRenderTextureIndices.Allocate(), type);
+		case DescriptorType::DepthBuffer: return Descriptor(persDepthBufferIndices.Allocate(), type);
+#endif
+
+		default:
+			Fatal("Invalid DescriptorType");
+		}
 	}
 
-	Descriptor DescriptorHeap::AllocateTemp(DescriptorType descriptorType)
+	Descriptor DescriptorHeap::AllocateTempResource()
 	{
-		assert(descriptorType != DescriptorType::Sampler && "temp samplers are not supported");
 		assert(frameIndex < tempResourceIndices.size());
 
 		TempIndexAllocator& allocator = tempResourceIndices[frameIndex];
 
 		uint32_t out = allocator.Allocate();
-		return Descriptor(out, descriptorType);
+		return Descriptor(out, DescriptorType::Resource);
 	}
 
 	void DescriptorHeap::FreePersistent(Descriptor descriptor)
 	{
 		if (!descriptor) Fatal("Attempted to free a null persistent descriptor!");
 
-		if (descriptor.type == DescriptorType::Sampler)
+		switch (descriptor.type)
 		{
-			persSamplerIndices.Free(descriptor.heapIndex);
-		}
-		else
-		{
-			persResourceIndices.Free(descriptor.heapIndex);
+		case DescriptorType::Resource: persResourceIndices.Free(descriptor.heapIndex); break;
+		case DescriptorType::Sampler: persSamplerIndices.Free(descriptor.heapIndex); break;
+#ifdef IGLO_D3D12
+		case DescriptorType::RenderTexture: persRenderTextureIndices.Free(descriptor.heapIndex); break;
+		case DescriptorType::DepthBuffer: persDepthBufferIndices.Free(descriptor.heapIndex); break;
+#endif
+
+		default:
+			Fatal("Invalid DescriptorType");
 		}
 	}
 
@@ -1037,6 +1044,9 @@ namespace ig
 
 	void CommandList::ClearColor(const Texture& renderTexture, Color color, uint32_t numRects, const IntRect* rects)
 	{
+		assert(
+			renderTexture.GetUsage() == TextureUsage::RenderTexture ||
+			renderTexture.GetUsage() == TextureUsage::UnorderedAccessRenderTexture);
 		if (numRects > 0)
 		{
 			assert(rects != nullptr);
@@ -1047,6 +1057,7 @@ namespace ig
 	void CommandList::ClearDepth(const Texture& depthBuffer, float depth, byte stencil, bool clearDepth, bool clearStencil,
 		uint32_t numRects, const IntRect* rects)
 	{
+		assert(depthBuffer.GetUsage() == TextureUsage::DepthBuffer);
 		if (numRects > 0)
 		{
 			assert(rects != nullptr);
@@ -1680,11 +1691,12 @@ namespace ig
 		genMipsPipeline = nullptr;
 		bilinearClampSampler = nullptr;
 
+		DestroySwapChainResources();
+
 		descriptorHeap = nullptr;
 		uploadHeap = nullptr;
 		commandQueue = nullptr;
 
-		DestroySwapChainResources();
 		Impl_DestroyGraphicsDevice();
 	}
 
@@ -1740,9 +1752,7 @@ namespace ig
 		// Descriptor heap manager
 		{
 			auto result = DescriptorHeap::Create(*this,
-				renderSettings.maxPersistentResourceDescriptors,
-				renderSettings.maxTempResourceDescriptorsPerFrame,
-				renderSettings.maxSamplerDescriptors,
+				renderSettings.descriptorLimits,
 				renderSettings.maxFramesInFlight);
 			if (!result.second) return result.second;
 			descriptorHeap = std::move(result.first);
@@ -2174,8 +2184,8 @@ namespace ig
 		{
 			.extent = Extent2D(header->dwWidth, header->dwHeight),
 			.format = Format::None,
-			.mipLevels = 1,
 			.numFaces = 1,
+			.mipLevels = 1,
 			.isCubemap = false,
 		};
 		bool mustConvertBGRToBGRA = false;
@@ -2749,9 +2759,25 @@ namespace ig
 		uploadHeap->FreeAllTempPages();
 		for (size_t i = 0; i < endOfFrame.size(); i++)
 		{
-			endOfFrame[i].delayedDestroyTextures.clear();
-			endOfFrame[i].delayedDestroyBuffers.clear();
+			endOfFrame[i].DestroyResources(*this);
 		}
+	}
+
+	void IGLOContext::EndOfFrame::DestroyResources(const IGLOContext& context)
+	{
+		delayedDestroyTextures.clear();
+		delayedDestroyBuffers.clear();
+
+#ifdef IGLO_VULKAN
+		for (VkImageView& currentView : delayedDestroyVulkanImageViews)
+		{
+			if (currentView)
+			{
+				vkDestroyImageView(context.GetVulkanDevice(), currentView, nullptr);
+				currentView = VK_NULL_HANDLE;
+			}
+		}
+#endif
 	}
 
 	void IGLOContext::MoveToNextFrame()
@@ -2767,9 +2793,7 @@ namespace ig
 		commandQueue->WaitForCompletion(currentFrame.computeReceipt);
 		commandQueue->WaitForCompletion(currentFrame.copyReceipt);
 
-		// The delayed destroy resources are held for max 1 full frame cycle
-		currentFrame.delayedDestroyTextures.clear();
-		currentFrame.delayedDestroyBuffers.clear();
+		currentFrame.DestroyResources(*this);
 
 		descriptorHeap->NextFrame();
 		uploadHeap->NextFrame();
@@ -2784,11 +2808,19 @@ namespace ig
 		if (!graphics.validSwapChain)
 		{
 			WaitForIdleDevice();
-			DetailedResult dr = CreateSwapChain(swapChain.extent, swapChain.format, swapChain.numBackBuffers,
-				numFramesInFlight, swapChain.presentMode);
-			if (!dr)
+
+			// To prevent error messages from being spammed when user resizes window to {0,0},
+			// we wait with replacing the swapchain until window size is valid.
+			VkSurfaceCapabilitiesKHR caps = {};
+			vkGetPhysicalDeviceSurfaceCapabilitiesKHR(graphics.physicalDevice, graphics.surface, &caps);
+			if (caps.maxImageExtent.width > 0 && caps.maxImageExtent.height > 0)
 			{
-				Log(LogType::Error, "Failed to replace swapchain. Reason: " + dr.errorMessage);
+				DetailedResult dr = CreateSwapChain(swapChain.extent, swapChain.format, swapChain.numBackBuffers,
+					numFramesInFlight, swapChain.presentMode);
+				if (!dr)
+				{
+					Log(LogType::Error, "Failed to replace swapchain. Reason: " + dr.errorMessage);
+				}
 			}
 			WaitForIdleDevice();
 		}
@@ -2805,12 +2837,19 @@ namespace ig
 		if (!buffer) return;
 		endOfFrame[frameIndex].delayedDestroyBuffers.push_back(std::move(buffer));
 	}
+#ifdef IGLO_VULKAN
+	void IGLOContext::DelayedDestroyVulkanImageView(VkImageView imageView) const
+	{
+		if (!imageView) return;
+		endOfFrame[frameIndex].delayedDestroyVulkanImageViews.push_back(imageView);
+	}
+#endif
 
 	Descriptor IGLOContext::CreateTempConstant(const void* data, uint64_t numBytes) const
 	{
 		if (numBytes == 0) Fatal("Failed to create temp shader constant. Reason: Size can't be zero.");
 
-		Descriptor outDescriptor = descriptorHeap->AllocateTemp(DescriptorType::ConstantBuffer_CBV);
+		Descriptor out = descriptorHeap->AllocateTempResource();
 		TempBuffer tempBuffer = uploadHeap->AllocateTempBuffer(numBytes, GetGraphicsSpecs().bufferPlacementAlignments.constant);
 
 		memcpy(tempBuffer.data, data, numBytes);
@@ -2819,13 +2858,14 @@ namespace ig
 		D3D12_CONSTANT_BUFFER_VIEW_DESC desc = {};
 		desc.BufferLocation = tempBuffer.impl.resource->GetGPUVirtualAddress() + tempBuffer.offset;
 		desc.SizeInBytes = (UINT)AlignUp(numBytes, GetGraphicsSpecs().bufferPlacementAlignments.constant);
-		graphics.device->CreateConstantBufferView(&desc, descriptorHeap->GetD3D12CPUHandle(outDescriptor));
+		graphics.device->CreateConstantBufferView(&desc, descriptorHeap->GetD3D12CPUHandle(out));
 #endif
 #ifdef IGLO_VULKAN
-		descriptorHeap->WriteBufferDescriptor(outDescriptor, tempBuffer.impl.buffer, tempBuffer.offset, numBytes);
+		descriptorHeap->WriteBufferDescriptor(out, VulkanDescriptorType::ConstantBuffer_CBV,
+			tempBuffer.impl.buffer, tempBuffer.offset, numBytes);
 #endif
 
-		return outDescriptor;
+		return out;
 	}
 
 	Descriptor IGLOContext::CreateTempStructuredBuffer(const void* data, uint32_t elementStride, uint32_t numElements) const
@@ -2834,7 +2874,7 @@ namespace ig
 
 		if (numBytes == 0) Fatal("Failed to create temp structured buffer. Reason: Size can't be zero.");
 
-		Descriptor outDescriptor = descriptorHeap->AllocateTemp(DescriptorType::RawOrStructuredBuffer_SRV_UAV);
+		Descriptor out = descriptorHeap->AllocateTempResource();
 
 #ifdef IGLO_D3D12
 		// In D3D12, structured buffers need a special non-power of 2 element stride alignment,
@@ -2849,26 +2889,19 @@ namespace ig
 		uint64_t firstElementOffset = firstElementIndex * elementStride; // Byte offset of our first element
 		memcpy(beginningOfPage + firstElementOffset, data, numBytes);
 
-		D3D12_SHADER_RESOURCE_VIEW_DESC srv = {};
-		srv.Format = DXGI_FORMAT_UNKNOWN;
-		srv.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
-		srv.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-		srv.Buffer.FirstElement = firstElementIndex;
-		srv.Buffer.NumElements = numElements;
-		srv.Buffer.StructureByteStride = elementStride;
-		srv.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
-
-		graphics.device->CreateShaderResourceView(tempBuffer.impl.resource, &srv, descriptorHeap->GetD3D12CPUHandle(outDescriptor));
+		D3D12_SHADER_RESOURCE_VIEW_DESC srv = Buffer::GenerateD3D12Desc_SRV_Structured(numElements, elementStride, firstElementIndex);
+		graphics.device->CreateShaderResourceView(tempBuffer.impl.resource, &srv, descriptorHeap->GetD3D12CPUHandle(out));
 #endif
 #ifdef IGLO_VULKAN
 		TempBuffer tempBuffer = uploadHeap->AllocateTempBuffer(numBytes, GetGraphicsSpecs().bufferPlacementAlignments.rawOrStructuredBuffer);
 
 		memcpy(tempBuffer.data, data, numBytes);
 
-		descriptorHeap->WriteBufferDescriptor(outDescriptor, tempBuffer.impl.buffer, tempBuffer.offset, numBytes);
+		descriptorHeap->WriteBufferDescriptor(out, VulkanDescriptorType::RawOrStructuredBuffer_SRV_UAV,
+			tempBuffer.impl.buffer, tempBuffer.offset, numBytes);
 #endif
 
-		return outDescriptor;
+		return out;
 	}
 
 	Descriptor IGLOContext::CreateTempRawBuffer(const void* data, uint64_t numBytes) const
@@ -2878,70 +2911,79 @@ namespace ig
 		if (numBytes == 0) Fatal(ToString(errStr, "Size can't be zero."));
 		if (numBytes % 4 != 0) Fatal(ToString(errStr, "Expected size to be a multiple of 4."));
 
-		Descriptor outDescriptor = descriptorHeap->AllocateTemp(DescriptorType::RawOrStructuredBuffer_SRV_UAV);
+		Descriptor out = descriptorHeap->AllocateTempResource();
 		TempBuffer tempBuffer = uploadHeap->AllocateTempBuffer(numBytes, GetGraphicsSpecs().bufferPlacementAlignments.rawOrStructuredBuffer);
 
 		memcpy(tempBuffer.data, data, numBytes);
 
 #ifdef IGLO_D3D12
-		D3D12_SHADER_RESOURCE_VIEW_DESC srv = {};
-		srv.Format = DXGI_FORMAT_R32_TYPELESS;
-		srv.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
-		srv.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-		srv.Buffer.FirstElement = tempBuffer.offset / 4;
-		srv.Buffer.NumElements = UINT(numBytes / 4);
-		srv.Buffer.StructureByteStride = 0;
-		srv.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_RAW;
-
-		graphics.device->CreateShaderResourceView(tempBuffer.impl.resource, &srv, descriptorHeap->GetD3D12CPUHandle(outDescriptor));
+		D3D12_SHADER_RESOURCE_VIEW_DESC srv = Buffer::GenerateD3D12Desc_SRV_Raw(numBytes, tempBuffer.offset / 4);
+		graphics.device->CreateShaderResourceView(tempBuffer.impl.resource, &srv, descriptorHeap->GetD3D12CPUHandle(out));
 #endif
 #ifdef IGLO_VULKAN
-		descriptorHeap->WriteBufferDescriptor(outDescriptor, tempBuffer.impl.buffer, tempBuffer.offset, numBytes);
+		descriptorHeap->WriteBufferDescriptor(out, VulkanDescriptorType::RawOrStructuredBuffer_SRV_UAV,
+			tempBuffer.impl.buffer, tempBuffer.offset, numBytes);
 #endif
 
-		return outDescriptor;
+		return out;
 	}
 
 	Buffer::~Buffer()
 	{
 		Impl_Destroy();
-
-		for (Descriptor d : descriptor_SRV_or_CBV)
-		{
-			if (d) context.GetDescriptorHeap().FreePersistent(d);
-		}
-		descriptor_SRV_or_CBV.clear();
-
-		if (descriptor_UAV)
-		{
-			context.GetDescriptorHeap().FreePersistent(descriptor_UAV);
-			descriptor_UAV.SetToNull();
-		}
 	}
 
 	Descriptor Buffer::GetDescriptor() const
 	{
-		const char* errStr = "Buffer does not have a descriptor of type SRV/CBV.";
-
-		if (desc.usage == BufferUsage::Readable) Fatal(errStr);
-
-		switch (desc.type)
+		if (desc.usage == BufferUsage::Dynamic)
 		{
-		case BufferType::StructuredBuffer:
-		case BufferType::RawBuffer:
-		case BufferType::ShaderConstant:
-			if (desc.usage == BufferUsage::Dynamic) return descriptor_SRV_or_CBV[dynamicSetCounter];
-			return descriptor_SRV_or_CBV[0];
-
-		default:
-			Fatal(errStr);
+			assert(implPerFrame);
+#ifdef IGLO_D3D12
+			const Descriptor d = implPerFrame[dynamicSetCounter].cbv_srv;
+#endif
+#ifdef IGLO_VULKAN
+			const Descriptor d = implPerFrame[dynamicSetCounter].cbv_srv_uav;
+#endif
+			if (!d) Fatal("Buffer has no CBV or SRV.");
+			return d;
 		}
+#ifdef IGLO_D3D12
+		const Descriptor d = impl.cbv_srv;
+#endif
+#ifdef IGLO_VULKAN
+		const Descriptor d = impl.cbv_srv_uav;
+#endif
+		if (!d) Fatal("Buffer has no CBV or SRV.");
+		return d;
 	}
 
 	Descriptor Buffer::GetUnorderedAccessDescriptor() const
 	{
-		if (!descriptor_UAV) Fatal("Buffer does not have an unordered access descriptor.");
-		return descriptor_UAV;
+		if (desc.usage == BufferUsage::Dynamic)
+		{
+			assert(implPerFrame);
+#ifdef IGLO_D3D12
+			const Descriptor d = implPerFrame[dynamicSetCounter].uav;
+#endif
+#ifdef IGLO_VULKAN
+			const Descriptor d = implPerFrame[dynamicSetCounter].cbv_srv_uav;
+#endif
+			if (!d) Fatal("Buffer has no UAV.");
+			return d;
+		}
+#ifdef IGLO_D3D12
+		const Descriptor d = impl.uav;
+#endif
+#ifdef IGLO_VULKAN
+		const Descriptor d = impl.cbv_srv_uav;
+#endif
+		if (!d) Fatal("Buffer has no UAV.");
+		return d;
+	}
+
+	uint32_t Buffer::GetPerFrameArrayLength() const
+	{
+		return context.GetMaxFramesInFlight();
 	}
 
 	std::unique_ptr<Buffer> Buffer::InternalCreate(const IGLOContext& context, const BufferDesc& desc)
@@ -2955,8 +2997,10 @@ namespace ig
 		case BufferType::StructuredBuffer: errStr = "Failed to create structured buffer. Reason: "; break;
 		case BufferType::RawBuffer:        errStr = "Failed to create raw buffer. Reason: "; break;
 		case BufferType::ShaderConstant:   errStr = "Failed to create shader constant buffer. Reason: "; break;
+
 		default:
-			Fatal("Invalid buffer type when creating buffer.");
+			Log(LogType::Error, ToString(errStr, "Invalid buffer type."));
+			return nullptr;
 		}
 
 		if (desc.size == 0)
@@ -2989,6 +3033,12 @@ namespace ig
 					return nullptr;
 				}
 			}
+		}
+		if (desc.usage == BufferUsage::Readable &&
+			desc.type == BufferType::ShaderConstant)
+		{
+			Log(LogType::Error, ToString(errStr, "Readable usage is not supported for shader constants."));
+			return nullptr;
 		}
 
 		std::unique_ptr<Buffer> out = std::unique_ptr<Buffer>(new Buffer(context, desc));
@@ -3101,24 +3151,25 @@ namespace ig
 	{
 		assert(desc.usage == BufferUsage::Dynamic && "must have Dynamic usage");
 
-		dynamicSetCounter = (dynamicSetCounter + 1) % context.GetMaxFramesInFlight();
+		dynamicSetCounter = (dynamicSetCounter + 1) % GetPerFrameArrayLength();
 
-		assert(dynamicSetCounter < mapped.size());
-		assert(mapped[dynamicSetCounter] != nullptr);
+		assert(implPerFrame);
+		assert(implPerFrame[dynamicSetCounter].mapped);
 
-		memcpy(mapped[dynamicSetCounter], srcData, desc.size);
+		memcpy(implPerFrame[dynamicSetCounter].mapped, srcData, desc.size);
 	}
 
 	void Buffer::ReadData(void* destData)
 	{
 		assert(desc.usage == BufferUsage::Readable && "must have Readable usage");
 
-		uint32_t frameIndex = context.GetFrameIndex();
+		const uint32_t frameIndex = context.GetFrameIndex();
 
-		assert(frameIndex < mapped.size());
-		assert(mapped[frameIndex] != nullptr);
+		assert(frameIndex < GetPerFrameArrayLength());
+		assert(implPerFrame);
+		assert(implPerFrame[frameIndex].mapped);
 
-		memcpy(destData, mapped[frameIndex], desc.size);
+		memcpy(destData, implPerFrame[frameIndex].mapped, desc.size);
 	}
 
 	Texture::~Texture()
@@ -3126,40 +3177,31 @@ namespace ig
 		if (isWrapped) return;
 
 		Impl_Destroy();
-
-		if (srvDescriptor)
-		{
-			context.GetDescriptorHeap().FreePersistent(srvDescriptor);
-			srvDescriptor.SetToNull();
-		}
-		if (uavDescriptor)
-		{
-			context.GetDescriptorHeap().FreePersistent(uavDescriptor);
-			uavDescriptor.SetToNull();
-		}
 	}
 
 	Descriptor Texture::GetDescriptor() const
 	{
-		if (!srvDescriptor) Fatal("Texture has no SRV.");
-		return srvDescriptor;
+		if (!impl.srv) Fatal("Texture has no SRV.");
+		return impl.srv;
 	}
 
 	Descriptor Texture::GetUnorderedAccessDescriptor() const
 	{
-		if (!uavDescriptor) Fatal("Texture has no UAV.");
-		return uavDescriptor;
+		if (!impl.uav) Fatal("Texture has no UAV.");
+		return impl.uav;
 	}
 
 	std::unique_ptr<Texture> Texture::Create(const IGLOContext& context, uint32_t width, uint32_t height, Format format,
 		TextureUsage usage, MSAA msaa, ClearValue optimizedClearValue)
 	{
-		TextureDesc desc;
-		desc.extent = Extent2D(width, height);
-		desc.format = format;
-		desc.usage = usage;
-		desc.msaa = msaa;
-		desc.optimizedClearValue = optimizedClearValue;
+		TextureDesc desc =
+		{
+			.extent = Extent2D(width, height),
+			.format = format,
+			.usage = usage,
+			.msaa = msaa,
+			.optimizedClearValue = optimizedClearValue,
+		};
 		return Texture::Create(context, desc);
 	}
 
@@ -3174,20 +3216,22 @@ namespace ig
 		case TextureUsage::UnorderedAccess:
 		case TextureUsage::RenderTexture:
 		case TextureUsage::DepthBuffer:
+		case TextureUsage::UnorderedAccessRenderTexture:
 			break;
 
 		default:
-			Fatal(ToString(errStr, "Invalid texture usage."));
+			Log(LogType::Error, ToString(errStr, "Invalid texture usage."));
+			return nullptr;
 		}
 
 		if (desc.extent.width == 0 || desc.extent.height == 0)
 		{
-			Log(LogType::Error, ToString(errStr, "Texture dimensions must be atleast 1x1."));
+			Log(LogType::Error, ToString(errStr, "Texture dimensions must be at least 1x1."));
 			return nullptr;
 		}
 		if (desc.numFaces == 0 || desc.mipLevels == 0)
 		{
-			Log(LogType::Error, ToString(errStr, "Texture must have atleast 1 face and 1 mip level."));
+			Log(LogType::Error, ToString(errStr, "Texture must have at least 1 face and 1 mip level."));
 			return nullptr;
 		}
 		if (desc.format == Format::None)
@@ -3198,6 +3242,16 @@ namespace ig
 		if (desc.isCubemap && desc.numFaces % 6 != 0)
 		{
 			Log(LogType::Error, ToString(errStr, "For cubemap textures, number of faces must be a multiple of 6."));
+			return nullptr;
+		}
+		if (desc.msaa != MSAA::Disabled && (desc.usage == TextureUsage::UnorderedAccess || desc.usage == TextureUsage::UnorderedAccessRenderTexture))
+		{
+			Log(LogType::Error, ToString(errStr, "MSAA is not supported for unordered access textures."));
+			return nullptr;
+		}
+		if (HasFlag(desc.flags, TextureFlags::DepthBuffer_DenyShaderResource) && desc.usage != TextureUsage::DepthBuffer)
+		{
+			Log(LogType::Error, ToString(errStr, "DepthBuffer_DenyShaderResource flag requires DepthBuffer usage."));
 			return nullptr;
 		}
 
@@ -3213,43 +3267,18 @@ namespace ig
 		return out;
 	}
 
-	std::unique_ptr<Texture> Texture::CreateWrapped(const IGLOContext& context, const WrappedTextureDesc& desc)
+	std::unique_ptr<Texture> Texture::CreateWrapped(const IGLOContext& context, const TextureDesc& desc, const Impl_Texture& impl)
 	{
 		const char* errStr = "Failed to create wrapped texture. Reason: ";
 
-		size_t expectedResources = 1;
-		size_t expectedMemories = 1;
-		size_t expectedMappedPtrs = 0;
-		if (desc.textureDesc.usage == TextureUsage::Readable)
+		if (desc.usage == TextureUsage::Readable)
 		{
-			expectedResources = context.GetMaxFramesInFlight();
-			expectedMemories = context.GetMaxFramesInFlight();
-			expectedMappedPtrs = context.GetMaxFramesInFlight();
-		}
-
-#ifdef IGLO_D3D12
-		size_t providedResources = desc.impl.resource.size();
-		size_t providedMemories = desc.impl.resource.size();
-#endif
-#ifdef IGLO_VULKAN
-		size_t providedResources = desc.impl.image.size();
-		size_t providedMemories = desc.impl.memory.size();
-#endif
-		size_t providedMappedPtrs = desc.readMapped.size();
-
-		if (expectedResources != providedResources ||
-			expectedMemories != providedMemories ||
-			expectedMappedPtrs != providedMappedPtrs)
-		{
-			Log(LogType::Error, ToString(errStr, "Unexpected vector size for impl.resource, impl.image, impl.memory or readMapped."));
+			Log(LogType::Error, ToString(errStr, "Readable texture usage is not supported for wrapped textures."));
 			return nullptr;
 		}
 
-		std::unique_ptr<Texture> out = std::unique_ptr<Texture>(new Texture(context, desc.textureDesc, true));
-		out->srvDescriptor = desc.srvDescriptor;
-		out->uavDescriptor = desc.uavDescriptor;
-		out->readMapped = desc.readMapped;
-		out->impl = desc.impl;
+		std::unique_ptr<Texture> out = std::unique_ptr<Texture>(new Texture(context, desc, true));
+		out->impl = impl;
 		return out;
 	}
 
@@ -3349,6 +3378,11 @@ namespace ig
 		return out;
 	}
 
+	uint32_t Texture::GetPerFrameArrayLength() const
+	{
+		return context.GetMaxFramesInFlight();
+	}
+
 	DetailedResult Texture::ValidateMipGeneration(CommandListType cmdListType, const Image& image)
 	{
 		if (GetFormatInfo(image.GetFormat()).blockSize != 0)
@@ -3389,7 +3423,7 @@ namespace ig
 		unorderedDesc.isCubemap = false;
 		unorderedDesc.numFaces = desc.numFaces;
 		unorderedDesc.mipLevels = desc.mipLevels - 1;
-		unorderedDesc.createDescriptors = false;
+		unorderedDesc.flags = TextureFlags::SkipDescriptorCreation;
 		std::unique_ptr<Texture> unorderedTexture = Texture::Create(context, unorderedDesc);
 		if (!unorderedTexture)
 		{
@@ -3420,8 +3454,8 @@ namespace ig
 		{
 			DescriptorHeap& heap = context.GetDescriptorHeap();
 
-			Descriptor srv = heap.AllocateTemp(DescriptorType::Texture_SRV);
-			Descriptor uav = heap.AllocateTemp(DescriptorType::Texture_UAV);
+			Descriptor srv = heap.AllocateTempResource();
+			Descriptor uav = heap.AllocateTempResource();
 			pushConstants.srcTextureIndex = srv.heapIndex;
 			pushConstants.destTextureIndex = uav.heapIndex;
 
@@ -3451,38 +3485,27 @@ namespace ig
 			VkDevice device = context.GetVulkanDevice();
 
 			// SRV
-			VkImageViewCreateInfo srcViewInfo = {};
-			srcViewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-			srcViewInfo.image = GetVulkanImage();
-			srcViewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-			srcViewInfo.format = ToVulkanFormat(image.GetFormat());
-			srcViewInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
-			srcViewInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
-			srcViewInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
-			srcViewInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
-			srcViewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-			srcViewInfo.subresourceRange.baseMipLevel = i;
-			srcViewInfo.subresourceRange.levelCount = 1;
-			srcViewInfo.subresourceRange.baseArrayLayer = 0;
-			srcViewInfo.subresourceRange.layerCount = 1;
-			VkImageView srcImageView = VK_NULL_HANDLE;
-			if (heap.CreateTempVulkanImageView(device, &srcViewInfo, nullptr, &srcImageView) != VK_SUCCESS)
+			const uint32_t numFaces = 1;
+			const uint32_t baseMip = i;
+			const uint32_t mipLevels = 1;
+			VkImageView view_srv = Texture::CreateImageView(device, GetVulkanImage(), VK_IMAGE_ASPECT_COLOR_BIT,
+				image.GetFormat(), false, numFaces, baseMip, mipLevels);
+			if (!view_srv)
 			{
 				return DetailedResult::Fail("Failed to create source image view for mipmap generation.");
 			}
-			heap.WriteImageDescriptor(srv, srcImageView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+			heap.WriteImageDescriptor(srv, VulkanDescriptorType::Texture_SRV, view_srv, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+			context.DelayedDestroyVulkanImageView(view_srv);
 
 			// UAV
-			VkImageViewCreateInfo destViewInfo = srcViewInfo;
-			destViewInfo.image = unorderedRef.GetVulkanImage();
-			destViewInfo.format = ToVulkanFormat(format_non_sRGB);
-			VkImageView destImageView = VK_NULL_HANDLE;
-			if (heap.CreateTempVulkanImageView(device, &destViewInfo, nullptr, &destImageView) != VK_SUCCESS)
+			VkImageView view_uav = Texture::CreateImageView(device, unorderedRef.GetVulkanImage(), VK_IMAGE_ASPECT_COLOR_BIT,
+				format_non_sRGB, false, numFaces, baseMip, mipLevels);
+			if (!view_uav)
 			{
 				return DetailedResult::Fail("Failed to create destination image view for mipmap generation.");
 			}
-			heap.WriteImageDescriptor(uav, destImageView, VK_IMAGE_LAYOUT_GENERAL);
-
+			heap.WriteImageDescriptor(uav, VulkanDescriptorType::Texture_UAV, view_uav, VK_IMAGE_LAYOUT_GENERAL);
+			context.DelayedDestroyVulkanImageView(view_uav);
 #endif
 
 			cmd.AddTextureBarrierAtSubresource(*this, SimpleBarrier::CopyDest, SimpleBarrier::ComputeShaderResource, 0, i);
@@ -3522,7 +3545,7 @@ namespace ig
 #ifdef IGLO_D3D12
 		uint64_t requiredUploadBufferSize = 0;
 		{
-			D3D12_RESOURCE_DESC resDesc = impl.resource[0]->GetDesc();
+			D3D12_RESOURCE_DESC resDesc = impl.resource->GetDesc();
 			context.GetD3D12Device()->GetCopyableFootprints(&resDesc, 0, desc.numFaces * desc.mipLevels, 0,
 				nullptr, nullptr, nullptr, &requiredUploadBufferSize);
 		}
@@ -3553,7 +3576,7 @@ namespace ig
 		}
 
 		cmd.CopyTempBufferToTexture(tempBuffer, *this);
-	}
+		}
 
 	void Texture::SetPixels(CommandList& cmd, const void* pixelData)
 	{
@@ -3585,7 +3608,7 @@ namespace ig
 		uint32_t subResourceIndex = (destFaceIndex * desc.mipLevels) + destMipIndex;
 		uint64_t requiredUploadBufferSize = 0;
 		{
-			D3D12_RESOURCE_DESC resDesc = impl.resource[0]->GetDesc();
+			D3D12_RESOURCE_DESC resDesc = impl.resource->GetDesc();
 			context.GetD3D12Device()->GetCopyableFootprints(&resDesc, subResourceIndex, 1, 0, nullptr, nullptr, nullptr, &requiredUploadBufferSize);
 		}
 #endif
@@ -3609,11 +3632,11 @@ namespace ig
 		}
 
 		cmd.CopyTempBufferToTextureSubresource(tempBuffer, *this, destFaceIndex, destMipIndex);
-	}
+		}
 
 	void Texture::SetPixelsAtSubresource(CommandList& cmd, const void* pixelData, uint32_t destFaceIndex, uint32_t destMipIndex)
 	{
-		assert(pixelData != nullptr);
+		assert(pixelData);
 
 		ImageDesc imageDesc;
 		imageDesc.extent = Image::CalculateMipExtent(desc.extent, destMipIndex);
@@ -3632,10 +3655,15 @@ namespace ig
 		assert(destImage.GetFormat() == desc.format && "image must match texture");
 		assert(destImage.GetNumFaces() == desc.numFaces && "image must match texture");
 		assert(destImage.GetMipLevels() == desc.mipLevels && "image must match texture");
-		assert(readMapped.size() == context.GetMaxFramesInFlight());
+
+		const uint32_t frameIndex = context.GetFrameIndex();
+
+		assert(frameIndex < GetPerFrameArrayLength());
+		assert(implPerFrame);
+		assert(implPerFrame[frameIndex].mapped);
 
 		byte* destPtr = (byte*)destImage.GetPixels();
-		byte* srcPtr = (byte*)readMapped[context.GetFrameIndex()];
+		byte* srcPtr = (byte*)implPerFrame[frameIndex].mapped;
 		const uint32_t textureRowPitch = context.GetGraphicsSpecs().bufferPlacementAlignments.textureRowPitch;
 		for (uint32_t faceIndex = 0; faceIndex < desc.numFaces; faceIndex++)
 		{
@@ -3660,8 +3688,8 @@ namespace ig
 		{
 			.extent = desc.extent,
 			.format = desc.format,
-			.mipLevels = desc.mipLevels,
 			.numFaces = desc.numFaces,
+			.mipLevels = desc.mipLevels,
 			.isCubemap = desc.isCubemap,
 		};
 
@@ -3715,4 +3743,4 @@ namespace ig
 		return descriptor;
 	}
 
-} //end of namespace ig
+	} //end of namespace ig
