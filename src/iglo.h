@@ -1461,9 +1461,9 @@ namespace ig
 				(
 					"Persistent Resource Descriptors: ", live.persistentResources, "/", max.persistentResources, "\n",
 					"Temp Resource Descriptors: ", live.tempResourcesPerFrame, "/", max.tempResourcesPerFrame, "\n",
-					"Sampler Descriptors: ", live.samplers, "/", max.samplers, "\n"
+					"Sampler Descriptors: ", live.samplers, "/", max.samplers
 #ifdef IGLO_D3D12
-					, "Render Texture Descriptors: ", live.renderTextures, "/", max.renderTextures, "\n",
+					, "\n", "Render Texture Descriptors: ", live.renderTextures, "/", max.renderTextures, "\n",
 					"Depth Buffer Descriptors: ", live.depthBuffers, "/", max.depthBuffers
 #endif
 				);
