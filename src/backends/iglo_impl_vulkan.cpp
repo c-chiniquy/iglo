@@ -519,6 +519,20 @@ namespace ig
 		return out;
 	}
 
+	VkPresentModeKHR ToVulkanPresentMode(PresentMode presentMode)
+	{
+		switch (presentMode)
+		{
+		case PresentMode::Immediate: return VK_PRESENT_MODE_IMMEDIATE_KHR;
+		case PresentMode::Mailbox: return VK_PRESENT_MODE_MAILBOX_KHR;
+		case PresentMode::Vsync: return VK_PRESENT_MODE_FIFO_KHR;
+		case PresentMode::VsyncRelaxed: return VK_PRESENT_MODE_FIFO_RELAXED_KHR;
+
+		default:
+			Fatal("Invalid present mode.");
+		}
+	}
+
 	uint64_t GetRequiredUploadBufferSize(const Image& image, const BufferPlacementAlignments& alignments)
 	{
 		uint64_t size = 0;
@@ -715,7 +729,7 @@ namespace ig
 		return DetailedResult::Success();
 	}
 
-	std::array<uint32_t,NUM_VK_DESCRIPTOR_TYPES> GetVulkanPropsMaxDescriptors(VkPhysicalDevice device)
+	std::array<uint32_t, NUM_VK_DESCRIPTOR_TYPES> GetVulkanPropsMaxDescriptors(VkPhysicalDevice device)
 	{
 		VkPhysicalDeviceProperties2 props2 = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2 };
 		VkPhysicalDeviceDescriptorIndexingProperties indexingProps = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_PROPERTIES };
@@ -1524,7 +1538,7 @@ namespace ig
 		impl.numBufferBarriers = 0;
 	}
 
-	void CommandList::AddGlobalBarrier(BarrierSync syncBefore, BarrierSync syncAfter, BarrierAccess accessBefore, BarrierAccess accessAfter)
+	void CommandList::AddGlobalBarrier(BarrierSync syncBefore, BarrierAccess accessBefore, BarrierSync syncAfter, BarrierAccess accessAfter)
 	{
 		if (impl.numGlobalBarriers >= MAX_QUEUED_BARRIERS_PER_TYPE) FlushBarriers();
 
@@ -1538,8 +1552,9 @@ namespace ig
 		impl.numGlobalBarriers++;
 	}
 
-	void CommandList::AddTextureBarrier(const Texture& texture, BarrierSync syncBefore, BarrierSync syncAfter,
-		BarrierAccess accessBefore, BarrierAccess accessAfter, BarrierLayout layoutBefore, BarrierLayout layoutAfter, bool discard)
+	void CommandList::AddTextureBarrier(const Texture& texture,
+		BarrierSync syncBefore, BarrierAccess accessBefore, BarrierLayout layoutBefore,
+		BarrierSync syncAfter, BarrierAccess accessAfter, BarrierLayout layoutAfter, bool discard)
 	{
 		if (impl.numTextureBarriers >= MAX_QUEUED_BARRIERS_PER_TYPE) FlushBarriers();
 
@@ -1574,8 +1589,9 @@ namespace ig
 		}
 	}
 
-	void CommandList::AddTextureBarrierAtSubresource(const Texture& texture, BarrierSync syncBefore, BarrierSync syncAfter,
-		BarrierAccess accessBefore, BarrierAccess accessAfter, BarrierLayout layoutBefore, BarrierLayout layoutAfter,
+	void CommandList::AddTextureBarrierAtSubresource(const Texture& texture,
+		BarrierSync syncBefore, BarrierAccess accessBefore, BarrierLayout layoutBefore,
+		BarrierSync syncAfter, BarrierAccess accessAfter, BarrierLayout layoutAfter,
 		uint32_t faceIndex, uint32_t mipIndex, bool discard)
 	{
 		if (impl.numTextureBarriers >= MAX_QUEUED_BARRIERS_PER_TYPE) FlushBarriers();
@@ -1598,8 +1614,9 @@ namespace ig
 		impl.numTextureBarriers++;
 	}
 
-	void CommandList::AddBufferBarrier(const Buffer& buffer, BarrierSync syncBefore, BarrierSync syncAfter,
-		BarrierAccess accessBefore, BarrierAccess accessAfter)
+	void CommandList::AddBufferBarrier(const Buffer& buffer,
+		BarrierSync syncBefore, BarrierAccess accessBefore,
+		BarrierSync syncAfter, BarrierAccess accessAfter)
 	{
 		if (impl.numBufferBarriers >= MAX_QUEUED_BARRIERS_PER_TYPE) FlushBarriers();
 
@@ -1771,7 +1788,7 @@ namespace ig
 			VkImageSubresourceRange range = {};
 			range.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 			range.baseMipLevel = 0;
-			range.levelCount = renderTexture.GetMipLevels();
+			range.levelCount = 1;
 			range.baseArrayLayer = 0;
 			range.layerCount = renderTexture.GetNumFaces();
 
@@ -1823,7 +1840,7 @@ namespace ig
 			VkImageSubresourceRange range = {};
 			range.aspectMask = (clearDepth ? VK_IMAGE_ASPECT_DEPTH_BIT : 0) | (clearStencil ? VK_IMAGE_ASPECT_STENCIL_BIT : 0);
 			range.baseMipLevel = 0;
-			range.levelCount = depthBuffer.GetMipLevels();
+			range.levelCount = 1;
 			range.baseArrayLayer = 0;
 			range.layerCount = depthBuffer.GetNumFaces();
 
@@ -1841,7 +1858,9 @@ namespace ig
 
 	void CommandList::Impl_ClearUnorderedAccessBufferUInt32(const Buffer& buffer, const uint32_t value)
 	{
+		SafePauseRendering();
 		vkCmdFillBuffer(impl.currentCommandBuffer, buffer.GetVulkanBuffer(), 0, VK_WHOLE_SIZE, value);
+		SafeResumeRendering();
 	}
 
 	void CommandList::Impl_ClearUnorderedAccessTextureFloat(const Texture& texture, const float values[4])
@@ -1855,12 +1874,14 @@ namespace ig
 		VkImageSubresourceRange range = {};
 		range.aspectMask = GetFullImageAspect(texture.GetFormat());
 		range.baseMipLevel = 0;
-		range.levelCount = texture.GetMipLevels();
+		range.levelCount = 1;
 		range.baseArrayLayer = 0;
 		range.layerCount = texture.GetNumFaces();
 
+		SafePauseRendering();
 		vkCmdClearColorImage(impl.currentCommandBuffer, texture.GetVulkanImage(),
 			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearColor, 1, &range);
+		SafeResumeRendering();
 	}
 
 	void CommandList::Impl_ClearUnorderedAccessTextureUInt32(const Texture& texture, const uint32_t values[4])
@@ -1874,12 +1895,14 @@ namespace ig
 		VkImageSubresourceRange range = {};
 		range.aspectMask = GetFullImageAspect(texture.GetFormat());
 		range.baseMipLevel = 0;
-		range.levelCount = texture.GetMipLevels();
+		range.levelCount = 1;
 		range.baseArrayLayer = 0;
 		range.layerCount = texture.GetNumFaces();
 
+		SafePauseRendering();
 		vkCmdClearColorImage(impl.currentCommandBuffer, texture.GetVulkanImage(),
 			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearColor, 1, &range);
+		SafeResumeRendering();
 	}
 
 	void CommandList::Impl_SetPushConstants(const void* data, uint32_t sizeInBytes, uint32_t destOffsetInBytes)
@@ -3108,7 +3131,7 @@ namespace ig
 		createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
 		createInfo.clipped = VK_TRUE;
 		createInfo.oldSwapchain = graphics.swapChain; // Important
-		createInfo.presentMode = (VkPresentModeKHR)presentMode;
+		createInfo.presentMode = ToVulkanPresentMode(presentMode);
 
 		if (formatInfo.sRGB_opposite != Format::None)
 		{
@@ -3142,8 +3165,6 @@ namespace ig
 		{
 			Log(LogType::Warning, ToString("Using ", imageCount, " backbuffers instead of the requested ", numBackBuffers, "."));
 		}
-
-		graphics.swapChainUsesMinImageCount = (imageCount == caps.minImageCount);
 
 		commandQueue->RecreateSwapChainSemaphores(numFramesInFlight, imageCount);
 
@@ -3194,8 +3215,7 @@ namespace ig
 		}
 
 		// Acquire next image
-		result = commandQueue->AcquireNextVulkanSwapChainImage(graphics.device, graphics.swapChain,
-			graphics.swapChainUsesMinImageCount ? 0 : UINT64_MAX);
+		result = commandQueue->AcquireNextVulkanSwapChainImage(graphics.device, graphics.swapChain, UINT64_MAX);
 
 		graphics.validSwapChain = false;
 		if (result == VK_SUCCESS)
@@ -3551,19 +3571,19 @@ namespace ig
 			{
 				switch (mode)
 				{
-				case (VkPresentModeKHR)PresentMode::ImmediateWithTearing:
-					graphicsSpecs.supportedPresentModes.immediateWithTearing = true;
-					break;
-
-				case (VkPresentModeKHR)PresentMode::Immediate:
+				case VK_PRESENT_MODE_IMMEDIATE_KHR:
 					graphicsSpecs.supportedPresentModes.immediate = true;
 					break;
 
-				case (VkPresentModeKHR)PresentMode::Vsync:
+				case VK_PRESENT_MODE_MAILBOX_KHR:
+					graphicsSpecs.supportedPresentModes.mailbox = true;
+					break;
+
+				case VK_PRESENT_MODE_FIFO_KHR:
 					graphicsSpecs.supportedPresentModes.vsync = true;
 					break;
 
-				case (VkPresentModeKHR)PresentMode::VsyncRelaxed:
+				case VK_PRESENT_MODE_FIFO_RELAXED_KHR:
 					graphicsSpecs.supportedPresentModes.vsyncRelaxed = true;
 					break;
 

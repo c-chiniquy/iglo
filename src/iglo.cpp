@@ -142,7 +142,28 @@ namespace ig
 		case 0x5143: return "Qualcomm";
 		case 0x13B5: return "ARM";
 		case 0x106B: return "Apple";
-		default:     return "Unknown Vendor";
+
+		default:
+			return "Unknown Vendor";
+		}
+	}
+
+	const char* GetPresentModeName(PresentMode presentMode)
+	{
+		switch (presentMode)
+		{
+		case PresentMode::Immediate: return "Immediate";
+		case PresentMode::Mailbox: return "Mailbox";
+		case PresentMode::Vsync: return "Vsync";
+#ifdef IGLO_D3D12
+		case PresentMode::VsyncHalf: return "VsyncHalf";
+#endif
+#ifdef IGLO_VULKAN
+		case PresentMode::VsyncRelaxed: return "VsyncRelaxed";
+#endif
+
+		default:
+			return "Unknown";
 		}
 	}
 
@@ -319,7 +340,7 @@ namespace ig
 
 		default:
 			return "Unknown";
-		};
+		}
 	}
 
 	const char* GetKeyName(Key key)
@@ -902,7 +923,20 @@ namespace ig
 			out.sync = BarrierSync::PixelShading;
 			out.access = BarrierAccess::ShaderResource;
 			out.layout = BarrierLayout::ShaderResource;
-			if (queueType == CommandListType::Compute)
+			if (isComputeQueue)
+			{
+				out.sync = BarrierSync::None;
+				out.access = BarrierAccess::NoAccess;
+			}
+			if (isGraphicsQueue) out.layout = BarrierLayout::_GraphicsQueue_ShaderResource;
+			if (isComputeQueue) out.layout = BarrierLayout::_ComputeQueue_ShaderResource;
+			break;
+
+		case SimpleBarrier::VertexShaderResource:
+			out.sync = BarrierSync::VertexShading;
+			out.access = BarrierAccess::ShaderResource;
+			out.layout = BarrierLayout::ShaderResource;
+			if (isComputeQueue)
 			{
 				out.sync = BarrierSync::None;
 				out.access = BarrierAccess::NoAccess;
@@ -977,11 +1011,18 @@ namespace ig
 			break;
 
 		case SimpleBarrier::ClearUnorderedAccess:
+#ifdef IGLO_D3D12
 			out.sync = BarrierSync::ClearUnorderedAccessView;
 			out.access = BarrierAccess::UnorderedAccess;
 			out.layout = BarrierLayout::UnorderedAccess;
 			if (isGraphicsQueue) out.layout = BarrierLayout::_GraphicsQueue_UnorderedAccess;
 			if (isComputeQueue) out.layout = BarrierLayout::_ComputeQueue_UnorderedAccess;
+#endif
+#ifdef IGLO_VULKAN
+			out.sync = BarrierSync::Copy;
+			out.access = BarrierAccess::CopyDest;
+			out.layout = BarrierLayout::CopyDest;
+#endif
 			break;
 
 		case SimpleBarrier::ClearInactiveRenderTarget:
@@ -1005,7 +1046,7 @@ namespace ig
 	{
 		SimpleBarrierInfo infoBefore = GetSimpleBarrierInfo(before, commandListType);
 		SimpleBarrierInfo infoAfter = GetSimpleBarrierInfo(after, commandListType);
-		AddTextureBarrier(texture, infoBefore.sync, infoAfter.sync, infoBefore.access, infoAfter.access, infoBefore.layout, infoAfter.layout);
+		AddTextureBarrier(texture, infoBefore.sync, infoBefore.access, infoBefore.layout, infoAfter.sync, infoAfter.access, infoAfter.layout);
 	}
 
 	void CommandList::AddTextureBarrierAtSubresource(const Texture& texture, SimpleBarrier before, SimpleBarrier after,
@@ -1013,8 +1054,16 @@ namespace ig
 	{
 		SimpleBarrierInfo infoBefore = GetSimpleBarrierInfo(before, commandListType);
 		SimpleBarrierInfo infoAfter = GetSimpleBarrierInfo(after, commandListType);
-		AddTextureBarrierAtSubresource(texture, infoBefore.sync, infoAfter.sync, infoBefore.access, infoAfter.access,
-			infoBefore.layout, infoAfter.layout, faceIndex, mipIndex);
+		AddTextureBarrierAtSubresource(texture,
+			infoBefore.sync, infoBefore.access, infoBefore.layout,
+			infoAfter.sync, infoAfter.access, infoAfter.layout, faceIndex, mipIndex);
+	}
+
+	void CommandList::AddBufferBarrier(const Buffer& buffer, SimpleBarrier before, SimpleBarrier after)
+	{
+		SimpleBarrierInfo infoBefore = GetSimpleBarrierInfo(before, commandListType);
+		SimpleBarrierInfo infoAfter = GetSimpleBarrierInfo(after, commandListType);
+		AddBufferBarrier(buffer, infoBefore.sync, infoBefore.access, infoAfter.sync, infoAfter.access);
 	}
 
 	void CommandList::SetRenderTarget(const Texture* renderTexture, const Texture* depthBuffer, bool optimizedClear)
@@ -2640,10 +2689,10 @@ namespace ig
 		HRESULT hr = 0;
 		switch (swapChain.presentMode)
 		{
-		case PresentMode::ImmediateWithTearing:
+		case PresentMode::Immediate:
 			hr = graphics.swapChain->Present(0, DXGI_PRESENT_ALLOW_TEARING);
 			break;
-		case PresentMode::Immediate:
+		case PresentMode::Mailbox:
 			hr = graphics.swapChain->Present(0, 0);
 			break;
 		case PresentMode::Vsync:
@@ -2669,6 +2718,7 @@ namespace ig
 				case DXGI_ERROR_DEVICE_HUNG: reasonStr = "The device has hung."; break;
 				case DXGI_ERROR_DEVICE_REMOVED: reasonStr = "The device was removed."; break;
 				case DXGI_ERROR_DEVICE_RESET: reasonStr = "The device was reset."; break;
+
 				default:
 					reasonStr = "Unknown device removal reason.";
 					break;
@@ -2801,8 +2851,7 @@ namespace ig
 #ifdef IGLO_VULKAN
 		if (graphics.validSwapChain)
 		{
-			VkResult result = commandQueue->AcquireNextVulkanSwapChainImage(graphics.device, graphics.swapChain,
-				graphics.swapChainUsesMinImageCount ? 0 : UINT64_MAX);
+			VkResult result = commandQueue->AcquireNextVulkanSwapChainImage(graphics.device, graphics.swapChain, UINT64_MAX);
 			HandleVulkanSwapChainResult(result, "image acquisition");
 		}
 		if (!graphics.validSwapChain)

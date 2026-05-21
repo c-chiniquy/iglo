@@ -25,7 +25,7 @@ public:
 			},
 			ig::RenderSettings
 			{
-				.presentMode = ig::PresentMode::ImmediateWithTearing,
+				.presentMode = ig::PresentMode::Immediate,
 			});
 		if (context)
 		{

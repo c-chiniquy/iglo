@@ -32,7 +32,7 @@ public:
 			},
 			ig::RenderSettings
 			{
-				.presentMode = ig::PresentMode::Immediate,
+				.presentMode = ig::PresentMode::Mailbox,
 			});
 		if (context)
 		{

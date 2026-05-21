@@ -216,40 +216,34 @@ namespace ig
 		X16 = 16
 	};
 
-#ifdef IGLO_D3D12
 	enum class PresentMode
 	{
 		// Lowest latency of all presentation modes.
-		// This is also known as "Vsync Off".
-		ImmediateWithTearing = 0,
+		// May result in visible tearing.
+		Immediate = 0,
 
 		// No tearing, lower latency than Vsync, but can drop frames.
-		// In D3D12, the more frames in flight you use the lower latency you get, at the cost of higher GPU usage.
-		// This is also known as "Mailbox" and "Fast Vsync".
-		Immediate,
+		// The compositor may cap the framerate at twice the refresh rate (or higher if you use more frames in flight).
+		Mailbox,
 
 		// No dropped frames, no tearing, high latency.
 		// The more frames in flight you use, the higher the latency.
 		Vsync,
 
+#ifdef IGLO_D3D12
 		VsyncHalf,
-	};
 #endif
 #ifdef IGLO_VULKAN
-	enum class PresentMode
-	{
-		ImmediateWithTearing = VK_PRESENT_MODE_IMMEDIATE_KHR,
-		Immediate = VK_PRESENT_MODE_MAILBOX_KHR,
-		Vsync = VK_PRESENT_MODE_FIFO_KHR,
-		VsyncRelaxed = VK_PRESENT_MODE_FIFO_RELAXED_KHR,
-	};
+		VsyncRelaxed,
 #endif
+	};
+	const char* GetPresentModeName(PresentMode);
 
 	// Must match 'PresentMode'
 	struct SupportedPresentModes
 	{
-		bool immediateWithTearing = false;
 		bool immediate = false;
+		bool mailbox = false;
 		bool vsync = false;
 #ifdef IGLO_D3D12
 		bool vsyncHalf = false;
@@ -1837,6 +1831,7 @@ namespace ig
 		Present, // For presenting the back buffer. Does not use queue specific layouts.
 		Discard,
 		PixelShaderResource,
+		VertexShaderResource,
 		ComputeShaderResource,
 		ComputeShaderUnorderedAccess,
 		RenderTarget,
@@ -1881,15 +1876,18 @@ namespace ig
 		// Stops recording commands.
 		void End();
 
-		void AddGlobalBarrier(BarrierSync syncBefore, BarrierSync syncAfter, BarrierAccess accessBefore, BarrierAccess accessAfter);
-		void AddTextureBarrier(const Texture& texture, BarrierSync syncBefore, BarrierSync syncAfter,
-			BarrierAccess accessBefore, BarrierAccess accessAfter, BarrierLayout layoutBefore, BarrierLayout layoutAfter, bool discard = false);
+		void AddGlobalBarrier(BarrierSync syncBefore, BarrierAccess accessBefore, BarrierSync syncAfter, BarrierAccess accessAfter);
+		void AddTextureBarrier(const Texture& texture,
+			BarrierSync syncBefore, BarrierAccess accessBefore, BarrierLayout layoutBefore,
+			BarrierSync syncAfter, BarrierAccess accessAfter, BarrierLayout layoutAfter, bool discard = false);
 		void AddTextureBarrier(const Texture& texture, SimpleBarrier before, SimpleBarrier after);
-		void AddTextureBarrierAtSubresource(const Texture& texture, BarrierSync syncBefore, BarrierSync syncAfter,
-			BarrierAccess accessBefore, BarrierAccess accessAfter, BarrierLayout layoutBefore, BarrierLayout layoutAfter,
+		void AddTextureBarrierAtSubresource(const Texture& texture,
+			BarrierSync syncBefore, BarrierAccess accessBefore, BarrierLayout layoutBefore,
+			BarrierSync syncAfter, BarrierAccess accessAfter, BarrierLayout layoutAfter,
 			uint32_t faceIndex, uint32_t mipIndex, bool discard = false);
 		void AddTextureBarrierAtSubresource(const Texture& texture, SimpleBarrier before, SimpleBarrier after, uint32_t faceIndex, uint32_t mipIndex);
-		void AddBufferBarrier(const Buffer& buffer, BarrierSync syncBefore, BarrierSync syncAfter, BarrierAccess accessBefore, BarrierAccess accessAfter);
+		void AddBufferBarrier(const Buffer& buffer, BarrierSync syncBefore, BarrierAccess accessBefore, BarrierSync syncAfter, BarrierAccess accessAfter);
+		void AddBufferBarrier(const Buffer& buffer, SimpleBarrier before, SimpleBarrier after);
 		void FlushBarriers();
 
 		void SetPipeline(const Pipeline&);
@@ -1907,7 +1905,13 @@ namespace ig
 		void ClearDepth(const Texture& depthBuffer, float depth = 1.0f, byte stencil = 255, bool clearDepth = true, bool clearStencil = true,
 			uint32_t numRects = 0, const IntRect* rects = nullptr);
 
+		// On D3D12, the buffer must have a UAV.
+		// On Vulkan, no descriptors are required.
 		void ClearUnorderedAccessBufferUInt32(const Buffer& buffer, const uint32_t value);
+
+		// Clears mip 0 across all array slices/faces. Other mip levels are unaffected.
+		// On D3D12, the texture must have a UAV.
+		// On Vulkan, no descriptors are required.
 		void ClearUnorderedAccessTextureFloat(const Texture& texture, const float values[4]);
 		void ClearUnorderedAccessTextureUInt32(const Texture& texture, const uint32_t values[4]);
 

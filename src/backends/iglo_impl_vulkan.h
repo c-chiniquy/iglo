@@ -20,7 +20,6 @@ namespace ig
 		VkDevice device = VK_NULL_HANDLE;
 		VkSurfaceKHR surface = VK_NULL_HANDLE;
 		VkSwapchainKHR swapChain = VK_NULL_HANDLE;
-		bool swapChainUsesMinImageCount = false;
 		bool validSwapChain = false;
 		bool usesMemoryBudgetExt = false;
 #ifndef NDEBUG
@@ -127,7 +126,7 @@ namespace ig
 		VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
 		VK_DESCRIPTOR_TYPE_SAMPLER
 	};
-	static std::array<uint32_t, NUM_VK_DESCRIPTOR_TYPES> GetVulkanPropsMaxDescriptors(VkPhysicalDevice);
+	std::array<uint32_t, NUM_VK_DESCRIPTOR_TYPES> GetVulkanPropsMaxDescriptors(VkPhysicalDevice);
 
 	struct Impl_DescriptorHeap
 	{
@@ -207,7 +206,7 @@ namespace ig
 	};
 	VulkanTextureFilter ToVulkanTextureFilter(TextureFilter);
 
-
+	VkPresentModeKHR ToVulkanPresentMode(PresentMode);
 	std::optional<uint32_t> FindVulkanMemoryType(VkPhysicalDevice, uint32_t typeFilter, VkMemoryPropertyFlags properties);
 	DetailedResult IsVulkanPhysicalDeviceSuitable(VkPhysicalDevice, VkSurfaceKHR, const std::vector<const char*>& requiredDeviceExtensions);
 	uint64_t GetRequiredUploadBufferSize(const Image&, const BufferPlacementAlignments&);

@@ -575,15 +575,15 @@ private:
 				break;
 
 			case ig::Key::P:
-				if (context->GetPresentMode() == ig::PresentMode::ImmediateWithTearing) context->SetPresentMode(ig::PresentMode::Immediate);
-				else if (context->GetPresentMode() == ig::PresentMode::Immediate) context->SetPresentMode(ig::PresentMode::Vsync);
+				if (context->GetPresentMode() == ig::PresentMode::Immediate) context->SetPresentMode(ig::PresentMode::Mailbox);
+				else if (context->GetPresentMode() == ig::PresentMode::Mailbox) context->SetPresentMode(ig::PresentMode::Vsync);
 #ifdef IGLO_D3D12
 				else if (context->GetPresentMode() == ig::PresentMode::Vsync) context->SetPresentMode(ig::PresentMode::VsyncHalf);
 #endif
 #ifdef IGLO_VULKAN
 				else if (context->GetPresentMode() == ig::PresentMode::Vsync) context->SetPresentMode(ig::PresentMode::VsyncRelaxed);
 #endif
-				else context->SetPresentMode(ig::PresentMode::ImmediateWithTearing);
+				else context->SetPresentMode(ig::PresentMode::Immediate);
 				break;
 
 			case ig::Key::R:
@@ -786,26 +786,9 @@ private:
 					"iglo v" IGLO_VERSION_STRING " " IGLO_GRAPHICS_API_STRING "\n",
 					"FPS: ", mainloop.GetAverageFPS());
 
-				std::string presentModeStr = "";
-				switch (context->GetPresentMode())
-				{
-				default:
-					ig::Fatal("Unexpected present mode");
-
-				case ig::PresentMode::Immediate: presentModeStr = "Immediate"; break;
-				case ig::PresentMode::ImmediateWithTearing: presentModeStr = "Immediate with tearing"; break;
-				case ig::PresentMode::Vsync: presentModeStr = "Vsync"; break;
-#ifdef IGLO_D3D12
-				case ig::PresentMode::VsyncHalf: presentModeStr = "Vsync Half"; break;
-#endif
-#ifdef IGLO_VULKAN
-				case ig::PresentMode::VsyncRelaxed: presentModeStr = "Vsync Relaxed"; break;
-#endif
-				}
-
 				std::string strBottom = ig::ToString(
 					"MSAA X", (int)sceneRender->GetMSAA(), " [M]\n",
-					"Present mode [P]: ", presentModeStr, "\n",
+					"Present mode [P]: ", ig::GetPresentModeName(context->GetPresentMode()), "\n",
 					"Light distance [I, O]: ", lightDistance, "\n",
 					"Light elevation [K, L]: ", lightElevation, "\n",
 					"Light rotates [R]: ", lightRotates ? "True" : "False");

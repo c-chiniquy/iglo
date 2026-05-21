@@ -616,7 +616,7 @@ namespace ig
 		impl.numBufferBarriers = 0;
 	}
 
-	void CommandList::AddGlobalBarrier(BarrierSync syncBefore, BarrierSync syncAfter, BarrierAccess accessBefore, BarrierAccess accessAfter)
+	void CommandList::AddGlobalBarrier(BarrierSync syncBefore, BarrierAccess accessBefore, BarrierSync syncAfter, BarrierAccess accessAfter)
 	{
 		if (impl.numGlobalBarriers >= MAX_QUEUED_BARRIERS_PER_TYPE) FlushBarriers();
 
@@ -629,8 +629,9 @@ namespace ig
 		impl.numGlobalBarriers++;
 	}
 
-	void CommandList::AddTextureBarrier(const Texture& texture, BarrierSync syncBefore, BarrierSync syncAfter,
-		BarrierAccess accessBefore, BarrierAccess accessAfter, BarrierLayout layoutBefore, BarrierLayout layoutAfter, bool discard)
+	void CommandList::AddTextureBarrier(const Texture& texture,
+		BarrierSync syncBefore, BarrierAccess accessBefore, BarrierLayout layoutBefore,
+		BarrierSync syncAfter, BarrierAccess accessAfter, BarrierLayout layoutAfter, bool discard)
 	{
 		if (impl.numTextureBarriers >= MAX_QUEUED_BARRIERS_PER_TYPE) FlushBarriers();
 
@@ -648,8 +649,9 @@ namespace ig
 		impl.numTextureBarriers++;
 	}
 
-	void CommandList::AddTextureBarrierAtSubresource(const Texture& texture, BarrierSync syncBefore, BarrierSync syncAfter,
-		BarrierAccess accessBefore, BarrierAccess accessAfter, BarrierLayout layoutBefore, BarrierLayout layoutAfter,
+	void CommandList::AddTextureBarrierAtSubresource(const Texture& texture,
+		BarrierSync syncBefore, BarrierAccess accessBefore, BarrierLayout layoutBefore,
+		BarrierSync syncAfter, BarrierAccess accessAfter, BarrierLayout layoutAfter,
 		uint32_t faceIndex, uint32_t mipIndex, bool discard)
 	{
 		if (impl.numTextureBarriers >= MAX_QUEUED_BARRIERS_PER_TYPE) FlushBarriers();
@@ -668,8 +670,9 @@ namespace ig
 		impl.numTextureBarriers++;
 	}
 
-	void CommandList::AddBufferBarrier(const Buffer& buffer, BarrierSync syncBefore, BarrierSync syncAfter,
-		BarrierAccess accessBefore, BarrierAccess accessAfter)
+	void CommandList::AddBufferBarrier(const Buffer& buffer,
+		BarrierSync syncBefore, BarrierAccess accessBefore,
+		BarrierSync syncAfter, BarrierAccess accessAfter)
 	{
 		if (impl.numBufferBarriers >= MAX_QUEUED_BARRIERS_PER_TYPE) FlushBarriers();
 
@@ -2338,8 +2341,8 @@ namespace ig
 			};
 			graphicsSpecs.supportedPresentModes =
 			{
-				.immediateWithTearing = true,
 				.immediate = true,
+				.mailbox = true,
 				.vsync = true,
 				.vsyncHalf = true,
 			};
