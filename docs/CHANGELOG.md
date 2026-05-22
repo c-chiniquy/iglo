@@ -1,6 +1,32 @@
 
 # Changelog
 
+## v0.5.0
+
+### Changes
+- Major changes:
+  - Render passes are now explicit.
+  - Added `BeginRenderPass()`, `BeginRenderPassMultiTarget()`, `EndRenderPass()`, `SafePauseRenderPass()`, `SafeResumeRenderPass()`.
+  - `SetRenderTarget()` and `SetRenderTargets()` are now D3D12-only. Cross-backend code should use `BeginRenderPass()` and `EndRenderPass()` instead.
+  - Renamed `ig::PresentMode` enum values to more accurately match the Vulkan present modes.
+    - `Immediate` -> `Mailbox`
+    - `ImmediateWithTearing` -> `Immediate`
+- New features:
+  - `ig::DescriptorHeap` now manages RTV and DSV descriptors (D3D12).
+  - Added `ig::SimpleBarrier::VertexShaderResource`
+  - You can now create buffer barriers using `ig::SimpleBarrier`.
+  - Added `ig::TextureUsage::UnorderedAccessRenderTexture`
+  - Added `ig::TextureFlags` enum. You can now specify texture flags at texture creation.
+- Bug fixes:
+  - Clearing unordered access buffers and textures now works properly in Vulkan.
+  - Vulkan backend now correctly targets only the first mip for UAVs, RTVs and DSVs (descriptors and image views).
+    Both backends now work uniformly: Default created SRVs target all mips. Default created UAVs, RTVs and DSVs only target the first mip.
+- Improvements:
+  - Refactored `ig::DescriptorHeap` class.
+  - Refactored `ig::Texture` and `ig::Buffer` classes.
+  - D3D12 now prefers high-performance GPUs when enumerating adapters.
+  - The CMake script now uses the latest release version of Agility SDK (not pre-release).
+
 ## v0.4.5
 
 ### Changes
