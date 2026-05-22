@@ -238,16 +238,19 @@ private:
 			cmd->AddTextureBarrier(context->GetBackBuffer(), ig::SimpleBarrier::Discard, ig::SimpleBarrier::RenderTarget);
 			cmd->FlushBarriers();
 
-			cmd->SetRenderTarget(&context->GetBackBuffer());
-			cmd->SetViewport((float)context->GetWidth(), (float)context->GetHeight());
-			cmd->SetScissorRectangle(context->GetWidth(), context->GetHeight());
-			cmd->ClearColor(context->GetBackBuffer(), ig::Colors::Black);
-
-			r->Begin(*cmd);
+			cmd->BeginRenderPass(&context->GetBackBuffer());
 			{
-				r->DrawString(64, 64, "Hello world!", *defaultFont, ig::Colors::Green);
+				cmd->SetViewport((float)context->GetWidth(), (float)context->GetHeight());
+				cmd->SetScissorRectangle(context->GetWidth(), context->GetHeight());
+				cmd->ClearColor(context->GetBackBuffer(), ig::Colors::Black);
+
+				r->Begin(*cmd);
+				{
+					r->DrawString(64, 64, "Hello world!", *defaultFont, ig::Colors::Green);
+				}
+				r->End();
 			}
-			r->End();
+			cmd->EndRenderPass();
 
 			// The back buffer will now be used to present
 			cmd->AddTextureBarrier(context->GetBackBuffer(), ig::SimpleBarrier::RenderTarget, ig::SimpleBarrier::Present);
