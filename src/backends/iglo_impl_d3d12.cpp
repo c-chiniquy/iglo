@@ -697,9 +697,25 @@ namespace ig
 		}
 	}
 
-	void CommandList::Impl_SetRenderTargets(const Texture* const* renderTextures, uint32_t numRenderTextures,
+	void CommandList::SetRenderTarget(const Texture* renderTexture, const Texture* depthBuffer, bool optimizedClear)
+	{
+		if (renderTexture)
+		{
+			const Texture* renderTextures[] = { renderTexture };
+			SetRenderTargets(renderTextures, 1, depthBuffer, optimizedClear);
+		}
+		else
+		{
+			SetRenderTargets(nullptr, 0, depthBuffer, optimizedClear);
+		}
+	}
+
+	void CommandList::SetRenderTargets(const Texture* const* renderTextures, uint32_t numRenderTextures,
 		const Texture* depthBuffer, bool optimizedClear)
 	{
+		if (numRenderTextures > 0) assert(renderTextures);
+		assert(numRenderTextures <= MAX_SIMULTANEOUS_RENDER_TARGETS && "too many render textures provided");
+
 		DescriptorHeap& heap = context.GetDescriptorHeap();
 
 		D3D12_CPU_DESCRIPTOR_HANDLE rtvHandles[MAX_SIMULTANEOUS_RENDER_TARGETS] = {};
@@ -725,6 +741,28 @@ namespace ig
 				ClearDepth(*depthBuffer, clearValue.depth, clearValue.stencil, true, true);
 			}
 		}
+	}
+
+	void CommandList::BeginRenderPass(const Texture* renderTexture, const Texture* depthBuffer, bool optimizedClear)
+	{
+		SetRenderTarget(renderTexture, depthBuffer, optimizedClear);
+	}
+	void CommandList::BeginRenderPassMultiTarget(const Texture* const* renderTextures, uint32_t numRenderTextures,
+		const Texture* depthBuffer, bool optimizedClear)
+	{
+		SetRenderTargets(renderTextures, numRenderTextures, depthBuffer, optimizedClear);
+	}
+
+	void CommandList::EndRenderPass()
+	{
+		SetRenderTarget(nullptr);
+	}
+
+	void CommandList::SafePauseRenderPass()
+	{
+	}
+	void CommandList::SafeResumeRenderPass()
+	{
 	}
 
 	void CommandList::Impl_ClearColor(const Texture& renderTexture, Color color, uint32_t numRects, const IntRect* rects)

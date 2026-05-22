@@ -670,40 +670,45 @@ private:
 		cmd->AddTextureBarrier(*shadowMap, ig::SimpleBarrier::Discard, ig::SimpleBarrier::DepthWrite);
 		cmd->FlushBarriers();
 
-		// Prepare the shadow map pipeline
-		cmd->SetRenderTarget(nullptr, shadowMap.get(), true);
-		cmd->SetViewport((float)shadowMapRes, (float)shadowMapRes);
-		cmd->SetScissorRectangle(shadowMapRes, shadowMapRes);
-		cmd->SetPipeline(*pipelineDepth);
-
-		// Bind resources
 		PushConstants pushConstants;
-		pushConstants.colorTextureIndex = IGLO_UINT32_MAX; // Per model
-		pushConstants.depthTextureIndex = shadowMap->GetDescriptor().heapIndex;
-		pushConstants.colorSamplerIndex = colorSampler->GetDescriptor().heapIndex;
-		pushConstants.depthSamplerIndex = depthSampler->GetDescriptor().heapIndex;
-		pushConstants.lightConstantsIndex = lightConstants->GetDescriptor().heapIndex;
-		pushConstants.cameraConstantsIndex = cameraConstants->GetDescriptor().heapIndex;
-		pushConstants.modelConstantsIndex = IGLO_UINT32_MAX; // Per model
-		cmd->SetPushConstants(&pushConstants, sizeof(pushConstants));
 
-		// Render the scene from the lights perspective
-		RenderAllModels(false);
+		// Render scene from light's perspective
+		cmd->BeginRenderPass(nullptr, shadowMap.get(), true);
+		{
+			cmd->SetViewport((float)shadowMapRes, (float)shadowMapRes);
+			cmd->SetScissorRectangle(shadowMapRes, shadowMapRes);
+			cmd->SetPipeline(*pipelineDepth);
+
+			// Bind resources
+			pushConstants.colorTextureIndex = IGLO_UINT32_MAX; // Per model
+			pushConstants.depthTextureIndex = shadowMap->GetDescriptor().heapIndex;
+			pushConstants.colorSamplerIndex = colorSampler->GetDescriptor().heapIndex;
+			pushConstants.depthSamplerIndex = depthSampler->GetDescriptor().heapIndex;
+			pushConstants.lightConstantsIndex = lightConstants->GetDescriptor().heapIndex;
+			pushConstants.cameraConstantsIndex = cameraConstants->GetDescriptor().heapIndex;
+			pushConstants.modelConstantsIndex = IGLO_UINT32_MAX; // Per model
+			cmd->SetPushConstants(&pushConstants, sizeof(pushConstants));
+
+			RenderAllModels(false);
+		}
+		cmd->EndRenderPass();
 
 		cmd->AddTextureBarrier(*shadowMap, ig::SimpleBarrier::DepthWrite, ig::SimpleBarrier::PixelShaderResource);
 		cmd->AddTextureBarrier(*sceneRender, ig::SimpleBarrier::Discard, ig::SimpleBarrier::RenderTarget);
 		cmd->AddTextureBarrier(*sceneDepth, ig::SimpleBarrier::Discard, ig::SimpleBarrier::DepthWrite);
 		cmd->FlushBarriers();
 
-		// Prepare the lighting and shadows pipeline
-		cmd->SetRenderTarget(sceneRender.get(), sceneDepth.get(), true);
-		cmd->SetViewport((float)sceneRender->GetWidth(), (float)sceneRender->GetHeight());
-		cmd->SetScissorRectangle(sceneRender->GetWidth(), sceneRender->GetHeight());
-		cmd->SetPipeline(enableMSAA ? *pipelineLightAndShadowMSAA : *pipelineLightAndShadow);
-		cmd->SetPushConstants(&pushConstants.depthTextureIndex, sizeof(uint32_t) * 3, sizeof(uint32_t) * 1);
+		// Render scene from camera's perspective
+		cmd->BeginRenderPass(sceneRender.get(), sceneDepth.get(), true);
+		{
+			cmd->SetViewport((float)sceneRender->GetWidth(), (float)sceneRender->GetHeight());
+			cmd->SetScissorRectangle(sceneRender->GetWidth(), sceneRender->GetHeight());
+			cmd->SetPipeline(enableMSAA ? *pipelineLightAndShadowMSAA : *pipelineLightAndShadow);
+			cmd->SetPushConstants(&pushConstants.depthTextureIndex, sizeof(uint32_t) * 3, sizeof(uint32_t) * 1);
 
-		// Render the scene from the cameras perspective
-		RenderAllModels(true);
+			RenderAllModels(true);
+		}
+		cmd->EndRenderPass();
 	}
 
 	void RenderUI()
@@ -835,15 +840,21 @@ private:
 			cmd->AddTextureBarrier(context->GetBackBuffer(), ig::SimpleBarrier::Discard, ig::SimpleBarrier::RenderTarget);
 			cmd->FlushBarriers();
 
-			// Draw the final scene to the back buffer
-			cmd->SetRenderTarget(&context->GetBackBuffer(true)); // Use an sRGB render target view
-			cmd->SetViewport((float)context->GetWidth(), (float)context->GetHeight());
-			cmd->SetScissorRectangle(context->GetWidth(), context->GetHeight());
-			screenRenderer->DrawFullscreenQuad(*cmd, enableMSAA ? *sceneResolved : *sceneRender, context->GetBackBuffer());
+			// Draw the final scene texture to the back buffer
+			cmd->BeginRenderPass(&context->GetBackBuffer(true)); // Use an sRGB render target view
+			{
+				cmd->SetViewport((float)context->GetWidth(), (float)context->GetHeight());
+				cmd->SetScissorRectangle(context->GetWidth(), context->GetHeight());
+				screenRenderer->DrawFullscreenQuad(*cmd, enableMSAA ? *sceneResolved : *sceneRender, context->GetBackBuffer());
+			}
+			cmd->EndRenderPass();
 
 			// Render all 2D content
-			cmd->SetRenderTarget(&context->GetBackBuffer(false)); // Use a non-sRGB render target view
-			RenderUI();
+			cmd->BeginRenderPass(&context->GetBackBuffer(false)); // Use a non-sRGB render target view
+			{
+				RenderUI();
+			}
+			cmd->EndRenderPass();
 
 			cmd->AddTextureBarrier(context->GetBackBuffer(), ig::SimpleBarrier::RenderTarget, ig::SimpleBarrier::Present);
 			cmd->FlushBarriers();

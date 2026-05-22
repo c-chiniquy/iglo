@@ -1892,12 +1892,30 @@ namespace ig
 
 		void SetPipeline(const Pipeline&);
 
+#ifdef IGLO_D3D12
+		// Only available on the D3D12 backend for convenience reasons, since D3D12 doesn't use render passes.
+		// SetRenderTarget() is identical to calling BeginRenderPass().
+		// There is no need to call EndRenderPass() in D3D12.
+		void SetRenderTarget(const Texture* renderTexture, const Texture* depthBuffer = nullptr, bool optimizedClear = false);
+		void SetRenderTargets(const Texture* const* renderTextures, uint32_t numRenderTextures,
+			const Texture* depthBuffer = nullptr, bool optimizedClear = false);
+#endif
 		// Sets the render target(s) for subsequent rendering.
 		// It is valid to pass nullptr for 'renderTexture' if rendering only to a depth buffer.
 		// If 'optimizedClear' is true, all bound color and depth attachments are cleared immediately when bound.
 		// The optimized clear values are chosen at texture creation time.
-		void SetRenderTarget(const Texture* renderTexture, const Texture* depthBuffer = nullptr, bool optimizedClear = false);
-		void SetRenderTargets(const Texture* const* renderTextures, uint32_t numRenderTextures, const Texture* depthBuffer, bool optimizedClear = false);
+		void BeginRenderPass(const Texture* renderTexture, const Texture* depthBuffer = nullptr, bool optimizedClear = false);
+		void BeginRenderPassMultiTarget(const Texture* const* renderTextures, uint32_t numRenderTextures,
+			const Texture* depthBuffer = nullptr, bool optimizedClear = false);
+
+		void EndRenderPass();
+
+		// SafePauseRenderPass() MUST be followed by a call to SafeResumeRenderPass() in the same function.
+		// Nested calls to pause/resume is safe.
+		// Calling pause/resume outside a render pass is safe.
+		// Does nothing on the D3D12 backend.
+		void SafePauseRenderPass();
+		void SafeResumeRenderPass();
 
 		// Clears a render texture
 		void ClearColor(const Texture& renderTexture, Color color = Colors::Black, uint32_t numRects = 0, const IntRect* rects = nullptr);
@@ -1970,18 +1988,10 @@ namespace ig
 
 		Impl_CommandList impl;
 
-#ifdef IGLO_VULKAN
-		void SafeEndRendering();
-		void SafePauseRendering(); // MUST be followed by a call to SafeResumeRendering() in the same function.
-		void SafeResumeRendering(); // MUST be called shortly after SafePauseRendering() in the same function.
-#endif
-
 		void Impl_Destroy();
 		DetailedResult Impl_Create();
 		void Impl_Begin();
 		void Impl_End();
-		void Impl_SetRenderTargets(const Texture* const* renderTextures, uint32_t numRenderTextures,
-			const Texture* depthBuffer, bool optimizedClear);
 		void Impl_ClearColor(const Texture& renderTexture, Color color, uint32_t numRects, const IntRect* rects);
 		void Impl_ClearDepth(const Texture& depthBuffer, float depth, byte stencil, bool clearDepth, bool clearStencil,
 			uint32_t numRects, const IntRect* rects);

@@ -74,8 +74,8 @@ namespace ig
 		const Texture* currentDepthTexture = nullptr;
 		VkCommandBuffer currentCommandBuffer = VK_NULL_HANDLE;
 
-		bool isRendering = false;
-		bool temporaryRenderPause = false;
+		bool activeRenderPass = false;
+		uint32_t nestedPauseCounter = false;
 	};
 
 	struct Impl_Pipeline

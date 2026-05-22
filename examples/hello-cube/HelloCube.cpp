@@ -281,55 +281,59 @@ private:
 			cmd->AddTextureBarrier(*depthBuffer, ig::SimpleBarrier::Discard, ig::SimpleBarrier::DepthWrite);
 			cmd->FlushBarriers();
 
-			cmd->SetRenderTarget(renderTexture.get(), depthBuffer.get(), true);
-			cmd->SetViewport((float)renderTexture->GetWidth(), (float)renderTexture->GetHeight());
-			cmd->SetScissorRectangle(renderTexture->GetWidth(), renderTexture->GetHeight());
-			cmd->SetPipeline(*pipeline);
-
-			// Generate matrices
-			ig::Vector3 cameraPos = ig::Vector3(-1.5f, 1.25f, 0);
-			ig::Vector3 cameraLookAt = ig::Vector3(0, 0, 0);
-			ig::Vector3 cameraLookUp = ig::Vector3(0, 1, 0);
-			float cameraAspectRatio = (float)context->GetWidth() / (float)context->GetHeight();
-			float cameraFOV = 70.0f;
-			float zNear = 0.5f;
-			float zFar = 20.0f;
-			ig::Matrix4x4 view = ig::Matrix4x4::LookToLH(cameraPos, cameraLookAt - cameraPos, cameraLookUp);
-			ig::Matrix4x4 proj = ig::Matrix4x4::PerspectiveFovLH(cameraAspectRatio, cameraFOV, zNear, zFar);
-			ig::Matrix4x4 world = ig::Matrix4x4::WorldTRS(
-				ig::Vector3(0, 0, 0), // Translation
-				ig::Quaternion::Euler(0, (float)tick * 0.4f, 0), // Rotation
-				ig::Vector3(1, 1, 1)); // Scale
-
-			// Update the dynamic constants before binding them
-			MatrixConstants data;
-			data.viewProj = (proj * view).GetTransposed();
-			data.world = world.GetTransposed();
-			matrixConstants->SetDynamicData(&data);
-
-			// Bind texture, sampler and constants
-			PushConstants pushConstants;
-			pushConstants.textureIndex = cubeTexture->GetDescriptor().heapIndex;
-			pushConstants.samplerIndex = sampler->GetDescriptor().heapIndex;
-			pushConstants.constantsIndex = matrixConstants->GetDescriptor().heapIndex;
-			cmd->SetPushConstants(&pushConstants, sizeof(pushConstants));
-
-			// Draw cube
-			cmd->SetVertexBuffer(*cube.vertexBuffer);
-			cmd->SetIndexBuffer(*cube.indexBuffer);
-			cmd->DrawIndexed(cube.indexBuffer->GetNumElements());
-
-			r->Begin(*cmd);
+			cmd->BeginRenderPass(renderTexture.get(), depthBuffer.get(), true);
 			{
-				std::string str = ig::ToString
-				(
-					sampleName, "\n",
-					"iglo v" IGLO_VERSION_STRING " " IGLO_GRAPHICS_API_STRING "\n",
-					"FPS: ", mainloop.GetAverageFPS()
-				);
-				r->DrawString(4, 4, str, *defaultFont, ig::Colors::Yellow);
+				cmd->SetViewport((float)renderTexture->GetWidth(), (float)renderTexture->GetHeight());
+				cmd->SetScissorRectangle(renderTexture->GetWidth(), renderTexture->GetHeight());
+				cmd->SetPipeline(*pipeline);
+
+				// Generate matrices
+				ig::Vector3 cameraPos = ig::Vector3(-1.5f, 1.25f, 0);
+				ig::Vector3 cameraLookAt = ig::Vector3(0, 0, 0);
+				ig::Vector3 cameraLookUp = ig::Vector3(0, 1, 0);
+				float cameraAspectRatio = (float)context->GetWidth() / (float)context->GetHeight();
+				float cameraFOV = 70.0f;
+				float zNear = 0.5f;
+				float zFar = 20.0f;
+				ig::Matrix4x4 view = ig::Matrix4x4::LookToLH(cameraPos, cameraLookAt - cameraPos, cameraLookUp);
+				ig::Matrix4x4 proj = ig::Matrix4x4::PerspectiveFovLH(cameraAspectRatio, cameraFOV, zNear, zFar);
+				ig::Matrix4x4 world = ig::Matrix4x4::WorldTRS(
+					ig::Vector3(0, 0, 0), // Translation
+					ig::Quaternion::Euler(0, (float)tick * 0.4f, 0), // Rotation
+					ig::Vector3(1, 1, 1)); // Scale
+
+				// Update the dynamic constants before binding them
+				MatrixConstants data;
+				data.viewProj = (proj * view).GetTransposed();
+				data.world = world.GetTransposed();
+				matrixConstants->SetDynamicData(&data);
+
+				// Bind texture, sampler and constants
+				PushConstants pushConstants;
+				pushConstants.textureIndex = cubeTexture->GetDescriptor().heapIndex;
+				pushConstants.samplerIndex = sampler->GetDescriptor().heapIndex;
+				pushConstants.constantsIndex = matrixConstants->GetDescriptor().heapIndex;
+				cmd->SetPushConstants(&pushConstants, sizeof(pushConstants));
+
+				// Draw cube
+				cmd->SetVertexBuffer(*cube.vertexBuffer);
+				cmd->SetIndexBuffer(*cube.indexBuffer);
+				cmd->DrawIndexed(cube.indexBuffer->GetNumElements());
+
+				r->Begin(*cmd);
+				{
+					std::string str = ig::ToString
+					(
+						sampleName, "\n",
+						"iglo v" IGLO_VERSION_STRING " " IGLO_GRAPHICS_API_STRING "\n",
+						"FPS: ", mainloop.GetAverageFPS()
+					);
+					r->DrawString(4, 4, str, *defaultFont, ig::Colors::Yellow);
+				}
+				r->End();
+
 			}
-			r->End();
+			cmd->EndRenderPass();
 
 			cmd->AddTextureBarrier(*renderTexture, ig::SimpleBarrier::RenderTarget, ig::SimpleBarrier::ResolveSource);
 			cmd->AddTextureBarrier(context->GetBackBuffer(), ig::SimpleBarrier::Discard, ig::SimpleBarrier::ResolveDest);

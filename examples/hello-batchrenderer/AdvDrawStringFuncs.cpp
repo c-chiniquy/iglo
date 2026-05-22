@@ -231,7 +231,12 @@ namespace ig
 		AlignStringRectangles(lines, align, rect, (float)font.GetFontDesc().lineGap, pixelAligned);
 
 		// Make sure font texture is up to date
-		if (font.TextureIsDirty()) font.ApplyChangesToTexture(*r.GetCurrentCommandList());
+		if (font.TextureIsDirty())
+		{
+			r.GetCurrentCommandList()->SafePauseRenderPass();
+			font.ApplyChangesToTexture(*r.GetCurrentCommandList());
+			r.GetCurrentCommandList()->SafeResumeRenderPass();
+		}
 
 		if (font.GetFontType() == FontType::SDF)
 		{
@@ -405,7 +410,9 @@ namespace ig
 				if (font.TextureIsDirty())
 				{
 					font.PreloadGlyphs(str);
+					r.GetCurrentCommandList()->SafePauseRenderPass();
 					font.ApplyChangesToTexture(*r.GetCurrentCommandList());
+					r.GetCurrentCommandList()->SafeResumeRenderPass();
 					r.UsingTexture(*font.GetTexture());
 				}
 

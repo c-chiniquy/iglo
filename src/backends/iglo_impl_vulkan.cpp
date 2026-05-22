@@ -1498,7 +1498,14 @@ namespace ig
 
 	void CommandList::Impl_End()
 	{
-		SafeEndRendering();
+		if (impl.activeRenderPass)
+		{
+			Fatal("Active render pass detected at CommandList::End(). Call EndRenderPass() first.");
+		}
+		if (impl.nestedPauseCounter > 0)
+		{
+			Fatal("Render pause detected at CommandList::End(). You must call SafeResumeRenderPass() after SafePauseRenderPass().");
+		}
 		if (impl.currentCommandBuffer)
 		{
 			VkResult res = vkEndCommandBuffer(impl.currentCommandBuffer);
@@ -1511,7 +1518,7 @@ namespace ig
 		else
 		{
 			Log(LogType::Error, "Failed to stop recording commands."
-				" Reason: The command list had not began recording commands in the first place.");
+				" Reason: The command list had not begun recording commands in the first place.");
 		}
 	}
 
@@ -1528,9 +1535,7 @@ namespace ig
 			dependencyInfo.bufferMemoryBarrierCount = impl.numBufferBarriers;
 			dependencyInfo.pBufferMemoryBarriers = impl.bufferBarriers.data();
 
-			SafePauseRendering();
 			vkCmdPipelineBarrier2(impl.currentCommandBuffer, &dependencyInfo);
-			SafeResumeRendering();
 		}
 
 		impl.numGlobalBarriers = 0;
@@ -1574,19 +1579,6 @@ namespace ig
 		barrier.subresourceRange.layerCount = texture.GetNumFaces();
 
 		impl.numTextureBarriers++;
-
-		// Render pass ends when we detect a texture barrier involving an active renter target.
-		if (impl.isRendering)
-		{
-			for (uint32_t a = 0; a < impl.numCurrentRenderTextures; a++)
-			{
-				if (barrier.image == impl.currentRenderTextures[a]->GetVulkanImage())
-				{
-					SafeEndRendering();
-					break;
-				}
-			}
-		}
 	}
 
 	void CommandList::AddTextureBarrierAtSubresource(const Texture& texture,
@@ -1641,108 +1633,123 @@ namespace ig
 		vkCmdBindPipeline(impl.currentCommandBuffer, bindPoint, pipeline.GetVulkanPipeline());
 	}
 
-	void CommandList::Impl_SetRenderTargets(const Texture* const* renderTextures, uint32_t numRenderTextures,
+	void CommandList::BeginRenderPass(const Texture* renderTexture, const Texture* depthBuffer, bool optimizedClear)
+	{
+		if (renderTexture)
+		{
+			const Texture* renderTextures[] = { renderTexture };
+			BeginRenderPassMultiTarget(renderTextures, 1, depthBuffer, optimizedClear);
+		}
+		else
+		{
+			BeginRenderPassMultiTarget(nullptr, 0, depthBuffer, optimizedClear);
+		}
+	}
+
+	void CommandList::BeginRenderPassMultiTarget(const Texture* const* renderTextures, uint32_t numRenderTextures,
 		const Texture* depthBuffer, bool optimizedClear)
 	{
-		SafeEndRendering();
+		if (numRenderTextures > 0) assert(renderTextures);
+		assert(numRenderTextures <= MAX_SIMULTANEOUS_RENDER_TARGETS && "too many render textures provided");
 
-		if (numRenderTextures > 0 || depthBuffer)
+		if (impl.activeRenderPass) Fatal("Can't begin new render pass while a previous render pass is active.");
+		if (impl.nestedPauseCounter > 0) Fatal("Can't begin new render pass while inside a pause/resume block.");
+		if (numRenderTextures == 0 && !depthBuffer) Fatal("Must specify at least one render target when beginning render pass.");
+
+		impl.renderInfo.colorAttachments = {};
+		for (uint32_t i = 0; i < numRenderTextures; i++)
 		{
-			impl.renderInfo.colorAttachments = {};
-			for (uint32_t i = 0; i < numRenderTextures; i++)
-			{
-				VkRenderingAttachmentInfo& attachment = impl.renderInfo.colorAttachments[i];
-				attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-				attachment.imageView = renderTextures[i]->GetVulkanImageView_UAV_RTV_DSV();
-				attachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-				attachment.loadOp = optimizedClear ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD;
-				attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+			VkRenderingAttachmentInfo& attachment = impl.renderInfo.colorAttachments[i];
+			attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+			attachment.imageView = renderTextures[i]->GetVulkanImageView_UAV_RTV_DSV();
+			attachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+			attachment.loadOp = optimizedClear ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD;
+			attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
 
-				if (optimizedClear)
-				{
-					Color color = renderTextures[i]->GetOptimizedClearValue().color;
-					attachment.clearValue.color = { color.red, color.green, color.blue, color.alpha };
-				}
+			if (optimizedClear)
+			{
+				Color color = renderTextures[i]->GetOptimizedClearValue().color;
+				attachment.clearValue.color = { color.red, color.green, color.blue, color.alpha };
 			}
-
-			bool hasStencil = false;
-			impl.renderInfo.depthAttachment = {};
-			impl.renderInfo.stencilAttachment = {};
-			if (depthBuffer)
-			{
-				hasStencil = GetFormatInfo(depthBuffer->GetFormat()).hasStencilComponent;
-
-				impl.renderInfo.depthAttachment =
-				{
-					.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-					.imageView = depthBuffer->GetVulkanImageView_UAV_RTV_DSV(),
-					.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-					.loadOp = optimizedClear ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD,
-					.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-				};
-				if (hasStencil)
-				{
-					impl.renderInfo.stencilAttachment =
-					{
-						 .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-						 .imageView = depthBuffer->GetVulkanImageView_UAV_RTV_DSV(),
-						 .imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-						 .loadOp = optimizedClear ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD,
-						 .storeOp = VK_ATTACHMENT_STORE_OP_STORE
-					};
-				}
-
-				if (optimizedClear)
-				{
-					ClearValue clearValue = depthBuffer->GetOptimizedClearValue();
-					impl.renderInfo.depthAttachment.clearValue.depthStencil.depth = clearValue.depth;
-					if (hasStencil) impl.renderInfo.stencilAttachment.clearValue.depthStencil.stencil = clearValue.stencil;
-				}
-
-			}
-
-			impl.renderInfo.renderingInfo = {};
-			impl.renderInfo.renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
-			impl.renderInfo.renderingInfo.renderArea.offset = { 0, 0 };
-			impl.renderInfo.renderingInfo.renderArea.extent =
-			{
-				(numRenderTextures > 0) ? renderTextures[0]->GetWidth() : depthBuffer->GetWidth(),
-				(numRenderTextures > 0) ? renderTextures[0]->GetHeight() : depthBuffer->GetHeight()
-			};
-			impl.renderInfo.renderingInfo.layerCount = 1;
-			impl.renderInfo.renderingInfo.colorAttachmentCount = numRenderTextures;
-			impl.renderInfo.renderingInfo.pColorAttachments = impl.renderInfo.colorAttachments.data();
-			impl.renderInfo.renderingInfo.pDepthAttachment = depthBuffer ? &impl.renderInfo.depthAttachment : nullptr;
-			impl.renderInfo.renderingInfo.pStencilAttachment = (hasStencil) ? &impl.renderInfo.stencilAttachment : nullptr;
-
-			vkCmdBeginRendering(impl.currentCommandBuffer, &impl.renderInfo.renderingInfo);
-
-			// It's important we don't clear these render targets again when pausing and resuming render passes later.
-			for (uint32_t i = 0; i < numRenderTextures; i++)
-			{
-				impl.renderInfo.colorAttachments[i].loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
-			}
-			if (depthBuffer) impl.renderInfo.depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
-			if (hasStencil) impl.renderInfo.stencilAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
-
-			// Remember which render targets are active
-			impl.numCurrentRenderTextures = numRenderTextures;
-			for (uint32_t i = 0; i < numRenderTextures; i++)
-			{
-				impl.currentRenderTextures[i] = renderTextures[i];
-			}
-			impl.currentDepthTexture = depthBuffer;
-
-			// Render pass has begun
-			impl.isRendering = true;
 		}
+
+		bool hasStencil = false;
+		impl.renderInfo.depthAttachment = {};
+		impl.renderInfo.stencilAttachment = {};
+		if (depthBuffer)
+		{
+			hasStencil = GetFormatInfo(depthBuffer->GetFormat()).hasStencilComponent;
+
+			impl.renderInfo.depthAttachment =
+			{
+				.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+				.imageView = depthBuffer->GetVulkanImageView_UAV_RTV_DSV(),
+				.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+				.loadOp = optimizedClear ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD,
+				.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+			};
+			if (hasStencil)
+			{
+				impl.renderInfo.stencilAttachment =
+				{
+					 .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+					 .imageView = depthBuffer->GetVulkanImageView_UAV_RTV_DSV(),
+					 .imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+					 .loadOp = optimizedClear ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD,
+					 .storeOp = VK_ATTACHMENT_STORE_OP_STORE
+				};
+			}
+
+			if (optimizedClear)
+			{
+				ClearValue clearValue = depthBuffer->GetOptimizedClearValue();
+				impl.renderInfo.depthAttachment.clearValue.depthStencil.depth = clearValue.depth;
+				if (hasStencil) impl.renderInfo.stencilAttachment.clearValue.depthStencil.stencil = clearValue.stencil;
+			}
+
+		}
+
+		impl.renderInfo.renderingInfo = {};
+		impl.renderInfo.renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
+		impl.renderInfo.renderingInfo.renderArea.offset = { 0, 0 };
+		impl.renderInfo.renderingInfo.renderArea.extent =
+		{
+			(numRenderTextures > 0) ? renderTextures[0]->GetWidth() : depthBuffer->GetWidth(),
+			(numRenderTextures > 0) ? renderTextures[0]->GetHeight() : depthBuffer->GetHeight()
+		};
+		impl.renderInfo.renderingInfo.layerCount = 1;
+		impl.renderInfo.renderingInfo.colorAttachmentCount = numRenderTextures;
+		impl.renderInfo.renderingInfo.pColorAttachments = impl.renderInfo.colorAttachments.data();
+		impl.renderInfo.renderingInfo.pDepthAttachment = depthBuffer ? &impl.renderInfo.depthAttachment : nullptr;
+		impl.renderInfo.renderingInfo.pStencilAttachment = (hasStencil) ? &impl.renderInfo.stencilAttachment : nullptr;
+
+		vkCmdBeginRendering(impl.currentCommandBuffer, &impl.renderInfo.renderingInfo);
+
+		// It's important we don't clear these render targets again when pausing and resuming render passes later.
+		for (uint32_t i = 0; i < numRenderTextures; i++)
+		{
+			impl.renderInfo.colorAttachments[i].loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+		}
+		if (depthBuffer) impl.renderInfo.depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+		if (hasStencil) impl.renderInfo.stencilAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+
+		// Remember which render targets are active
+		impl.numCurrentRenderTextures = numRenderTextures;
+		for (uint32_t i = 0; i < numRenderTextures; i++)
+		{
+			impl.currentRenderTextures[i] = renderTextures[i];
+		}
+		impl.currentDepthTexture = depthBuffer;
+
+		// Render pass has begun
+		impl.activeRenderPass = true;
 	}
 
 	void CommandList::Impl_ClearColor(const Texture& renderTexture, Color color, uint32_t numRects, const IntRect* rects)
 	{
 		// Check if the texture is one of the current render targets
-		int32_t attachmentIndex = -1;
-		if (impl.isRendering)
+		std::optional<uint32_t> attachmentIndex;
+		if (impl.activeRenderPass)
 		{
 			for (uint32_t i = 0; i < impl.numCurrentRenderTextures; i++)
 			{
@@ -1754,11 +1761,11 @@ namespace ig
 			}
 		}
 
-		if (attachmentIndex >= 0)
+		if (attachmentIndex.has_value())
 		{
 			VkClearAttachment clearAttachment = {};
 			clearAttachment.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-			clearAttachment.colorAttachment = (uint32_t)attachmentIndex;
+			clearAttachment.colorAttachment = attachmentIndex.value();
 			clearAttachment.clearValue.color = { color.red, color.green, color.blue, color.alpha };
 
 			if (numRects == 0)
@@ -1792,10 +1799,8 @@ namespace ig
 			range.baseArrayLayer = 0;
 			range.layerCount = renderTexture.GetNumFaces();
 
-			SafePauseRendering();
 			vkCmdClearColorImage(impl.currentCommandBuffer, renderTexture.GetVulkanImage(),
 				VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearValue, 1, &range);
-			SafeResumeRendering();
 
 			if (numRects > 0)
 			{
@@ -1807,7 +1812,7 @@ namespace ig
 	void CommandList::Impl_ClearDepth(const Texture& depthBuffer, float depth, byte stencil, bool clearDepth, bool clearStencil,
 		uint32_t numRects, const IntRect* rects)
 	{
-		if (impl.isRendering && (impl.currentDepthTexture == &depthBuffer))
+		if (impl.activeRenderPass && (impl.currentDepthTexture == &depthBuffer))
 		{
 			VkClearAttachment clearAttachment = {};
 			clearAttachment.aspectMask = (clearDepth ? VK_IMAGE_ASPECT_DEPTH_BIT : 0) | (clearStencil ? VK_IMAGE_ASPECT_STENCIL_BIT : 0);
@@ -1844,10 +1849,8 @@ namespace ig
 			range.baseArrayLayer = 0;
 			range.layerCount = depthBuffer.GetNumFaces();
 
-			SafePauseRendering();
 			vkCmdClearDepthStencilImage(impl.currentCommandBuffer, depthBuffer.GetVulkanImage(),
 				VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearValue, 1, &range);
-			SafeResumeRendering();
 
 			if (numRects > 0)
 			{
@@ -1858,9 +1861,7 @@ namespace ig
 
 	void CommandList::Impl_ClearUnorderedAccessBufferUInt32(const Buffer& buffer, const uint32_t value)
 	{
-		SafePauseRendering();
 		vkCmdFillBuffer(impl.currentCommandBuffer, buffer.GetVulkanBuffer(), 0, VK_WHOLE_SIZE, value);
-		SafeResumeRendering();
 	}
 
 	void CommandList::Impl_ClearUnorderedAccessTextureFloat(const Texture& texture, const float values[4])
@@ -1878,10 +1879,8 @@ namespace ig
 		range.baseArrayLayer = 0;
 		range.layerCount = texture.GetNumFaces();
 
-		SafePauseRendering();
 		vkCmdClearColorImage(impl.currentCommandBuffer, texture.GetVulkanImage(),
 			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearColor, 1, &range);
-		SafeResumeRendering();
 	}
 
 	void CommandList::Impl_ClearUnorderedAccessTextureUInt32(const Texture& texture, const uint32_t values[4])
@@ -1899,10 +1898,8 @@ namespace ig
 		range.baseArrayLayer = 0;
 		range.layerCount = texture.GetNumFaces();
 
-		SafePauseRendering();
 		vkCmdClearColorImage(impl.currentCommandBuffer, texture.GetVulkanImage(),
 			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearColor, 1, &range);
-		SafeResumeRendering();
 	}
 
 	void CommandList::Impl_SetPushConstants(const void* data, uint32_t sizeInBytes, uint32_t destOffsetInBytes)
@@ -2023,12 +2020,10 @@ namespace ig
 			regionList.push_back(region);
 		}
 
-		SafePauseRendering();
 		vkCmdCopyImage(impl.currentCommandBuffer,
 			source.GetVulkanImage(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
 			destination.GetVulkanImage(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
 			(uint32_t)regionList.size(), regionList.data());
-		SafeResumeRendering();
 	}
 
 	void CommandList::Impl_CopyTextureSubresource(const Texture& source, uint32_t sourceFaceIndex, uint32_t sourceMipIndex,
@@ -2052,12 +2047,10 @@ namespace ig
 			1u  // Depth is always 1 for 2D textures
 		};
 
-		SafePauseRendering();
 		vkCmdCopyImage(impl.currentCommandBuffer,
 			source.GetVulkanImage(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
 			destination.GetVulkanImage(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
 			1, &region);
-		SafeResumeRendering();
 	}
 
 	void CommandList::Impl_CopyTextureToReadableTexture(const Texture& source, const Texture& destination)
@@ -2093,12 +2086,10 @@ namespace ig
 			}
 		}
 
-		SafePauseRendering();
 		vkCmdCopyImage(impl.currentCommandBuffer,
 			source.GetVulkanImage(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
 			destination.GetVulkanImage(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
 			(uint32_t)regionList.size(), regionList.data());
-		SafeResumeRendering();
 	}
 
 	void CommandList::CopyBuffer(const Buffer& source, const Buffer& destination)
@@ -2108,9 +2099,7 @@ namespace ig
 		copyRegion.dstOffset = 0;
 		copyRegion.size = source.GetSize();
 
-		SafePauseRendering();
 		vkCmdCopyBuffer(impl.currentCommandBuffer, source.GetVulkanBuffer(), destination.GetVulkanBuffer(), 1, &copyRegion);
-		SafeResumeRendering();
 	}
 
 	void CommandList::CopyTempBufferToTexture(const TempBuffer& source, const Texture& destination)
@@ -2150,12 +2139,9 @@ namespace ig
 			}
 		}
 
-
-		SafePauseRendering();
 		vkCmdCopyBufferToImage(impl.currentCommandBuffer,
 			source.impl.buffer, destination.GetVulkanImage(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
 			(uint32_t)regionList.size(), regionList.data());
-		SafeResumeRendering();
 	}
 
 	void CommandList::CopyTempBufferToTextureSubresource(const TempBuffer& source, const Texture& destination, uint32_t destFaceIndex, uint32_t destMipIndex)
@@ -2176,61 +2162,56 @@ namespace ig
 		region.imageOffset = { 0, 0, 0 };
 		region.imageExtent = { mipExtent.width, mipExtent.height, 1 };
 
-		SafePauseRendering();
 		vkCmdCopyBufferToImage(impl.currentCommandBuffer, source.impl.buffer, destination.GetVulkanImage(),
 			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
-		SafeResumeRendering();
 	}
 
 	void CommandList::CopyTempBufferToBuffer(const TempBuffer& source, const Buffer& destination)
 	{
-		VkBufferCopy copyRegion = {};
-		copyRegion.srcOffset = source.offset;
-		copyRegion.dstOffset = 0;
-		copyRegion.size = destination.GetSize();
-
-		SafePauseRendering();
+		VkBufferCopy copyRegion =
+		{
+			.srcOffset = source.offset,
+			.dstOffset = 0,
+			.size = destination.GetSize(),
+		};
 		vkCmdCopyBuffer(impl.currentCommandBuffer, source.impl.buffer, destination.GetVulkanBuffer(), 1, &copyRegion);
-		SafeResumeRendering();
 	}
 
-	void CommandList::SafeEndRendering()
+	void CommandList::EndRenderPass()
 	{
-		if (impl.isRendering)
+		if (!impl.activeRenderPass)
 		{
-			assert(impl.temporaryRenderPause == false);
+			Fatal("EndRenderPass() was called when there was no active render pass.");
+		}
+		if (impl.nestedPauseCounter > 0)
+		{
+			Fatal("EndRenderPass() was called inside a pause/resume block. You must resume the render pass before you can end it.");
+		}
 
+		vkCmdEndRendering(impl.currentCommandBuffer);
+
+		impl.activeRenderPass = false;
+		impl.numCurrentRenderTextures = 0;
+		impl.currentDepthTexture = nullptr;
+	}
+
+	void CommandList::SafePauseRenderPass()
+	{
+		impl.nestedPauseCounter++;
+		if (impl.nestedPauseCounter == 1 && impl.activeRenderPass)
+		{
 			vkCmdEndRendering(impl.currentCommandBuffer);
-
-			impl.isRendering = false;
-			impl.numCurrentRenderTextures = 0;
-			impl.currentDepthTexture = nullptr;
 		}
 	}
 
-	void CommandList::SafePauseRendering()
+	void CommandList::SafeResumeRenderPass()
 	{
-		if (impl.isRendering)
+		if (impl.nestedPauseCounter == 0) Fatal("SafeResumeRenderPass() was called without SafePauseRenderPass() being called first.");
+		impl.nestedPauseCounter--;
+
+		if (impl.nestedPauseCounter == 0 && impl.activeRenderPass)
 		{
-			assert(impl.temporaryRenderPause == false);
-
-			vkCmdEndRendering(impl.currentCommandBuffer);
-
-			impl.isRendering = false;
-			impl.temporaryRenderPause = true;
-		}
-	}
-
-	void CommandList::SafeResumeRendering()
-	{
-		if (impl.temporaryRenderPause)
-		{
-			assert(impl.isRendering == false);
-
 			vkCmdBeginRendering(impl.currentCommandBuffer, &impl.renderInfo.renderingInfo);
-
-			impl.isRendering = true;
-			impl.temporaryRenderPause = false;
 		}
 	}
 
@@ -2256,12 +2237,10 @@ namespace ig
 			1 // Depth
 		};
 
-		SafePauseRendering();
 		vkCmdResolveImage(impl.currentCommandBuffer,
 			source.GetVulkanImage(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
 			destination.GetVulkanImage(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
 			1, &resolveRegion);
-		SafeResumeRendering();
 	}
 
 	void UploadHeap::Page::Impl_Free(const IGLOContext& context)

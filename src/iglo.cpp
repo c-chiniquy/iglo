@@ -1066,31 +1066,6 @@ namespace ig
 		AddBufferBarrier(buffer, infoBefore.sync, infoBefore.access, infoAfter.sync, infoAfter.access);
 	}
 
-	void CommandList::SetRenderTarget(const Texture* renderTexture, const Texture* depthBuffer, bool optimizedClear)
-	{
-		if (renderTexture)
-		{
-			const Texture* renderTextures[] = { renderTexture };
-			SetRenderTargets(renderTextures, 1, depthBuffer, optimizedClear);
-		}
-		else
-		{
-			SetRenderTargets(nullptr, 0, depthBuffer, optimizedClear);
-		}
-	}
-
-	void CommandList::SetRenderTargets(const Texture* const* renderTextures, uint32_t numRenderTextures,
-		const Texture* depthBuffer, bool optimizedClear)
-	{
-		if (numRenderTextures > 0)
-		{
-			assert(renderTextures != nullptr);
-		}
-		assert(numRenderTextures <= MAX_SIMULTANEOUS_RENDER_TARGETS && "too many render textures provided");
-
-		Impl_SetRenderTargets(renderTextures, numRenderTextures, depthBuffer, optimizedClear);
-	}
-
 	void CommandList::ClearColor(const Texture& renderTexture, Color color, uint32_t numRects, const IntRect* rects)
 	{
 		assert(

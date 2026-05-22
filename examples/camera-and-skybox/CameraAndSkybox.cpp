@@ -473,57 +473,61 @@ private:
 			cmd->AddTextureBarrier(*renderDepth, ig::SimpleBarrier::Discard, ig::SimpleBarrier::DepthWrite);
 			cmd->FlushBarriers();
 
-			cmd->SetRenderTarget(renderColor.get(), renderDepth.get());
-			cmd->SetViewport((float)renderColor->GetWidth(), (float)renderColor->GetHeight());
-			cmd->SetScissorRectangle(renderColor->GetWidth(), renderColor->GetHeight());
-			if (!skyboxEnabled) cmd->ClearColor(*renderColor);
-			cmd->ClearDepth(*renderDepth);
-
-			struct PushConstants
+			cmd->BeginRenderPass(renderColor.get(), renderDepth.get());
 			{
-				ig::Matrix4x4 viewProj; // For all shaders
-				ig::Vector3 cameraPos; // For skybox
-				float padding = 0;
-				uint32_t textureIndex = IGLO_UINT32_MAX; // For skybox
-				uint32_t samplerIndex = IGLO_UINT32_MAX; // For skybox
-			};
-			PushConstants pushConstants;
-			pushConstants.viewProj = camera.GetViewProjMatrix().GetTransposed();
-			pushConstants.cameraPos = camera.GetPosition();
-			pushConstants.textureIndex = skyboxCubemapTexture->GetDescriptor().heapIndex;
-			pushConstants.samplerIndex = skyboxSampler->GetDescriptor().heapIndex;
-			cmd->SetPushConstants(&pushConstants, sizeof(pushConstants));
+				cmd->SetViewport((float)renderColor->GetWidth(), (float)renderColor->GetHeight());
+				cmd->SetScissorRectangle(renderColor->GetWidth(), renderColor->GetHeight());
+				if (!skyboxEnabled) cmd->ClearColor(*renderColor);
+				cmd->ClearDepth(*renderDepth);
 
-			// Draw skybox
-			if (skyboxEnabled)
-			{
-				cmd->SetPipeline(msaaEnabled ? *skyboxPipelineMSAA : *skyboxPipeline);
-				cmd->SetVertexBuffer(*skybox.vertexBuffer);
-				cmd->SetIndexBuffer(*skybox.indexBuffer);
-				cmd->DrawIndexed(skybox.indexBuffer->GetNumElements());
+				struct PushConstants
+				{
+					ig::Matrix4x4 viewProj; // For all shaders
+					ig::Vector3 cameraPos; // For skybox
+					float padding = 0;
+					uint32_t textureIndex = IGLO_UINT32_MAX; // For skybox
+					uint32_t samplerIndex = IGLO_UINT32_MAX; // For skybox
+				};
+				PushConstants pushConstants;
+				pushConstants.viewProj = camera.GetViewProjMatrix().GetTransposed();
+				pushConstants.cameraPos = camera.GetPosition();
+				pushConstants.textureIndex = skyboxCubemapTexture->GetDescriptor().heapIndex;
+				pushConstants.samplerIndex = skyboxSampler->GetDescriptor().heapIndex;
+				cmd->SetPushConstants(&pushConstants, sizeof(pushConstants));
+
+				// Draw skybox
+				if (skyboxEnabled)
+				{
+					cmd->SetPipeline(msaaEnabled ? *skyboxPipelineMSAA : *skyboxPipeline);
+					cmd->SetVertexBuffer(*skybox.vertexBuffer);
+					cmd->SetIndexBuffer(*skybox.indexBuffer);
+					cmd->DrawIndexed(skybox.indexBuffer->GetNumElements());
+				}
+
+				// Draw the XYZ lines
+				cmd->SetPipeline(msaaEnabled ? *linePipelineMSAA : *linePipeline);
+				cmd->SetVertexBuffer(*XYZLines);
+				cmd->Draw(XYZLines->GetNumElements());
+
+				if (sceneDrawMode == SceneDrawMode::InstancedCubes)
+				{
+					// Draw instanced cubes
+					cmd->SetPipeline(msaaEnabled ? *instancingPipelineMSAA : *instancingPipeline);
+					cmd->SetVertexBuffer(*cube.vertexBuffer, 0);
+					cmd->SetVertexBuffer(*instancePosBuffer, 1);
+					cmd->SetIndexBuffer(*cube.indexBuffer);
+					cmd->DrawIndexedInstanced(cube.indexBuffer->GetNumElements(), objectDrawCount);
+				}
+				else if (sceneDrawMode == SceneDrawMode::Points)
+				{
+					// Draw points
+					cmd->SetPipeline(msaaEnabled ? *pointPipelineMSAA : *pointPipeline);
+					cmd->SetVertexBuffer(*pointVertexBuffer);
+					cmd->Draw(objectDrawCount);
+				}
+
 			}
-
-			// Draw the XYZ lines
-			cmd->SetPipeline(msaaEnabled ? *linePipelineMSAA : *linePipeline);
-			cmd->SetVertexBuffer(*XYZLines);
-			cmd->Draw(XYZLines->GetNumElements());
-
-			if (sceneDrawMode == SceneDrawMode::InstancedCubes)
-			{
-				// Draw instanced cubes
-				cmd->SetPipeline(msaaEnabled ? *instancingPipelineMSAA : *instancingPipeline);
-				cmd->SetVertexBuffer(*cube.vertexBuffer, 0);
-				cmd->SetVertexBuffer(*instancePosBuffer, 1);
-				cmd->SetIndexBuffer(*cube.indexBuffer);
-				cmd->DrawIndexedInstanced(cube.indexBuffer->GetNumElements(), objectDrawCount);
-			}
-			else if (sceneDrawMode == SceneDrawMode::Points)
-			{
-				// Draw points
-				cmd->SetPipeline(msaaEnabled ? *pointPipelineMSAA : *pointPipeline);
-				cmd->SetVertexBuffer(*pointVertexBuffer);
-				cmd->Draw(objectDrawCount);
-			}
+			cmd->EndRenderPass();
 
 			if (msaaEnabled)
 			{
@@ -545,55 +549,58 @@ private:
 			cmd->AddTextureBarrier(context->GetBackBuffer(), ig::SimpleBarrier::Discard, ig::SimpleBarrier::RenderTarget);
 			cmd->FlushBarriers();
 
-			cmd->SetRenderTarget(&context->GetBackBuffer());
-			cmd->SetViewport((float)context->GetWidth(), (float)context->GetHeight());
-			cmd->SetScissorRectangle(context->GetWidth(), context->GetHeight());
-
-			// Draw the render texture onto the backbuffer
-			screenRenderer->DrawFullscreenQuad(*cmd, msaaEnabled ? *resolved : *renderColor, context->GetBackBuffer());
-
-			r->Begin(*cmd);
+			cmd->BeginRenderPass(&context->GetBackBuffer());
 			{
-				r->SetSamplerToPixelatedTextures();
+				cmd->SetViewport((float)context->GetWidth(), (float)context->GetHeight());
+				cmd->SetScissorRectangle(context->GetWidth(), context->GetHeight());
 
-				// Draw text
-				std::string str = ig::ToString
-				(
-					sampleName, "\n",
-					"iglo v" IGLO_VERSION_STRING " " IGLO_GRAPHICS_API_STRING "\n",
-					"FPS: ", mainloop.GetAverageFPS(), "\n",
-					"Yaw: ", camera.GetYaw(), "\n",
-					"Pitch: ", camera.GetPitch(), "\n",
-					"Roll: ", camera.GetRoll(), "\n",
-					"MSAA X", (int)renderColor->GetMSAA(), " [M]\n",
-					"Objects: ", objectDrawCount, " [,][.]\n",
-					"Drawing ", (sceneDrawMode == SceneDrawMode::InstancedCubes ? "instanced cubes" : "points"), " [N]\n"
-					"Skybox ", (skyboxEnabled ? "enabled" : "disabled"), " [B]\n"
-				);
+				// Draw the render texture onto the backbuffer
+				screenRenderer->DrawFullscreenQuad(*cmd, msaaEnabled ? *resolved : *renderColor, context->GetBackBuffer());
 
-				ig::SDFEffect sdfEffect;
-				sdfEffect.flags = ig::SDFEffectFlags::Glow | ig::SDFEffectFlags::Outline;
-				r->SetSDFEffect(sdfEffect);
-
-				ig::Vector2 strPos = ig::Vector2(7, 2);
-				r->DrawString(strPos, str, *trimSDF, ig::Colors::Yellow);
-
-				if (camera.GetPosition() == ig::Vector3(0, 0, 0))
+				r->Begin(*cmd);
 				{
-					const std::string helperText =
-						"Hold and drag mouse: rotate camera\n"
-						"[Arrow keys][WASD][Q, E][Shift][Space]: move camera\n"
-						"[Middle mouse]: reset camera\n"
-						"[Right mouse]: rotate camera around scene";
+					r->SetSamplerToPixelatedTextures();
 
-					ig::Vector2 strSize = r->MeasureString(helperText, *trimSDF);
-					float x = floorf(((float)context->GetWidth() / 2.0f) - (strSize.x / 2.0f));
-					float y = floorf((float)context->GetHeight() - (strSize.y + 15.0f));
-					r->DrawString(x, y, helperText, *trimSDF, ig::Colors::White);
+					// Draw text
+					std::string str = ig::ToString
+					(
+						sampleName, "\n",
+						"iglo v" IGLO_VERSION_STRING " " IGLO_GRAPHICS_API_STRING "\n",
+						"FPS: ", mainloop.GetAverageFPS(), "\n",
+						"Yaw: ", camera.GetYaw(), "\n",
+						"Pitch: ", camera.GetPitch(), "\n",
+						"Roll: ", camera.GetRoll(), "\n",
+						"MSAA X", (int)renderColor->GetMSAA(), " [M]\n",
+						"Objects: ", objectDrawCount, " [,][.]\n",
+						"Drawing ", (sceneDrawMode == SceneDrawMode::InstancedCubes ? "instanced cubes" : "points"), " [N]\n"
+						"Skybox ", (skyboxEnabled ? "enabled" : "disabled"), " [B]\n"
+					);
+
+					ig::SDFEffect sdfEffect;
+					sdfEffect.flags = ig::SDFEffectFlags::Glow | ig::SDFEffectFlags::Outline;
+					r->SetSDFEffect(sdfEffect);
+
+					ig::Vector2 strPos = ig::Vector2(7, 2);
+					r->DrawString(strPos, str, *trimSDF, ig::Colors::Yellow);
+
+					if (camera.GetPosition() == ig::Vector3(0, 0, 0))
+					{
+						const std::string helperText =
+							"Hold and drag mouse: rotate camera\n"
+							"[Arrow keys][WASD][Q, E][Shift][Space]: move camera\n"
+							"[Middle mouse]: reset camera\n"
+							"[Right mouse]: rotate camera around scene";
+
+						ig::Vector2 strSize = r->MeasureString(helperText, *trimSDF);
+						float x = floorf(((float)context->GetWidth() / 2.0f) - (strSize.x / 2.0f));
+						float y = floorf((float)context->GetHeight() - (strSize.y + 15.0f));
+						r->DrawString(x, y, helperText, *trimSDF, ig::Colors::White);
+					}
+
 				}
-
+				r->End();
 			}
-			r->End();
+			cmd->EndRenderPass();
 
 			cmd->AddTextureBarrier(context->GetBackBuffer(), ig::SimpleBarrier::RenderTarget, ig::SimpleBarrier::Present);
 			cmd->FlushBarriers();

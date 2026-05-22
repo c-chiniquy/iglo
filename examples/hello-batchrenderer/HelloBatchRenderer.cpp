@@ -591,7 +591,7 @@ private:
 				cmd->AddTextureBarrier(*rendertarget, ig::SimpleBarrier::Discard, ig::SimpleBarrier::RenderTarget);
 				cmd->FlushBarriers();
 
-				cmd->SetRenderTarget(rendertarget.get());
+				cmd->BeginRenderPass(rendertarget.get());
 				cmd->SetViewport((float)rendertarget->GetWidth(), (float)rendertarget->GetHeight());
 				cmd->SetScissorRectangle(rendertarget->GetWidth(), rendertarget->GetHeight());
 				cmd->ClearColor(*rendertarget, clearColor);
@@ -601,7 +601,7 @@ private:
 				cmd->AddTextureBarrier(context->GetBackBuffer(), ig::SimpleBarrier::Discard, ig::SimpleBarrier::RenderTarget);
 				cmd->FlushBarriers();
 
-				cmd->SetRenderTarget(&context->GetBackBuffer());
+				cmd->BeginRenderPass(&context->GetBackBuffer());
 				cmd->SetViewport((float)context->GetWidth(), (float)context->GetHeight());
 				cmd->SetScissorRectangle(context->GetWidth(), context->GetHeight());
 				cmd->ClearColor(context->GetBackBuffer(), clearColor);
@@ -1221,6 +1221,8 @@ private:
 				r.DrawString(strPos, demoStr, *vegur, ig::Colors::White);
 			}
 			r.End();
+
+			cmd->EndRenderPass();
 
 			if (useMSAA)
 			{

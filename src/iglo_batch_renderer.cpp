@@ -737,7 +737,9 @@ namespace ig
 					font.PreloadGlyphs(utf8string);
 
 					// Update the font texture.
+					cmd->SafePauseRenderPass();
 					font.ApplyChangesToTexture(*cmd);
+					cmd->SafeResumeRenderPass();
 
 					// There is a possibility that the old font texture got replaced with a larger one to fit more glyphs.
 					// This is why we must call UsingTexture() here to ensure the latest texture is still used.
