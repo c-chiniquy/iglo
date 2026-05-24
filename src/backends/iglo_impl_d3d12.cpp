@@ -1218,7 +1218,7 @@ namespace ig
 		if (createSRV)
 		{
 			impl.srv = heap.AllocatePersistent(DescriptorType::Resource);
-			D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = GenerateD3D12Desc_SRV_AllMips(desc.format, desc.msaa, desc.mipLevels, desc.numFaces, desc.isCubemap);
+			D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = GenerateD3D12Desc_SRV(desc.format, desc.msaa, desc.mipLevels, desc.numFaces, desc.isCubemap);
 			device->CreateShaderResourceView(impl.resource.Get(), &srvDesc, heap.GetD3D12CPUHandle(impl.srv));
 		}
 
@@ -1265,7 +1265,7 @@ namespace ig
 		return impl.resource.Get();
 	}
 
-	D3D12_SHADER_RESOURCE_VIEW_DESC Texture::GenerateD3D12Desc_SRV_AllMips(Format format, MSAA msaa,
+	D3D12_SHADER_RESOURCE_VIEW_DESC Texture::GenerateD3D12Desc_SRV(Format format, MSAA msaa,
 		uint32_t mipLevels, uint32_t numFaces, bool isCubemap)
 	{
 		assert((!isCubemap || numFaces % 6 == 0) && "If cubemap, numFaces must be a multiple of 6");

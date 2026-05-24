@@ -1111,7 +1111,7 @@ namespace ig
 
 		ID3D12Resource* GetD3D12Resource() const;
 
-		static D3D12_SHADER_RESOURCE_VIEW_DESC GenerateD3D12Desc_SRV_AllMips(Format, MSAA, uint32_t mipLevels, uint32_t numFaces, bool isCubemap);
+		static D3D12_SHADER_RESOURCE_VIEW_DESC GenerateD3D12Desc_SRV(Format, MSAA, uint32_t mipLevels, uint32_t numFaces, bool isCubemap);
 		static D3D12_UNORDERED_ACCESS_VIEW_DESC GenerateD3D12Desc_UAV(Format, MSAA, uint32_t numFaces);
 		static D3D12_RENDER_TARGET_VIEW_DESC GenerateD3D12Desc_RTV(Format, MSAA, uint32_t numFaces);
 		static D3D12_DEPTH_STENCIL_VIEW_DESC GenerateD3D12Desc_DSV(Format, MSAA, uint32_t numFaces);
