@@ -253,8 +253,10 @@ namespace ig
 		void DrawTriangle(Vector2 pos0, Vector2 pos1, Vector2 pos2, Color32 color);
 		void DrawTriangle(Vector2 pos0, Vector2 pos1, Vector2 pos2, Color32 color0, Color32 color1, Color32 color2);
 
-		void DrawTexturedTriangle(const Texture& texture, Vector2 pos0, Vector2 pos1, Vector2 pos2,
-			Color32 color0, Color32 color1, Color32 color2, Vector2 texCoord0, Vector2 texCoord1, Vector2 texCoord2);
+		void DrawTexturedTriangle(const Texture& texture,
+			Vector2 pos0, Vector2 pos1, Vector2 pos2,
+			Color32 color0, Color32 color1, Color32 color2,
+			Vector2 texCoord0, Vector2 texCoord1, Vector2 texCoord2);
 
 		// Draws a textured quad.
 		// Note that textures drawn with different texture draw styles can't be batched together in the same draw call,
@@ -262,6 +264,7 @@ namespace ig
 		void DrawTexture(const Texture& texture, float x, float y, Color32 color = Colors::White, TextureDrawStyle style = TextureDrawStyle::Auto);
 		void DrawTexture(const Texture& texture, float x, float y, float width, float height, Color32 color = Colors::White,
 			TextureDrawStyle style = TextureDrawStyle::Auto);
+		void DrawTexture(const Texture& texture, FloatRect rect, FloatRect UV, Color32 color = Colors::White, TextureDrawStyle style = TextureDrawStyle::Auto);
 		void DrawTexture(const Texture& texture, float x, float y, float width, float height, FloatRect UV, Color32 color,
 			TextureDrawStyle style = TextureDrawStyle::Auto);
 

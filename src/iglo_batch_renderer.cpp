@@ -851,6 +851,10 @@ namespace ig
 	{
 		DrawTexture(texture, x, y, width, height, FloatRect(0, 0, (float)texture.GetWidth(), (float)texture.GetHeight()), color, style);
 	}
+	void BatchRenderer::DrawTexture(const Texture& texture, FloatRect rect, FloatRect UV, Color32 color, TextureDrawStyle style)
+	{
+		DrawTexture(texture, rect.left, rect.top, rect.GetWidth(), rect.GetHeight(), UV, color, style);
+	}
 	void BatchRenderer::DrawTexture(const Texture& texture, float x, float y, float width, float height, FloatRect UV, Color32 color,
 		TextureDrawStyle style)
 	{
