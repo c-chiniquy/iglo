@@ -1,6 +1,12 @@
 
 # Changelog
 
+## v0.5.1
+
+### Changes
+- Added a new overload to `BatchRenderer::DrawTexture()`.
+- Renamed `Texture::GenerateD3D12Desc_SRV_AllMips()` to `Texture::GenerateD3D12Desc_SRV()`.
+
 ## v0.5.0
 
 ### Changes
