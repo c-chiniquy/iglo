@@ -1833,6 +1833,8 @@ namespace ig
 		impl.heap_DSV = nullptr;
 
 		impl.heap_Reusable_UAV = nullptr;
+		impl.heap_Reusable_RTV = nullptr;
+		impl.heap_Reusable_DSV = nullptr;
 	}
 
 	DetailedResult DescriptorHeap::Impl_Create()
@@ -1879,18 +1881,20 @@ namespace ig
 
 		// Shader-visible descriptor heaps
 		{
-			// Resources
-			D3D12_DESCRIPTOR_HEAP_DESC resHeap = {};
-			resHeap.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-			resHeap.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-			resHeap.NumDescriptors = CalcTotalDescriptors(limits.persistentResources, limits.tempResourcesPerFrame, maxFramesInFlight);
-			HRESULT hrRes = device->CreateDescriptorHeap(&resHeap, IID_PPV_ARGS(&impl.heap_CBV_SRV_UAV));
+			D3D12_DESCRIPTOR_HEAP_DESC resourceHeap =
+			{
+				.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
+				.NumDescriptors = CalcTotalDescriptors(limits.persistentResources, limits.tempResourcesPerFrame, maxFramesInFlight),
+				.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
+			};
+			D3D12_DESCRIPTOR_HEAP_DESC samplerHeap =
+			{
+				.Type = D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER,
+				.NumDescriptors = limits.samplers,
+				.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
+			};
 
-			// Samplers
-			D3D12_DESCRIPTOR_HEAP_DESC samplerHeap = {};
-			samplerHeap.Type = D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER;
-			samplerHeap.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-			samplerHeap.NumDescriptors = limits.samplers;
+			HRESULT hrRes = device->CreateDescriptorHeap(&resourceHeap, IID_PPV_ARGS(&impl.heap_CBV_SRV_UAV));
 			HRESULT hrSampler = device->CreateDescriptorHeap(&samplerHeap, IID_PPV_ARGS(&impl.heap_Samplers));
 
 			if (FAILED(hrRes) || FAILED(hrSampler))
@@ -1901,13 +1905,16 @@ namespace ig
 
 		// Non-shader-visible descriptor heaps
 		{
-			D3D12_DESCRIPTOR_HEAP_DESC rtvDesc = {};
-			rtvDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
-			rtvDesc.NumDescriptors = limits.renderTextures;
-
-			D3D12_DESCRIPTOR_HEAP_DESC dsvDesc = {};
-			dsvDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
-			dsvDesc.NumDescriptors = limits.depthBuffers;
+			D3D12_DESCRIPTOR_HEAP_DESC rtvDesc =
+			{
+				.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
+				.NumDescriptors = limits.renderTextures,
+			};
+			D3D12_DESCRIPTOR_HEAP_DESC dsvDesc =
+			{
+				.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV,
+				.NumDescriptors = limits.depthBuffers,
+			};
 
 			HRESULT hrRTV = device->CreateDescriptorHeap(&rtvDesc, IID_PPV_ARGS(&impl.heap_RTV));
 			HRESULT hrDSV = device->CreateDescriptorHeap(&dsvDesc, IID_PPV_ARGS(&impl.heap_DSV));
@@ -1920,13 +1927,27 @@ namespace ig
 
 		// Reusable non-shader-visible descriptor heaps
 		{
-			D3D12_DESCRIPTOR_HEAP_DESC uavDesc = {};
-			uavDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV; // We just need the UAV
-			uavDesc.NumDescriptors = 1;
+			D3D12_DESCRIPTOR_HEAP_DESC uavDesc =
+			{
+				.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, // We just need the UAV
+				.NumDescriptors = 1,
+			};
+			D3D12_DESCRIPTOR_HEAP_DESC rtvDesc =
+			{
+				.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
+				.NumDescriptors = MAX_SIMULTANEOUS_RENDER_TARGETS,
+			};
+			D3D12_DESCRIPTOR_HEAP_DESC dsvDesc =
+			{
+				.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV,
+				.NumDescriptors = 1,
+			};
 
 			HRESULT hrUAV = device->CreateDescriptorHeap(&uavDesc, IID_PPV_ARGS(&impl.heap_Reusable_UAV));
+			HRESULT hrRTV = device->CreateDescriptorHeap(&rtvDesc, IID_PPV_ARGS(&impl.heap_Reusable_RTV));
+			HRESULT hrDSV = device->CreateDescriptorHeap(&dsvDesc, IID_PPV_ARGS(&impl.heap_Reusable_DSV));
 
-			if (FAILED(hrUAV))
+			if (FAILED(hrUAV) || FAILED(hrRTV) || FAILED(hrDSV))
 			{
 				return DetailedResult::Fail("Failed to create reusable descriptor heaps.");
 			}
@@ -1959,6 +1980,14 @@ namespace ig
 	D3D12_CPU_DESCRIPTOR_HANDLE DescriptorHeap::GetD3D12CPUHandle_Reusable_UAV() const
 	{
 		return impl.heap_Reusable_UAV->GetCPUDescriptorHandleForHeapStart();
+	}
+	D3D12_CPU_DESCRIPTOR_HANDLE DescriptorHeap::GetD3D12CPUHandle_Reusable_RTV() const
+	{
+		return impl.heap_Reusable_RTV->GetCPUDescriptorHandleForHeapStart();
+	}
+	D3D12_CPU_DESCRIPTOR_HANDLE DescriptorHeap::GetD3D12CPUHandle_Reusable_DSV() const
+	{
+		return impl.heap_Reusable_DSV->GetCPUDescriptorHandleForHeapStart();
 	}
 
 	ID3D12DescriptorHeap* DescriptorHeap::GetD3D12DescriptorHeap(DescriptorType type) const

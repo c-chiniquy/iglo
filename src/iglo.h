@@ -1478,7 +1478,9 @@ namespace ig
 #ifdef IGLO_D3D12
 		D3D12_CPU_DESCRIPTOR_HANDLE GetD3D12CPUHandle(Descriptor) const;
 		D3D12_GPU_DESCRIPTOR_HANDLE GetD3D12GPUHandle(Descriptor) const;
-		D3D12_CPU_DESCRIPTOR_HANDLE GetD3D12CPUHandle_Reusable_UAV() const;
+		D3D12_CPU_DESCRIPTOR_HANDLE GetD3D12CPUHandle_Reusable_UAV() const; // Reusable UAV heap has a size of 1
+		D3D12_CPU_DESCRIPTOR_HANDLE GetD3D12CPUHandle_Reusable_RTV() const; // Reusable RTV heap has a size of MAX_SIMULTANEOUS_RENDER_TARGETS
+		D3D12_CPU_DESCRIPTOR_HANDLE GetD3D12CPUHandle_Reusable_DSV() const; // Reusable DSV heap has a size of 1
 		ID3D12DescriptorHeap* GetD3D12DescriptorHeap(DescriptorType) const;
 		ID3D12RootSignature* GetD3D12BindlessRootSignature() const { return impl.bindlessRootSignature.Get(); }
 		uint32_t GetD3D12DescriptorSize(DescriptorType) const;

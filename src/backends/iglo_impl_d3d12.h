@@ -82,6 +82,8 @@ namespace ig
 
 		// Small reusable non-shader-visible descriptor heaps
 		ComPtr<ID3D12DescriptorHeap> heap_Reusable_UAV; // For clearing unordered access textures/buffers
+		ComPtr<ID3D12DescriptorHeap> heap_Reusable_RTV;
+		ComPtr<ID3D12DescriptorHeap> heap_Reusable_DSV;
 
 		uint32_t descriptorSize_CBV_SRV_UAV = 0;
 		uint32_t descriptorSize_Sampler = 0;
