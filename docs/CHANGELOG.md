@@ -4,7 +4,9 @@
 ## v0.5.2
 
 ### Changes
-- The asserts in `ClearUnorderedAccessTextureFloat()` and `ClearUnorderedAccessTextureUInt32` now consider `UnorderedAccessRenderTexture` a valid texture usage.
+- Added reusable RTV and DSV descriptor heaps in the D3D12 backend.
+  These are small non-shader-visible heaps that help you create disposable RTVs and DSVs.
+- The asserts in `ClearUnorderedAccessTextureFloat()` and `ClearUnorderedAccessTextureUInt32()` now consider `UnorderedAccessRenderTexture` a valid texture usage.
 - ig::Shader now stores entry point name using `const char*` instead of `std::string`.
 - Initializing ig::Shader from a byte vector is now a static function instead of an overloaded constructor.
 - Improved the `Texture::GenerateD3D12Desc_SRV/UAV/RTV/DSV` helper functions.
