@@ -438,8 +438,8 @@ private:
 			ig::VertexElement normal(ig::Format::FLOAT_FLOAT_FLOAT, "NORMAL");
 
 			ig::PipelineDesc desc;
-			desc.VS = ig::Shader(sceneVS.fileContent, "VSLightingAndShadows");
-			desc.PS = ig::Shader(scenePS.fileContent, "PSLightingAndShadows");
+			desc.VS = ig::Shader::FromByteVector(sceneVS.fileContent, "VSLightingAndShadows");
+			desc.PS = ig::Shader::FromByteVector(scenePS.fileContent, "PSLightingAndShadows");
 			desc.vertexLayout = { position, texcoord, normal };
 			desc.primitiveTopology = ig::PrimitiveTopology::TriangleList;
 			desc.blendStates = { ig::BlendDesc::StraightAlpha };
@@ -454,7 +454,7 @@ private:
 
 			desc.renderTargetDesc = shadowMapDesc;
 			desc.PS = ig::Shader();
-			desc.VS = ig::Shader(depthVS.fileContent, "VSDepth");
+			desc.VS = ig::Shader::FromByteVector(depthVS.fileContent, "VSDepth");
 			desc.depthState = ig::DepthDesc::DepthEnabled;
 			pipelineDepth = ig::Pipeline::CreateGraphics(*context, desc);
 		}

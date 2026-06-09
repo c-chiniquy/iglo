@@ -1218,7 +1218,7 @@ namespace ig
 		if (createSRV)
 		{
 			impl.srv = heap.AllocatePersistent(DescriptorType::Resource);
-			D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = GenerateD3D12Desc_SRV(desc.format, desc.msaa, desc.mipLevels, desc.numFaces, desc.isCubemap);
+			D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = GenerateD3D12Desc_SRV(desc.format, desc.msaa, desc.isCubemap, desc.numFaces);
 			device->CreateShaderResourceView(impl.resource.Get(), &srvDesc, heap.GetD3D12CPUHandle(impl.srv));
 		}
 
@@ -1265,10 +1265,12 @@ namespace ig
 		return impl.resource.Get();
 	}
 
-	D3D12_SHADER_RESOURCE_VIEW_DESC Texture::GenerateD3D12Desc_SRV(Format format, MSAA msaa,
-		uint32_t mipLevels, uint32_t numFaces, bool isCubemap)
+	D3D12_SHADER_RESOURCE_VIEW_DESC Texture::GenerateD3D12Desc_SRV(Format format, MSAA msaa, bool isCubemap, uint32_t numFaces,
+		uint32_t baseMip, uint32_t mipLevels)
 	{
 		assert((!isCubemap || numFaces % 6 == 0) && "If cubemap, numFaces must be a multiple of 6");
+		assert((!isCubemap || msaa == MSAA::Disabled) && "No multisampled cube SRV dimension exists");
+		assert((msaa == MSAA::Disabled || baseMip == 0) && "MSAA SRVs are single-mip");
 
 		D3D12_SHADER_RESOURCE_VIEW_DESC out = {};
 		out.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
@@ -1282,12 +1284,14 @@ namespace ig
 				{
 					out.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;
 					out.TextureCube.MipLevels = mipLevels;
+					out.TextureCube.MostDetailedMip = baseMip;
 				}
 				else
 				{
 					out.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBEARRAY;
 					out.TextureCubeArray.MipLevels = mipLevels;
 					out.TextureCubeArray.NumCubes = numFaces / 6;
+					out.TextureCubeArray.MostDetailedMip = baseMip;
 				}
 			}
 			else
@@ -1296,12 +1300,14 @@ namespace ig
 				{
 					out.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
 					out.Texture2D.MipLevels = mipLevels;
+					out.Texture2D.MostDetailedMip = baseMip;
 				}
 				else
 				{
 					out.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DARRAY;
 					out.Texture2DArray.MipLevels = mipLevels;
 					out.Texture2DArray.ArraySize = numFaces;
+					out.Texture2DArray.MostDetailedMip = baseMip;
 				}
 			}
 		}
@@ -1329,8 +1335,10 @@ namespace ig
 		return out;
 	}
 
-	D3D12_UNORDERED_ACCESS_VIEW_DESC Texture::GenerateD3D12Desc_UAV(Format format, MSAA msaa, uint32_t numFaces)
+	D3D12_UNORDERED_ACCESS_VIEW_DESC Texture::GenerateD3D12Desc_UAV(Format format, MSAA msaa, uint32_t numFaces, uint32_t mipIndex)
 	{
+		assert((msaa == MSAA::Disabled || mipIndex == 0) && "MSAA UAVs are mip 0 only");
+
 		D3D12_UNORDERED_ACCESS_VIEW_DESC out = {};
 		out.Format = GetFormatInfoDXGI(format).dxgiFormat;
 
@@ -1341,7 +1349,7 @@ namespace ig
 			{
 				out.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2DARRAY;
 				out.Texture2DArray.ArraySize = numFaces;
-				out.Texture2DArray.MipSlice = 0;
+				out.Texture2DArray.MipSlice = mipIndex;
 				out.Texture2DArray.FirstArraySlice = 0;
 			}
 			else
@@ -1356,7 +1364,7 @@ namespace ig
 			if (msaa == MSAA::Disabled)
 			{
 				out.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
-				out.Texture2D.MipSlice = 0;
+				out.Texture2D.MipSlice = mipIndex;
 			}
 			else
 			{
@@ -1367,8 +1375,10 @@ namespace ig
 		return out;
 	}
 
-	D3D12_RENDER_TARGET_VIEW_DESC Texture::GenerateD3D12Desc_RTV(Format format, MSAA msaa, uint32_t numFaces)
+	D3D12_RENDER_TARGET_VIEW_DESC Texture::GenerateD3D12Desc_RTV(Format format, MSAA msaa, uint32_t numFaces, uint32_t mipIndex)
 	{
+		assert((msaa == MSAA::Disabled || mipIndex == 0) && "MSAA RTVs are mip 0 only");
+
 		D3D12_RENDER_TARGET_VIEW_DESC out = {};
 		out.Format = GetFormatInfoDXGI(format).dxgiFormat;
 
@@ -1379,7 +1389,7 @@ namespace ig
 			{
 				out.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2DARRAY;
 				out.Texture2DArray.ArraySize = numFaces;
-				out.Texture2DArray.MipSlice = 0;
+				out.Texture2DArray.MipSlice = mipIndex;
 				out.Texture2DArray.FirstArraySlice = 0;
 				out.Texture2DArray.PlaneSlice = 0;
 			}
@@ -1395,7 +1405,7 @@ namespace ig
 			if (msaa == MSAA::Disabled)
 			{
 				out.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
-				out.Texture2D.MipSlice = 0;
+				out.Texture2D.MipSlice = mipIndex;
 				out.Texture2D.PlaneSlice = 0;
 			}
 			else
@@ -1407,8 +1417,10 @@ namespace ig
 		return out;
 	}
 
-	D3D12_DEPTH_STENCIL_VIEW_DESC Texture::GenerateD3D12Desc_DSV(Format format, MSAA msaa, uint32_t numFaces)
+	D3D12_DEPTH_STENCIL_VIEW_DESC Texture::GenerateD3D12Desc_DSV(Format format, MSAA msaa, uint32_t numFaces, uint32_t mipIndex)
 	{
+		assert((msaa == MSAA::Disabled || mipIndex == 0) && "MSAA DSVs are mip 0 only");
+
 		D3D12_DEPTH_STENCIL_VIEW_DESC out = {};
 		out.Format = GetFormatInfoDXGI(format).dxgiFormat;
 		out.Flags = D3D12_DSV_FLAG_NONE;
@@ -1420,7 +1432,7 @@ namespace ig
 			{
 				out.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2DARRAY;
 				out.Texture2DArray.ArraySize = numFaces;
-				out.Texture2DArray.MipSlice = 0;
+				out.Texture2DArray.MipSlice = mipIndex;
 				out.Texture2DArray.FirstArraySlice = 0;
 			}
 			else
@@ -1435,7 +1447,7 @@ namespace ig
 			if (msaa == MSAA::Disabled)
 			{
 				out.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
-				out.Texture2D.MipSlice = 0;
+				out.Texture2D.MipSlice = mipIndex;
 			}
 			else
 			{
@@ -2395,7 +2407,7 @@ namespace ig
 			"Unable to find a hardware adapter that supports the required features.\n\n",
 			adapterErrors, "\n\n",
 			strLatestDrivers));
-	}
+			}
 
 	void IGLOContext::Impl_DestroyGraphicsDevice()
 	{
@@ -2405,6 +2417,6 @@ namespace ig
 		graphics.device = nullptr; // The device is destroyed last
 	}
 
-}
+		}
 
 #endif

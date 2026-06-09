@@ -340,8 +340,8 @@ private:
 			ig::VertexElement instancePos(ig::Format::FLOAT_FLOAT_FLOAT, "INSTANCEPOS", 0, 1, ig::InputClass::PerInstance, 1);
 
 			ig::PipelineDesc skyboxDesc;
-			skyboxDesc.VS = ig::Shader(skyboxVS.fileContent, "VSMain");
-			skyboxDesc.PS = ig::Shader(skyboxPS.fileContent, "PSMain");
+			skyboxDesc.VS = ig::Shader::FromByteVector(skyboxVS.fileContent, "VSMain");
+			skyboxDesc.PS = ig::Shader::FromByteVector(skyboxPS.fileContent, "PSMain");
 			skyboxDesc.blendStates = { ig::BlendDesc::BlendDisabled };
 			skyboxDesc.depthState = ig::DepthDesc::DepthDisabled;
 			skyboxDesc.rasterizerState = ig::RasterizerDesc::NoCull;
@@ -353,8 +353,8 @@ private:
 			skyboxPipelineMSAA = ig::Pipeline::CreateGraphics(*context, skyboxDesc);
 
 			ig::PipelineDesc instancingDesc;
-			instancingDesc.VS = ig::Shader(instancingVS.fileContent, "VSMain");
-			instancingDesc.PS = ig::Shader(instancingPS.fileContent, "PSMain");
+			instancingDesc.VS = ig::Shader::FromByteVector(instancingVS.fileContent, "VSMain");
+			instancingDesc.PS = ig::Shader::FromByteVector(instancingPS.fileContent, "PSMain");
 			instancingDesc.blendStates = { ig::BlendDesc::StraightAlpha };
 			instancingDesc.depthState = ig::DepthDesc::DepthEnabled;
 			instancingDesc.rasterizerState = ig::RasterizerDesc::BackCull;
@@ -366,8 +366,8 @@ private:
 			instancingPipelineMSAA = ig::Pipeline::CreateGraphics(*context, instancingDesc);
 
 			ig::PipelineDesc regularDesc = instancingDesc;
-			regularDesc.VS = ig::Shader(regularVS.fileContent, "VSMain");
-			regularDesc.PS = ig::Shader(regularPS.fileContent, "PSMain");
+			regularDesc.VS = ig::Shader::FromByteVector(regularVS.fileContent, "VSMain");
+			regularDesc.PS = ig::Shader::FromByteVector(regularPS.fileContent, "PSMain");
 			regularDesc.primitiveTopology = ig::PrimitiveTopology::PointList;
 			regularDesc.vertexLayout = { position, color };
 			regularDesc.renderTargetDesc = renderDesc;

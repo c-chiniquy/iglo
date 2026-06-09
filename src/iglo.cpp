@@ -572,8 +572,8 @@ namespace ig
 	}
 
 	std::unique_ptr<Pipeline> Pipeline::LoadFromFile(const IGLOContext& context,
-		const std::string& filepathVS, const std::string& entryPointNameVS,
-		const std::string& filepathPS, const std::string& entryPointNamePS,
+		const std::string& filepathVS, const char* entryPointNameVS,
+		const std::string& filepathPS, const char* entryPointNamePS,
 		const RenderTargetDesc& renderTargetDesc, const std::vector<VertexElement>& vertexLayout,
 		PrimitiveTopology primitiveTopology, DepthDesc depth, RasterizerDesc rasterizer, const std::vector<BlendDesc>& blend)
 	{
@@ -602,8 +602,8 @@ namespace ig
 		}
 
 		return CreateGraphics(context,
-			Shader(VS.fileContent, entryPointNameVS),
-			Shader(PS.fileContent, entryPointNamePS),
+			Shader::FromByteVector(VS.fileContent, entryPointNameVS),
+			Shader::FromByteVector(PS.fileContent, entryPointNamePS),
 			renderTargetDesc, vertexLayout,
 			primitiveTopology, depth, rasterizer, blend);
 	}
@@ -1068,9 +1068,7 @@ namespace ig
 
 	void CommandList::ClearColor(const Texture& renderTexture, Color color, uint32_t numRects, const IntRect* rects)
 	{
-		assert(
-			renderTexture.GetUsage() == TextureUsage::RenderTexture ||
-			renderTexture.GetUsage() == TextureUsage::UnorderedAccessRenderTexture);
+		assert(renderTexture.GetUsage() == TextureUsage::RenderTexture || renderTexture.GetUsage() == TextureUsage::UnorderedAccessRenderTexture);
 		if (numRects > 0)
 		{
 			assert(rects != nullptr);
@@ -1097,13 +1095,13 @@ namespace ig
 
 	void CommandList::ClearUnorderedAccessTextureFloat(const Texture& texture, const float values[4])
 	{
-		assert(texture.GetUsage() == TextureUsage::UnorderedAccess);
+		assert(texture.GetUsage() == TextureUsage::UnorderedAccess || texture.GetUsage() == TextureUsage::UnorderedAccessRenderTexture);
 		Impl_ClearUnorderedAccessTextureFloat(texture, values);
 	}
 
 	void CommandList::ClearUnorderedAccessTextureUInt32(const Texture& texture, const uint32_t values[4])
 	{
-		assert(texture.GetUsage() == TextureUsage::UnorderedAccess);
+		assert(texture.GetUsage() == TextureUsage::UnorderedAccess || texture.GetUsage() == TextureUsage::UnorderedAccessRenderTexture);
 		Impl_ClearUnorderedAccessTextureUInt32(texture, values);
 	}
 

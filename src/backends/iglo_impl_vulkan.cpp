@@ -859,7 +859,7 @@ namespace ig
 			shaderStage.pNext = &moduleInfo;
 			shaderStage.stage = stage;
 			shaderStage.module = VK_NULL_HANDLE; // Must be null when using pNext
-			shaderStage.pName = shader.entryPointName.c_str();
+			shaderStage.pName = shader.entryPointName;
 
 			numShaders++;
 		};
@@ -1067,7 +1067,7 @@ namespace ig
 		stageInfo.pNext = &shaderModule;
 		stageInfo.stage = VK_SHADER_STAGE_COMPUTE_BIT;
 		stageInfo.module = VK_NULL_HANDLE;  // Must be null when using pNext
-		stageInfo.pName = CS.entryPointName.c_str();
+		stageInfo.pName = CS.entryPointName;
 
 		VkPipelineLayout pipelineLayout = context.GetDescriptorHeap().GetVulkanBindlessPipelineLayout();
 

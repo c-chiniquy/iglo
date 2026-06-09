@@ -9,7 +9,7 @@
 // -------------------- Version --------------------//
 #define IGLO_VERSION_MAJOR 0
 #define IGLO_VERSION_MINOR 5
-#define IGLO_VERSION_PATCH 1
+#define IGLO_VERSION_PATCH 2
 
 #define IGLO_STRINGIFY_HELPER(x) #x
 #define IGLO_STRINGIFY(x) IGLO_STRINGIFY_HELPER(x)
@@ -1111,10 +1111,11 @@ namespace ig
 
 		ID3D12Resource* GetD3D12Resource() const;
 
-		static D3D12_SHADER_RESOURCE_VIEW_DESC GenerateD3D12Desc_SRV(Format, MSAA, uint32_t mipLevels, uint32_t numFaces, bool isCubemap);
-		static D3D12_UNORDERED_ACCESS_VIEW_DESC GenerateD3D12Desc_UAV(Format, MSAA, uint32_t numFaces);
-		static D3D12_RENDER_TARGET_VIEW_DESC GenerateD3D12Desc_RTV(Format, MSAA, uint32_t numFaces);
-		static D3D12_DEPTH_STENCIL_VIEW_DESC GenerateD3D12Desc_DSV(Format, MSAA, uint32_t numFaces);
+		static D3D12_SHADER_RESOURCE_VIEW_DESC GenerateD3D12Desc_SRV(Format, MSAA, bool isCubemap, uint32_t numFaces,
+			uint32_t baseMip = 0, uint32_t mipLevels = IGLO_UINT32_MAX);
+		static D3D12_UNORDERED_ACCESS_VIEW_DESC GenerateD3D12Desc_UAV(Format, MSAA, uint32_t numFaces, uint32_t mipIndex = 0);
+		static D3D12_RENDER_TARGET_VIEW_DESC GenerateD3D12Desc_RTV(Format, MSAA, uint32_t numFaces, uint32_t mipIndex = 0);
+		static D3D12_DEPTH_STENCIL_VIEW_DESC GenerateD3D12Desc_DSV(Format, MSAA, uint32_t numFaces, uint32_t mipIndex = 0);
 #endif
 #ifdef IGLO_VULKAN
 		VkImage GetVulkanImage() const;
@@ -1295,27 +1296,29 @@ namespace ig
 
 	struct Shader
 	{
+		static constexpr const char* DefaultEntryPointName = "main";
+
 		Shader() = default;
 
-		// Specifying 'entryPointName' is mandatory in Vulkan, but not necessary in D3D12.
-		Shader(const byte* shaderBytecode, size_t bytecodeLength, const std::string& entryPointName = "main")
+		// On Vulkan, you are required to specify 'entryPointName'.
+		// On D3D12, 'entryPointName' is ignored.
+		Shader(const byte* shaderBytecode, size_t bytecodeLength, const char* entryPointName = DefaultEntryPointName)
+			: shaderBytecode(shaderBytecode), bytecodeLength(bytecodeLength), entryPointName(entryPointName)
 		{
-			this->shaderBytecode = shaderBytecode;
-			this->bytecodeLength = bytecodeLength;
-			this->entryPointName = entryPointName;
 		}
 
-		Shader(std::vector<byte>&& shaderBytecode, const std::string& entryPointName) = delete;
-		Shader(const std::vector<byte>& shaderBytecode, const std::string& entryPointName = "main")
+		static Shader FromByteVector(const std::vector<byte>& shaderBytecode)
 		{
-			this->shaderBytecode = shaderBytecode.data();
-			this->bytecodeLength = shaderBytecode.size();
-			this->entryPointName = entryPointName;
+			return Shader(shaderBytecode.data(), shaderBytecode.size());
+		}
+		static Shader FromByteVector(const std::vector<byte>& shaderBytecode, const char* entryPointName)
+		{
+			return Shader(shaderBytecode.data(), shaderBytecode.size(), entryPointName);
 		}
 
 		const byte* shaderBytecode = nullptr;
 		size_t bytecodeLength = 0;
-		std::string entryPointName;
+		const char* entryPointName = DefaultEntryPointName;
 	};
 
 	struct RenderTargetDesc
@@ -1378,8 +1381,8 @@ namespace ig
 		// Vertex shader bytecode and pixel shader bytecode is loaded from file.
 		// You must provide one blend state (BlendDesc) for each expected render texture.
 		static std::unique_ptr<Pipeline> LoadFromFile(const IGLOContext&,
-			const std::string& filepathVS, const std::string& entryPointNameVS,
-			const std::string& filepathPS, const std::string& entryPointNamePS,
+			const std::string& filepathVS, const char* entryPointNameVS,
+			const std::string& filepathPS, const char* entryPointNamePS,
 			const RenderTargetDesc&, const std::vector<VertexElement>&,
 			PrimitiveTopology, DepthDesc, RasterizerDesc, const std::vector<BlendDesc>&);
 
@@ -1917,18 +1920,18 @@ namespace ig
 		void SafePauseRenderPass();
 		void SafeResumeRenderPass();
 
-		// Clears a render texture
+		// Clears mip 0 (all faces) of a render texture. Other mip levels are unaffected.
 		void ClearColor(const Texture& renderTexture, Color color = Colors::Black, uint32_t numRects = 0, const IntRect* rects = nullptr);
-		// Clears a depth buffer
+		// Clears mip 0 (all faces) of a depth buffer. Other mip levels are unaffected.
 		void ClearDepth(const Texture& depthBuffer, float depth = 1.0f, byte stencil = 255, bool clearDepth = true, bool clearStencil = true,
 			uint32_t numRects = 0, const IntRect* rects = nullptr);
 
-		// On D3D12, the buffer must have a UAV.
+		// On D3D12, the buffer is required to have a UAV.
 		// On Vulkan, no descriptors are required.
 		void ClearUnorderedAccessBufferUInt32(const Buffer& buffer, const uint32_t value);
 
-		// Clears mip 0 across all array slices/faces. Other mip levels are unaffected.
-		// On D3D12, the texture must have a UAV.
+		// Clears mip 0 (all faces) of an unordered access texture. Other mip levels are unaffected.
+		// On D3D12, the texture is required to have a UAV.
 		// On Vulkan, no descriptors are required.
 		void ClearUnorderedAccessTextureFloat(const Texture& texture, const float values[4]);
 		void ClearUnorderedAccessTextureUInt32(const Texture& texture, const uint32_t values[4]);

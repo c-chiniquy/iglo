@@ -467,7 +467,7 @@ private:
 
 			// Custom pixel shader
 			params = ig::GetStandardBatchParams(ig::StandardBatchType::Sprites, backBufferDesc);
-			params.pipelineDesc.PS = ig::Shader(g_PS_Wobble, sizeof(g_PS_Wobble), "PSMain");
+			params.pipelineDesc.PS = SHADER_PS(g_PS_Wobble);
 			batchCustomPixelShaderSprites = batchRenderer->CreateBatchType(params);
 		}
 

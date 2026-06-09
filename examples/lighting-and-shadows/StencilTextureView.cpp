@@ -41,7 +41,7 @@ namespace ig
 			auto device = context.GetD3D12Device();
 
 			D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = Texture::GenerateD3D12Desc_SRV(Format::None,
-				depthStencil.GetMSAA(), depthStencil.GetMipLevels(), depthStencil.GetNumFaces(), false);
+				depthStencil.GetMSAA(), false, depthStencil.GetNumFaces());
 
 			// Use a format that selects the stencil component
 			const FormatInfoDXGI formatInfoDXGI = GetFormatInfoDXGI(depthStencil.GetFormat());
