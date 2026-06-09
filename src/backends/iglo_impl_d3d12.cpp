@@ -2407,7 +2407,7 @@ namespace ig
 			"Unable to find a hardware adapter that supports the required features.\n\n",
 			adapterErrors, "\n\n",
 			strLatestDrivers));
-			}
+	}
 
 	void IGLOContext::Impl_DestroyGraphicsDevice()
 	{
@@ -2417,6 +2417,6 @@ namespace ig
 		graphics.device = nullptr; // The device is destroyed last
 	}
 
-		}
+}
 
 #endif
