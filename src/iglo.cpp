@@ -914,12 +914,7 @@ namespace ig
 
 		case SimpleBarrier::Discard:
 			out.sync = BarrierSync::All;
-#ifdef IGLO_D3D12
 			out.access = BarrierAccess::NoAccess;
-#endif
-#ifdef IGLO_VULKAN
-			out.access = BarrierAccess::Common;
-#endif
 			out.layout = BarrierLayout::Undefined;
 			out.discard = true;
 			break;
