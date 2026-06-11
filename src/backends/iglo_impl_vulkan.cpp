@@ -3125,9 +3125,11 @@ namespace ig
 		createInfo.oldSwapchain = graphics.swapChain; // Important
 		createInfo.presentMode = ToVulkanPresentMode(presentMode);
 
+		VkFormat formats[2] = {};
 		if (formatInfo.sRGB_opposite != Format::None)
 		{
-			VkFormat formats[2] = { createInfo.imageFormat, ToVulkanFormat(formatInfo.sRGB_opposite) };
+			formats[0] = createInfo.imageFormat;
+			formats[1] = ToVulkanFormat(formatInfo.sRGB_opposite);
 			formatListInfo.viewFormatCount = 2;
 			formatListInfo.pViewFormats = formats;
 
