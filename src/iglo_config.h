@@ -7,3 +7,6 @@
 
 // If using Vulkan, enable conservative rasterization extension.
 //#define IGLO_VULKAN_ENABLE_CONSERVATIVE_RASTERIZATION
+
+// If using Vulkan in Debug, enable synchronization validation (slow!)
+//#define IGLO_VULKAN_DEBUG_ENABLE_SYNCHRONIZATION_VALIDATION

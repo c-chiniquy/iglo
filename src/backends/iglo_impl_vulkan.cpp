@@ -3342,18 +3342,36 @@ namespace ig
 
 #ifndef NDEBUG
 		// Debug messenger
-		VkDebugUtilsMessengerCreateInfoEXT debugInfo = {};
-		debugInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-		debugInfo.messageSeverity =
-			VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
-			VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
-			VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-		debugInfo.messageType =
-			VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
-			VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
-			VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
-		debugInfo.pfnUserCallback = VulkanDebugCallback;
-		debugInfo.pUserData = nullptr;
+		VkDebugUtilsMessengerCreateInfoEXT debugInfo =
+		{
+			.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
+			.messageSeverity =
+				VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
+				VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
+				VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT,
+			.messageType =
+				VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
+				VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
+				VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT,
+			.pfnUserCallback = VulkanDebugCallback,
+			.pUserData = nullptr,
+		};
+
+#ifdef IGLO_VULKAN_DEBUG_ENABLE_SYNCHRONIZATION_VALIDATION
+		Log(LogType::Info, "Vulkan synchronization validation is enabled.");
+		// Synchronization validation
+		VkValidationFeatureEnableEXT validationEnables[] =
+		{
+			VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT,
+		};
+		VkValidationFeaturesEXT validationFeatures =
+		{
+			.sType = VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT,
+			.enabledValidationFeatureCount = 1,
+			.pEnabledValidationFeatures = validationEnables,
+		};
+		debugInfo.pNext = &validationFeatures;
+#endif
 
 		// Validation layer
 		{
@@ -3375,7 +3393,7 @@ namespace ig
 			{
 				instanceInfo.enabledLayerCount = 1;
 				instanceInfo.ppEnabledLayerNames = &validationLayerName;
-				instanceInfo.pNext = &debugInfo; // Link debug messenger to instance creation
+				instanceInfo.pNext = &debugInfo;
 			}
 			else
 			{
