@@ -895,6 +895,7 @@ namespace ig
 	uint64_t AlignUp(uint64_t value, uint64_t alignment);
 	bool IsPowerOf2(uint64_t value);
 	float Lerp(float a, float b, float t);
+	double Lerp(double a, double b, double t);
 
 } // namespace ig
 

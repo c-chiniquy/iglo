@@ -2523,4 +2523,11 @@ namespace ig
 		return a + (b - a) * t;
 	}
 
+	double Lerp(double a, double b, double t)
+	{
+		if (t <= 0.0) return a;
+		if (t >= 1.0) return b;
+		return a + (b - a) * t;
+	}
+
 } // namespace ig
