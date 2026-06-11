@@ -1019,7 +1019,7 @@ namespace ig
 			if (isComputeQueue) out.layout = BarrierLayout::_ComputeQueue_UnorderedAccess;
 #endif
 #ifdef IGLO_VULKAN
-			out.sync = BarrierSync::Copy;
+			out.sync = BarrierSync::ClearUnorderedAccessView;
 			out.access = BarrierAccess::CopyDest;
 			out.layout = BarrierLayout::CopyDest;
 #endif
@@ -1032,7 +1032,7 @@ namespace ig
 			out.layout = BarrierLayout::RenderTarget;
 #endif
 #ifdef IGLO_VULKAN
-			out.sync = BarrierSync::Copy;
+			out.sync = BarrierSync::Clear;
 			out.access = BarrierAccess::CopyDest;
 			out.layout = BarrierLayout::CopyDest;
 #endif
