@@ -883,12 +883,11 @@ namespace ig
 	SimpleBarrierInfo GetSimpleBarrierInfo(SimpleBarrier simpleBarrier, CommandListType queueType)
 	{
 		SimpleBarrierInfo out;
-		out.discard = (simpleBarrier == SimpleBarrier::Discard);
 
-		bool isGraphicsQueue = (queueType == CommandListType::Graphics);
-		bool isComputeQueue = (queueType == CommandListType::Compute);
+		const bool isGraphicsQueue = (queueType == CommandListType::Graphics);
+		const bool isComputeQueue = (queueType == CommandListType::Compute);
 #ifdef IGLO_D3D12
-		bool isCopyQueue = (queueType == CommandListType::Copy);
+		const bool isCopyQueue = (queueType == CommandListType::Copy);
 #endif
 
 		switch (simpleBarrier)
@@ -914,9 +913,15 @@ namespace ig
 			break;
 
 		case SimpleBarrier::Discard:
-			out.sync = BarrierSync::None;
+			out.sync = BarrierSync::All;
+#ifdef IGLO_D3D12
 			out.access = BarrierAccess::NoAccess;
+#endif
+#ifdef IGLO_VULKAN
+			out.access = BarrierAccess::Common;
+#endif
 			out.layout = BarrierLayout::Undefined;
+			out.discard = true;
 			break;
 
 		case SimpleBarrier::PixelShaderResource:

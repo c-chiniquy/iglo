@@ -1716,13 +1716,18 @@ namespace ig
 		NoAccess = D3D12_BARRIER_ACCESS_NO_ACCESS,
 #endif
 #ifdef IGLO_VULKAN
-		Common = VK_ACCESS_2_NONE,
+		Common = VK_ACCESS_2_MEMORY_READ_BIT | VK_ACCESS_2_MEMORY_WRITE_BIT,
 		VertexBuffer = VK_ACCESS_2_VERTEX_ATTRIBUTE_READ_BIT,
 		ConstantBuffer = VK_ACCESS_2_UNIFORM_READ_BIT,
 		IndexBuffer = VK_ACCESS_2_INDEX_READ_BIT,
 		RenderTarget = VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
 		UnorderedAccess = VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
-		DepthStencilWrite = VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+
+		// Depth testing is read-modify-write, and loadOp=LOAD reads the attachment.
+		// Mirrors the RenderTarget mapping (READ|WRITE). D3D12's ACCESS_DEPTH_STENCIL_WRITE
+		// already means read-write depth, so this keeps the portable semantics aligned.
+		DepthStencilWrite = VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+
 		DepthStencilRead = VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT,
 		ShaderResource = VK_ACCESS_2_SHADER_READ_BIT,
 		StreamOutput = VK_ACCESS_2_TRANSFORM_FEEDBACK_WRITE_BIT_EXT,
