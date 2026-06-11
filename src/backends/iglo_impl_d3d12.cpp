@@ -644,7 +644,7 @@ namespace ig
 		barrier.LayoutBefore = (D3D12_BARRIER_LAYOUT)layoutBefore;
 		barrier.LayoutAfter = (D3D12_BARRIER_LAYOUT)layoutAfter;
 		barrier.Flags = discard ? D3D12_TEXTURE_BARRIER_FLAG_DISCARD : D3D12_TEXTURE_BARRIER_FLAG_NONE;
-		barrier.Subresources.IndexOrFirstMipLevel = 0xffffffff;
+		barrier.Subresources.IndexOrFirstMipLevel = IGLO_UINT32_MAX;
 
 		impl.numTextureBarriers++;
 	}
