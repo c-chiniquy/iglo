@@ -2700,28 +2700,17 @@ namespace ig
 				if (callbackOnDeviceRemoved) callbackOnDeviceRemoved(reasonStr);
 			}
 		}
-
-		// Wait until the swap chain is ready to present the next frame.
-		// This ensures that the value passed to SetMaximumFrameLatency() is respected.
-		// Waiting for this at the start of the next frame reduces input latency.
-		// Info:
-		// https://learn.microsoft.com/en-us/windows/uwp/gaming/reduce-latency-with-dxgi-1-3-swap-chains
-		// https://www.intel.com/content/www/us/en/developer/articles/code-sample/sample-application-for-direct3d-12-flip-model-swap-chains.html
-		HANDLE swapchainWaitableObject = graphics.swapChain->GetFrameLatencyWaitableObject();
-		WaitForSingleObjectEx(swapchainWaitableObject, 1000, true);
+		else
+		{
+			graphics.hasPresented = true;
+		}
 #endif
 #ifdef IGLO_VULKAN
 		VkResult result = commandQueue->Present(graphics.swapChain);
 		HandleVulkanSwapChainResult(result, "presentation");
-		if (graphics.validSwapChain)
-		{
-			VkResult result = commandQueue->AcquireNextVulkanSwapChainImage(graphics.device, graphics.swapChain, UINT64_MAX);
-			HandleVulkanSwapChainResult(result, "image acquisition");
-		}
+		graphics.hasPresented = true;
 #endif
 
-		// Must come after AcquireNextVulkanSwapChainImage().
-		// The frame receipt is what proves the acquire semaphore is recyclable in MoveToNextFrame().
 		endOfFrame.at(frameIndex).graphicsReceipt = commandQueue->SubmitSignal(CommandListType::Graphics);
 	}
 
@@ -2743,11 +2732,33 @@ namespace ig
 		descriptorHeap->NextFrame();
 		uploadHeap->NextFrame();
 
+#ifdef IGLO_D3D12
+		if (graphics.hasPresented)
+		{
+			graphics.hasPresented = false;
+
+			// Wait until the swap chain is ready to present the next frame.
+			// This ensures that the value passed to SetMaximumFrameLatency() is respected.
+			// Waiting for this at the start of the next frame reduces input latency.
+			// Info:
+			// https://learn.microsoft.com/en-us/windows/uwp/gaming/reduce-latency-with-dxgi-1-3-swap-chains
+			// https://www.intel.com/content/www/us/en/developer/articles/code-sample/sample-application-for-direct3d-12-flip-model-swap-chains.html
+			HANDLE swapchainWaitableObject = graphics.swapChain->GetFrameLatencyWaitableObject();
+			WaitForSingleObjectEx(swapchainWaitableObject, 1000, true);
+		}
+#endif
 #ifdef IGLO_VULKAN
+		if (graphics.validSwapChain && graphics.hasPresented)
+		{
+			graphics.hasPresented = false;
+			VkResult result = commandQueue->AcquireNextVulkanSwapChainImage(graphics.device, graphics.swapChain, UINT64_MAX);
+			HandleVulkanSwapChainResult(result, "image acquisition");
+		}
 		// Broken swapchain must be fixed outside Present(),
 		// because Draw() is only called if swapchain is valid.
 		if (!graphics.validSwapChain)
 		{
+			graphics.hasPresented = false;
 			WaitForIdleDevice();
 
 			// To prevent error messages from being spammed when user resizes window to {0,0},

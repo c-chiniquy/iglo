@@ -17,6 +17,7 @@ namespace ig
 		ComPtr<IDXGISwapChain3> swapChain;
 		ComPtr<IDXGIFactory6> factory;
 		ComPtr<IDXGIAdapter1> adapter;
+		bool hasPresented = false;
 	};
 
 	struct Impl_CommandQueue

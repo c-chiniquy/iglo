@@ -3070,6 +3070,7 @@ namespace ig
 		vkDeviceWaitIdle(graphics.device);
 
 		graphics.validSwapChain = false;
+		graphics.hasPresented = false;
 
 		// Handle resize
 		Extent2D cappedExtent = extent;

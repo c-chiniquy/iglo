@@ -2087,6 +2087,7 @@ namespace ig
 		DestroySwapChainResources();
 
 		graphics.swapChain = nullptr;
+		graphics.hasPresented = false;
 
 		FormatInfo formatInfo = GetFormatInfo(format);
 		Format format_non_sRGB = formatInfo.is_sRGB ? formatInfo.sRGB_opposite : format;
@@ -2206,6 +2207,7 @@ namespace ig
 
 		WaitForIdleDevice();
 
+		graphics.hasPresented = false;
 		window.activeResizing = false;
 		window.activeMenuLoop = false;
 

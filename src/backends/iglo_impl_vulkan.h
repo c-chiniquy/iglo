@@ -21,6 +21,7 @@ namespace ig
 		VkSurfaceKHR surface = VK_NULL_HANDLE;
 		VkSwapchainKHR swapChain = VK_NULL_HANDLE;
 		bool validSwapChain = false;
+		bool hasPresented = false;
 		bool usesMemoryBudgetExt = false;
 #ifndef NDEBUG
 		VkDebugUtilsMessengerEXT debugMessenger = VK_NULL_HANDLE;
