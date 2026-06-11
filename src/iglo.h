@@ -1600,7 +1600,7 @@ namespace ig
 		ID3D12CommandQueue* GetD3D12CommandQueue(CommandListType type) const { return impl.commandQueues[(uint32_t)type].Get(); }
 #endif
 #ifdef IGLO_VULKAN
-		void RecreateSwapChainSemaphores(uint32_t numFramesInFlight, uint32_t numBackBuffers);
+		DetailedResult RecreateSwapChainSemaphores(uint32_t numFramesInFlight, uint32_t numBackBuffers);
 		void DestroySwapChainSemaphores();
 		Receipt SubmitBinaryWaitSignal(VkSemaphore binarySemaphore);
 		VkResult Present(VkSwapchainKHR swapChain);
@@ -2586,10 +2586,17 @@ namespace ig
 		// NOTE: Changing the backbuffer format requires recreating the swapchain, which is an expensive operation.
 		void SetBackBufferFormat(Format format);
 
-		// Sends a command to the GPU to present the backbuffer to the screen.
-		// This begins a new frame.
-		// The CPU will wait a bit here if the GPU is too far behind.
+		// Presents the backbuffer to the screen.
+		// You are expected to present once in Draw().
 		void Present();
+
+		// Begins a new frame. Must be called at some point after Present().
+		// Note: MainLoop calls this for you, so you don't have to.
+		void MoveToNextFrame();
+
+		// On Vulkan, you must not write to the backbuffer if the swapchain is invalid.
+		// It's a good idea to skip drawing entirely when the swapchain is invalid.
+		bool IsSwapchainValid() const;
 
 		// Submits commands to the GPU
 		Receipt Submit(const CommandList& commandList);
@@ -2769,7 +2776,6 @@ namespace ig
 
 		CallbackOnDeviceRemoved callbackOnDeviceRemoved = nullptr;
 
-		void MoveToNextFrame();
 		void FreeAllTempResources();
 
 #ifdef IGLO_D3D12

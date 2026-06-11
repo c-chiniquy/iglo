@@ -1174,12 +1174,10 @@ namespace ig
 			}
 		}
 
-		RecreateSwapChainSemaphores(maxFramesInFlight, numBackBuffers);
-
-		return DetailedResult::Success();
+		return RecreateSwapChainSemaphores(maxFramesInFlight, numBackBuffers);
 	}
 
-	void CommandQueue::RecreateSwapChainSemaphores(uint32_t numFramesInFlight, uint32_t numBackBuffers)
+	DetailedResult CommandQueue::RecreateSwapChainSemaphores(uint32_t numFramesInFlight, uint32_t numBackBuffers)
 	{
 		VkDevice device = context.GetVulkanDevice();
 
@@ -1188,21 +1186,34 @@ namespace ig
 		// Create binary semaphores
 		impl.acquireSemaphores.resize(numFramesInFlight, VK_NULL_HANDLE);
 		impl.presentReadySemaphores.resize(numBackBuffers, VK_NULL_HANDLE);
-		VkSemaphoreCreateInfo createInfo = {};
-		createInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-		createInfo.flags = VK_SEMAPHORE_TYPE_BINARY;
+		VkSemaphoreCreateInfo createInfo =
+		{
+			.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+		};
 		for (uint32_t i = 0; i < numFramesInFlight; i++)
 		{
-			vkCreateSemaphore(device, &createInfo, nullptr, &impl.acquireSemaphores[i]);
+			VkResult result = vkCreateSemaphore(device, &createInfo, nullptr, &impl.acquireSemaphores[i]);
+			if (result != VK_SUCCESS)
+			{
+				DestroySwapChainSemaphores();
+				return DetailedResult::Fail(VulkanErrorMsg("RecreateSwapChainSemaphores -> vkCreateSemaphore", result));
+			}
 		}
 		for (uint32_t i = 0; i < numBackBuffers; i++)
 		{
-			vkCreateSemaphore(device, &createInfo, nullptr, &impl.presentReadySemaphores[i]);
+			VkResult result = vkCreateSemaphore(device, &createInfo, nullptr, &impl.presentReadySemaphores[i]);
+			if (result != VK_SUCCESS)
+			{
+				DestroySwapChainSemaphores();
+				return DetailedResult::Fail(VulkanErrorMsg("RecreateSwapChainSemaphores -> vkCreateSemaphore", result));
+			}
 		}
 
 		impl.frameIndex = 0;
 		impl.numFrames = numFramesInFlight;
 		impl.currentBackBufferIndex = 0;
+
+		return DetailedResult::Success();
 	}
 
 	Receipt CommandQueue::Impl_SubmitCommands(const CommandList* const* commandLists, uint32_t numCommandLists, CommandListType cmdType)
@@ -3062,7 +3073,7 @@ namespace ig
 
 		// Handle resize
 		Extent2D cappedExtent = extent;
-		VkSurfaceCapabilitiesKHR caps;
+		VkSurfaceCapabilitiesKHR caps = {};
 		VkResult result = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(graphics.physicalDevice, graphics.surface, &caps);
 		if (result != VK_SUCCESS)
 		{
@@ -3088,6 +3099,8 @@ namespace ig
 			resizeEvent.resize.height = cappedExtent.height;
 			eventQueue.push(resizeEvent);
 		}
+		uint32_t cappedNumBackBuffers = std::max(numBackBuffers, caps.minImageCount);
+		if (caps.maxImageCount > 0) cappedNumBackBuffers = std::min(cappedNumBackBuffers, caps.maxImageCount);
 
 		FormatInfo formatInfo = GetFormatInfo(format);
 
@@ -3097,7 +3110,7 @@ namespace ig
 		VkSwapchainCreateInfoKHR createInfo = {};
 		createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
 		createInfo.surface = graphics.surface;
-		createInfo.minImageCount = numBackBuffers;
+		createInfo.minImageCount = cappedNumBackBuffers;
 		createInfo.imageFormat = ToVulkanFormat(format);
 		createInfo.imageColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
 		createInfo.imageExtent = { cappedExtent.width, cappedExtent.height };
@@ -3138,14 +3151,25 @@ namespace ig
 
 		// Retrieve swapchain images
 		uint32_t imageCount = 0;
-		vkGetSwapchainImagesKHR(graphics.device, graphics.swapChain, &imageCount, nullptr);
-		if (imageCount < numBackBuffers) Fatal("vkGetSwapchainImagesKHR returned smaller image count than num backbuffers.");
+		result = vkGetSwapchainImagesKHR(graphics.device, graphics.swapChain, &imageCount, nullptr);
+		if (result != VK_SUCCESS)
+		{
+			return DetailedResult::Fail(VulkanErrorMsg("vkGetSwapchainImagesKHR", result));
+		}
+		if (imageCount < numFramesInFlight)
+		{
+			Fatal(ToString("Swapchain provided ", imageCount, " backbuffers, which is fewer than the ", numFramesInFlight, " frames in flight."));
+		}
 		if (imageCount != numBackBuffers)
 		{
 			Log(LogType::Warning, ToString("Using ", imageCount, " backbuffers instead of the requested ", numBackBuffers, "."));
 		}
 
-		commandQueue->RecreateSwapChainSemaphores(numFramesInFlight, imageCount);
+		DetailedResult recreateSemaphoresResult = commandQueue->RecreateSwapChainSemaphores(numFramesInFlight, imageCount);
+		if (!recreateSemaphoresResult)
+		{
+			return recreateSemaphoresResult;
+		}
 
 		swapChain.extent = cappedExtent;
 		swapChain.format = format;
@@ -3180,6 +3204,7 @@ namespace ig
 			impl.memory = VK_NULL_HANDLE;
 			impl.view_uav_rtv_dsv = Texture::CreateImageView(graphics.device, swapchainImages[i],
 				VK_IMAGE_ASPECT_COLOR_BIT, format, false, desc.numFaces, 0, desc.mipLevels);
+			if (impl.view_uav_rtv_dsv == VK_NULL_HANDLE) Fatal("Failed creating vulkan image view for backbuffer.");
 
 			swapChain.wrapped.push_back(std::move(Texture::CreateWrapped(*this, desc, impl)));
 
@@ -3188,6 +3213,7 @@ namespace ig
 			{
 				impl.view_uav_rtv_dsv = Texture::CreateImageView(graphics.device, swapchainImages[i],
 					VK_IMAGE_ASPECT_COLOR_BIT, formatInfo.sRGB_opposite, false, desc.numFaces, 0, desc.mipLevels);
+				if (impl.view_uav_rtv_dsv == VK_NULL_HANDLE) Fatal("Failed creating vulkan image view for backbuffer.");
 
 				swapChain.wrapped_sRGB_opposite.push_back(std::move(Texture::CreateWrapped(*this, desc, impl)));
 			}

@@ -3,6 +3,20 @@
 
 namespace ig
 {
+	// How MainLoop should handle the window being minimized.
+	// NOTE: MainLoop will always skip Draw() if the swapchain is invalid, regardless of WindowMinimizedBehaviour.
+	enum class WindowMinimizedBehaviour
+	{
+		// MainLoop does not change its behaviour when window is minimized.
+		None = 0,
+
+		// When window is minimized, MainLoop will skip the Draw() callback.
+		SkipDraw,
+
+		// When window is minimized, MainLoop will skip the Draw() callback and
+		// will sleep for a few milliseconds every frame to prevent 100% CPU usage.
+		SkipDrawAndSleep,
+	};
 
 	class MainLoop
 	{
@@ -11,19 +25,6 @@ namespace ig
 
 		MainLoop& operator=(const MainLoop&) = delete;
 		MainLoop(const MainLoop&) = delete;
-
-		enum class WindowMinimizedBehaviour
-		{
-			// MainLoop does not change its behaviour when window is minimized.
-			None = 0,
-
-			// When window is minimized, MainLoop will skip the Draw() callback.
-			SkipDraw,
-
-			// When window is minimized, MainLoop will skip the Draw() callback and
-			// will sleep for a few milliseconds every frame to prevent 100% CPU usage.
-			SkipDrawAndSleep,
-		};
 
 		using CallbackOnEvent = std::function<void(Event e)>;
 		using CallbackStart = std::function<void()>;

@@ -86,7 +86,7 @@ namespace ig
 		{
 			if (windowMinimizedBehaviour == WindowMinimizedBehaviour::None)
 			{
-				if (callbackDraw) callbackDraw();
+				if (callbackDraw && context->IsSwapchainValid()) callbackDraw();
 			}
 			else if (windowMinimizedBehaviour == WindowMinimizedBehaviour::SkipDraw)
 			{
@@ -98,8 +98,10 @@ namespace ig
 		}
 		else
 		{
-			if (callbackDraw) callbackDraw();
+			if (callbackDraw && context->IsSwapchainValid()) callbackDraw();
 		}
+
+		context->MoveToNextFrame();
 	}
 
 	void MainLoop::Run(IGLOContext& context, CallbackStart callback_Start, CallbackOnLoopExited callback_OnLoopExited,

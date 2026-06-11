@@ -2711,16 +2711,71 @@ namespace ig
 		WaitForSingleObjectEx(swapchainWaitableObject, 1000, true);
 #endif
 #ifdef IGLO_VULKAN
+		VkResult result = commandQueue->Present(graphics.swapChain);
+		HandleVulkanSwapChainResult(result, "presentation");
 		if (graphics.validSwapChain)
 		{
-			VkResult result = commandQueue->Present(graphics.swapChain);
-			HandleVulkanSwapChainResult(result, "presentation");
+			VkResult result = commandQueue->AcquireNextVulkanSwapChainImage(graphics.device, graphics.swapChain, UINT64_MAX);
+			HandleVulkanSwapChainResult(result, "image acquisition");
 		}
 #endif
 
+		// Must come after AcquireNextVulkanSwapChainImage().
+		// The frame receipt is what proves the acquire semaphore is recyclable in MoveToNextFrame().
 		endOfFrame.at(frameIndex).graphicsReceipt = commandQueue->SubmitSignal(CommandListType::Graphics);
+	}
 
-		MoveToNextFrame();
+	void IGLOContext::MoveToNextFrame()
+	{
+		frameIndex = (frameIndex + 1) % numFramesInFlight;
+
+		assert(numFramesInFlight <= maxFramesInFlight);
+		assert(numFramesInFlight <= swapChain.numBackBuffers);
+		assert(frameIndex < endOfFrame.size());
+
+		EndOfFrame& currentFrame = endOfFrame[frameIndex];
+		commandQueue->WaitForCompletion(currentFrame.graphicsReceipt);
+		commandQueue->WaitForCompletion(currentFrame.computeReceipt);
+		commandQueue->WaitForCompletion(currentFrame.copyReceipt);
+
+		currentFrame.DestroyResources(*this);
+
+		descriptorHeap->NextFrame();
+		uploadHeap->NextFrame();
+
+#ifdef IGLO_VULKAN
+		// Broken swapchain must be fixed outside Present(),
+		// because Draw() is only called if swapchain is valid.
+		if (!graphics.validSwapChain)
+		{
+			WaitForIdleDevice();
+
+			// To prevent error messages from being spammed when user resizes window to {0,0},
+			// we wait with replacing the swapchain until window size is valid.
+			VkSurfaceCapabilitiesKHR caps = {};
+			vkGetPhysicalDeviceSurfaceCapabilitiesKHR(graphics.physicalDevice, graphics.surface, &caps);
+			if (caps.maxImageExtent.width > 0 && caps.maxImageExtent.height > 0)
+			{
+				DetailedResult dr = CreateSwapChain(swapChain.extent, swapChain.format, swapChain.numBackBuffers,
+					numFramesInFlight, swapChain.presentMode);
+				if (!dr)
+				{
+					Log(LogType::Error, "Failed to replace swapchain. Reason: " + dr.errorMessage);
+				}
+			}
+			WaitForIdleDevice();
+		}
+#endif
+	}
+
+	bool IGLOContext::IsSwapchainValid() const
+	{
+#ifdef IGLO_D3D12
+		return true;
+#endif
+#ifdef IGLO_VULKAN
+		return graphics.validSwapChain;
+#endif
 	}
 
 	Receipt IGLOContext::Submit(const CommandList& commandList)
@@ -2799,52 +2854,6 @@ namespace ig
 				vkDestroyImageView(context.GetVulkanDevice(), currentView, nullptr);
 				currentView = VK_NULL_HANDLE;
 			}
-		}
-#endif
-	}
-
-	void IGLOContext::MoveToNextFrame()
-	{
-		frameIndex = (frameIndex + 1) % numFramesInFlight;
-
-		assert(numFramesInFlight <= maxFramesInFlight);
-		assert(numFramesInFlight <= swapChain.numBackBuffers);
-		assert(frameIndex < endOfFrame.size());
-
-		EndOfFrame& currentFrame = endOfFrame[frameIndex];
-		commandQueue->WaitForCompletion(currentFrame.graphicsReceipt);
-		commandQueue->WaitForCompletion(currentFrame.computeReceipt);
-		commandQueue->WaitForCompletion(currentFrame.copyReceipt);
-
-		currentFrame.DestroyResources(*this);
-
-		descriptorHeap->NextFrame();
-		uploadHeap->NextFrame();
-
-#ifdef IGLO_VULKAN
-		if (graphics.validSwapChain)
-		{
-			VkResult result = commandQueue->AcquireNextVulkanSwapChainImage(graphics.device, graphics.swapChain, UINT64_MAX);
-			HandleVulkanSwapChainResult(result, "image acquisition");
-		}
-		if (!graphics.validSwapChain)
-		{
-			WaitForIdleDevice();
-
-			// To prevent error messages from being spammed when user resizes window to {0,0},
-			// we wait with replacing the swapchain until window size is valid.
-			VkSurfaceCapabilitiesKHR caps = {};
-			vkGetPhysicalDeviceSurfaceCapabilitiesKHR(graphics.physicalDevice, graphics.surface, &caps);
-			if (caps.maxImageExtent.width > 0 && caps.maxImageExtent.height > 0)
-			{
-				DetailedResult dr = CreateSwapChain(swapChain.extent, swapChain.format, swapChain.numBackBuffers,
-					numFramesInFlight, swapChain.presentMode);
-				if (!dr)
-				{
-					Log(LogType::Error, "Failed to replace swapchain. Reason: " + dr.errorMessage);
-				}
-			}
-			WaitForIdleDevice();
 		}
 #endif
 	}
@@ -3654,7 +3663,7 @@ namespace ig
 		}
 
 		cmd.CopyTempBufferToTextureSubresource(tempBuffer, *this, destFaceIndex, destMipIndex);
-		}
+	}
 
 	void Texture::SetPixelsAtSubresource(CommandList& cmd, const void* pixelData, uint32_t destFaceIndex, uint32_t destMipIndex)
 	{
