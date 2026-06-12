@@ -82,11 +82,12 @@ namespace ig
 
 		//-------------- Draw --------------//
 		if (!mainLoopRunning) return;
+		const bool canDraw = context->IsSwapChainValid() && !context->IsDeviceLost();
 		if (context->GetWindowMinimized())
 		{
 			if (windowMinimizedBehaviour == WindowMinimizedBehaviour::None)
 			{
-				if (callbackDraw && context->IsSwapchainValid()) callbackDraw();
+				if (callbackDraw && canDraw) callbackDraw();
 			}
 			else if (windowMinimizedBehaviour == WindowMinimizedBehaviour::SkipDraw)
 			{
@@ -98,7 +99,7 @@ namespace ig
 		}
 		else
 		{
-			if (callbackDraw && context->IsSwapchainValid()) callbackDraw();
+			if (callbackDraw && canDraw) callbackDraw();
 		}
 
 		context->MoveToNextFrame();

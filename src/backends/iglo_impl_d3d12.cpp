@@ -2067,6 +2067,58 @@ namespace ig
 		swapChain.presentMode = presentMode;
 	}
 
+	void IGLOContext::Impl_Present()
+	{
+		HRESULT hr = 0;
+		switch (swapChain.presentMode)
+		{
+		case PresentMode::Immediate:
+			hr = graphics.swapChain->Present(0, DXGI_PRESENT_ALLOW_TEARING);
+			break;
+		case PresentMode::Mailbox:
+			hr = graphics.swapChain->Present(0, 0);
+			break;
+		case PresentMode::Vsync:
+			hr = graphics.swapChain->Present(1, 0);
+			break;
+		case PresentMode::VsyncHalf:
+			hr = graphics.swapChain->Present(2, 0);
+			break;
+		default:
+			Log(LogType::Error, "Presentation failed. Reason: Invalid present mode.");
+			break;
+		}
+		if (FAILED(hr))
+		{
+			Log(LogType::Error, D3D12ErrorMsg("IDXGISwapChain::Present", hr));
+		}
+	}
+
+	bool IGLOContext::PollDeviceLost()
+	{
+		HRESULT hr = graphics.device->GetDeviceRemovedReason();
+		if (FAILED(hr)) return true;
+		return false;
+	}
+
+	void IGLOContext::PostPresent()
+	{
+		// Wait until the swap chain is ready to present the next frame.
+		// This ensures that the value passed to SetMaximumFrameLatency() is respected.
+		// Waiting for this at the start of the next frame reduces input latency.
+		// Info:
+		// https://learn.microsoft.com/en-us/windows/uwp/gaming/reduce-latency-with-dxgi-1-3-swap-chains
+		// https://www.intel.com/content/www/us/en/developer/articles/code-sample/sample-application-for-direct3d-12-flip-model-swap-chains.html
+		HANDLE swapchainWaitableObject = graphics.swapChain->GetFrameLatencyWaitableObject();
+		WaitForSingleObjectEx(swapchainWaitableObject, 1000, true);
+	}
+
+	void IGLOContext::AttemptRepairSwapChain()
+	{
+		// "Repairing" a swapchain in D3D12 by simply recreating it is futile.
+		// If swapchain failed to create, the solution is for user to stop using invalid settings.
+	}
+
 	void IGLOContext::DestroySwapChainResources()
 	{
 		for (const auto& surface : swapChain.wrapped)
@@ -2087,7 +2139,6 @@ namespace ig
 		DestroySwapChainResources();
 
 		graphics.swapChain = nullptr;
-		graphics.hasPresented = false;
 
 		FormatInfo formatInfo = GetFormatInfo(format);
 		Format format_non_sRGB = formatInfo.is_sRGB ? formatInfo.sRGB_opposite : format;
@@ -2186,6 +2237,7 @@ namespace ig
 			}
 		}
 
+		swapChain.isValid = true;
 		return DetailedResult::Success();
 	}
 
@@ -2207,7 +2259,8 @@ namespace ig
 
 		WaitForIdleDevice();
 
-		graphics.hasPresented = false;
+		swapChain.hasPresented = false;
+		swapChain.isValid = false;
 		window.activeResizing = false;
 		window.activeMenuLoop = false;
 
@@ -2277,6 +2330,8 @@ namespace ig
 				swapChain.wrapped_sRGB_opposite.push_back(std::move(Texture::CreateWrapped(*this, desc, impl)));
 			}
 		}
+
+		swapChain.isValid = true;
 
 		commandQueue->SubmitSignal(CommandListType::Graphics);
 		WaitForIdleDevice();

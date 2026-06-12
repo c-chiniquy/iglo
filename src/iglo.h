@@ -8,8 +8,8 @@
 
 // -------------------- Version --------------------//
 #define IGLO_VERSION_MAJOR 0
-#define IGLO_VERSION_MINOR 5
-#define IGLO_VERSION_PATCH 3
+#define IGLO_VERSION_MINOR 7
+#define IGLO_VERSION_PATCH 0
 
 #define IGLO_STRINGIFY_HELPER(x) #x
 #define IGLO_STRINGIFY(x) IGLO_STRINGIFY_HELPER(x)
@@ -200,7 +200,7 @@ namespace ig
 {
 	// Callbacks
 	using CallbackModalLoop = std::function<void()>;
-	using CallbackOnDeviceRemoved = std::function<void(const std::string& deviceRemovalReason)>;
+	using CallbackOnDeviceLost = std::function<void()>;
 
 	void PopupMessage(const std::string& message, const std::string& caption = "", const IGLOContext* parent = nullptr);
 
@@ -1605,6 +1605,7 @@ namespace ig
 		Receipt SubmitBinaryWaitSignal(VkSemaphore binarySemaphore);
 		VkResult Present(VkSwapchainKHR swapChain);
 		VkResult AcquireNextVulkanSwapChainImage(VkDevice device, VkSwapchainKHR swapChain, uint64_t timeout);
+		bool CheckDeviceLoss() const;
 		uint32_t GetCurrentBackBufferIndex() { return impl.currentBackBufferIndex; }
 		VkQueue GetVulkanQueue(CommandListType type) const { return impl.queues[(uint32_t)type]; }
 		VkQueue GetVulkanPresentQueue() const { return impl.presentQueue; }
@@ -2468,8 +2469,8 @@ namespace ig
 		// If this returns true, running a GetEvent() loop or MainLoop on the main thread will make the window unresponsive.
 		bool IsInsideModalLoopCallback() const { return insideModalLoopCallback; }
 
-		void SetOnDeviceRemovedCallback(CallbackOnDeviceRemoved callback) { callbackOnDeviceRemoved = callback; }
-		CallbackOnDeviceRemoved GetOnDeviceRemovedCallback() const { return callbackOnDeviceRemoved; }
+		void SetOnDeviceLostCallback(CallbackOnDeviceLost callback) { callbackOnDeviceLost = callback; }
+		CallbackOnDeviceLost GetOnDeviceRemovedCallback() const { return callbackOnDeviceLost; }
 
 		// Gets the mouse position relative to the topleft corner of the window.
 		IntPoint GetMousePosition() const { return mousePosition; }
@@ -2595,8 +2596,10 @@ namespace ig
 		void MoveToNextFrame();
 
 		// On Vulkan, you must not write to the backbuffer if the swapchain is invalid.
-		// It's a good idea to skip drawing entirely when the swapchain is invalid.
-		bool IsSwapchainValid() const;
+		// It's a good idea to skip drawing entirely on invalid swapchain.
+		bool IsSwapChainValid() const { return swapChain.isValid; }
+
+		bool IsDeviceLost() const { return deviceLost; }
 
 		// Submits commands to the GPU
 		Receipt Submit(const CommandList& commandList);
@@ -2729,9 +2732,12 @@ namespace ig
 		//------------------ Graphics ------------------//
 
 		Impl_GraphicsContext graphics;
+		bool deviceLost = false;
 
 		struct SwapChainInfo
 		{
+			bool hasPresented = false;
+			bool isValid = false;
 			Extent2D extent;
 			Format format = Format::None;
 			PresentMode presentMode = PresentMode::Vsync;
@@ -2774,7 +2780,7 @@ namespace ig
 		mutable std::unique_ptr<CommandQueue> commandQueue;
 		mutable std::vector<uint32_t> maxMSAAPerFormat; // A cached list of max MSAA values for all iglo formats.
 
-		CallbackOnDeviceRemoved callbackOnDeviceRemoved = nullptr;
+		CallbackOnDeviceLost callbackOnDeviceLost = nullptr;
 
 		void FreeAllTempResources();
 
@@ -2787,10 +2793,14 @@ namespace ig
 		DetailedResult CreateSwapChain(Extent2D extent, Format format, uint32_t numBackBuffers,
 			uint32_t numFramesInFlight, PresentMode presentMode);
 		void DestroySwapChainResources();
+		void PostPresent();
+		void AttemptRepairSwapChain();
 		uint32_t GetCurrentBackBufferIndex() const;
+		bool PollDeviceLost();
+		void NotifyDeviceLost();
 
+		void Impl_Present();
 		uint32_t Impl_GetMaxMultiSampleCount(Format textureFormat) const;
-
 		DetailedResult Impl_InitGraphicsDevice();
 		void Impl_DestroyGraphicsDevice();
 	};

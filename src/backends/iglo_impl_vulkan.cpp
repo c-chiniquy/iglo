@@ -1243,7 +1243,8 @@ namespace ig
 			submitInfo.signalSemaphoreCount = 1;
 			submitInfo.pSignalSemaphores = &impl.timelineSemaphores[t];
 
-			vkQueueSubmit(impl.queues[t], 1, &submitInfo, VK_NULL_HANDLE);
+			VkResult result = vkQueueSubmit(impl.queues[t], 1, &submitInfo, VK_NULL_HANDLE);
+			if (result == VK_ERROR_DEVICE_LOST) impl.deviceLossDetected = true;
 
 			return { signalValue, impl.timelineSemaphores[t] };
 		}
@@ -1268,7 +1269,8 @@ namespace ig
 		submitInfo.signalSemaphoreCount = 1;
 		submitInfo.pSignalSemaphores = &impl.timelineSemaphores[t];
 
-		vkQueueSubmit(impl.queues[t], 1, &submitInfo, VK_NULL_HANDLE);
+		VkResult result = vkQueueSubmit(impl.queues[t], 1, &submitInfo, VK_NULL_HANDLE);
+		if (result == VK_ERROR_DEVICE_LOST) impl.deviceLossDetected = true;
 
 		return { signalValue, impl.timelineSemaphores[t] };
 	}
@@ -1338,7 +1340,11 @@ namespace ig
 			submitInfo.signalSemaphoreCount = 1;
 			submitInfo.pSignalSemaphores = &impl.presentReadySemaphores[impl.currentBackBufferIndex];
 
-			vkQueueSubmit(impl.queues[cmdTypeInt], 1, &submitInfo, VK_NULL_HANDLE);
+			VkResult result = vkQueueSubmit(impl.queues[cmdTypeInt], 1, &submitInfo, VK_NULL_HANDLE);
+			if (result == VK_ERROR_DEVICE_LOST)
+			{
+				impl.deviceLossDetected = true;
+			}
 		}
 
 		VkPresentInfoKHR presentInfo = {};
@@ -1350,6 +1356,10 @@ namespace ig
 		presentInfo.pImageIndices = &impl.currentBackBufferIndex;
 
 		VkResult result = vkQueuePresentKHR(impl.presentQueue, &presentInfo);
+		if (result == VK_ERROR_DEVICE_LOST)
+		{
+			impl.deviceLossDetected = true;
+		}
 
 		return result;
 	}
@@ -1370,7 +1380,16 @@ namespace ig
 			SubmitBinaryWaitSignal(impl.acquireSemaphores[impl.frameIndex]);
 			impl.frameIndex = (impl.frameIndex + 1) % impl.numFrames;
 		}
+		if (result == VK_ERROR_DEVICE_LOST)
+		{
+			impl.deviceLossDetected = true;
+		}
 		return result;
+	}
+
+	bool CommandQueue::CheckDeviceLoss() const
+	{
+		return impl.deviceLossDetected;
 	}
 
 	Receipt CommandQueue::SubmitBinaryWaitSignal(VkSemaphore binarySemaphore)
@@ -3047,6 +3066,39 @@ namespace ig
 		}
 	}
 
+	void IGLOContext::Impl_Present()
+	{
+		VkResult result = commandQueue->Present(graphics.swapChain);
+		HandleVulkanSwapChainResult(result, "presentation");
+	}
+
+	void IGLOContext::PostPresent()
+	{
+		VkResult result = commandQueue->AcquireNextVulkanSwapChainImage(graphics.device, graphics.swapChain, UINT64_MAX);
+		HandleVulkanSwapChainResult(result, "image acquisition");
+	}
+
+	void IGLOContext::AttemptRepairSwapChain()
+	{
+		WaitForIdleDevice();
+
+		// To prevent error messages from being spammed when user resizes window to {0,0},
+		// we wait with replacing the swapchain until window size is valid.
+		VkSurfaceCapabilitiesKHR caps = {};
+		vkGetPhysicalDeviceSurfaceCapabilitiesKHR(graphics.physicalDevice, graphics.surface, &caps);
+		if (caps.maxImageExtent.width > 0 && caps.maxImageExtent.height > 0)
+		{
+			DetailedResult dr = CreateSwapChain(swapChain.extent, swapChain.format, swapChain.numBackBuffers,
+				numFramesInFlight, swapChain.presentMode);
+			if (!dr)
+			{
+				Log(LogType::Error, "Failed to replace swapchain. Reason: " + dr.errorMessage);
+			}
+		}
+
+		WaitForIdleDevice();
+	}
+
 	void IGLOContext::DestroySwapChainResources()
 	{
 		// Wrapped textures don't destroy their resources, so we must do it manually.
@@ -3061,6 +3113,7 @@ namespace ig
 			VkImageView imageView_RTV = surface->GetVulkanImageView_UAV_RTV_DSV();
 			if (imageView_RTV) vkDestroyImageView(graphics.device, imageView_RTV, nullptr);
 		}
+
 		swapChain = SwapChainInfo();
 	}
 
@@ -3069,8 +3122,8 @@ namespace ig
 	{
 		vkDeviceWaitIdle(graphics.device);
 
-		graphics.validSwapChain = false;
-		graphics.hasPresented = false;
+		swapChain.isValid = false;
+		swapChain.hasPresented = false;
 
 		// Handle resize
 		Extent2D cappedExtent = extent;
@@ -3225,14 +3278,14 @@ namespace ig
 		// Acquire next image
 		result = commandQueue->AcquireNextVulkanSwapChainImage(graphics.device, graphics.swapChain, UINT64_MAX);
 
-		graphics.validSwapChain = false;
+		swapChain.isValid = false;
 		if (result == VK_SUCCESS)
 		{
-			graphics.validSwapChain = true;
+			swapChain.isValid = true;
 		}
 		else if (result == VK_SUBOPTIMAL_KHR)
 		{
-			graphics.validSwapChain = true;
+			swapChain.isValid = true;
 			Log(LogType::Info, "Acquired suboptimal image at swapchain creation.");
 		}
 		else if (result == VK_ERROR_OUT_OF_DATE_KHR)
@@ -3249,29 +3302,32 @@ namespace ig
 
 	void IGLOContext::HandleVulkanSwapChainResult(VkResult result, const std::string& scenario)
 	{
+		swapChain.isValid = false;
+
 		switch (result)
 		{
 		case VK_SUCCESS:
-			graphics.validSwapChain = true;
+			swapChain.isValid = true;
 			break;
 
 		case VK_SUBOPTIMAL_KHR:
 		case VK_ERROR_OUT_OF_DATE_KHR:
 		case VK_NOT_READY:
-			graphics.validSwapChain = false;
 			break;
 
 		case VK_ERROR_DEVICE_LOST:
-			graphics.validSwapChain = false;
-			Log(LogType::Error, "Device removal detected at " + scenario + "!");
-			if (callbackOnDeviceRemoved) callbackOnDeviceRemoved("The device was lost.");
+			NotifyDeviceLost();
 			break;
 
 		default:
-			graphics.validSwapChain = false;
 			Log(LogType::Error, scenario + " failed (" + vk::to_string((vk::Result)result) + ").");
 			break;
 		}
+	}
+
+	bool IGLOContext::PollDeviceLost()
+	{
+		return commandQueue->CheckDeviceLoss();
 	}
 
 	DetailedResult IGLOContext::Impl_InitGraphicsDevice()

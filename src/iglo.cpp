@@ -2658,58 +2658,9 @@ namespace ig
 
 	void IGLOContext::Present()
 	{
-#ifdef IGLO_D3D12
-		HRESULT hr = 0;
-		switch (swapChain.presentMode)
-		{
-		case PresentMode::Immediate:
-			hr = graphics.swapChain->Present(0, DXGI_PRESENT_ALLOW_TEARING);
-			break;
-		case PresentMode::Mailbox:
-			hr = graphics.swapChain->Present(0, 0);
-			break;
-		case PresentMode::Vsync:
-			hr = graphics.swapChain->Present(1, 0);
-			break;
-		case PresentMode::VsyncHalf:
-			hr = graphics.swapChain->Present(2, 0);
-			break;
-		default:
-			Log(LogType::Error, "Presentation failed. Reason: Invalid present mode.");
-			break;
-		}
-		if (FAILED(hr))
-		{
-			Log(LogType::Error, ToString("Presentation failed. Reason: IDXGISwapChain::Present returned error code: ", (uint32_t)hr, "."));
+		Impl_Present();
 
-			hr = graphics.device->GetDeviceRemovedReason();
-			if (FAILED(hr))
-			{
-				std::string reasonStr;
-				switch (hr)
-				{
-				case DXGI_ERROR_DEVICE_HUNG: reasonStr = "The device has hung."; break;
-				case DXGI_ERROR_DEVICE_REMOVED: reasonStr = "The device was removed."; break;
-				case DXGI_ERROR_DEVICE_RESET: reasonStr = "The device was reset."; break;
-
-				default:
-					reasonStr = "Unknown device removal reason.";
-					break;
-				}
-				Log(LogType::Error, "Device removal detected! Reason: " + reasonStr);
-				if (callbackOnDeviceRemoved) callbackOnDeviceRemoved(reasonStr);
-			}
-		}
-		else
-		{
-			graphics.hasPresented = true;
-		}
-#endif
-#ifdef IGLO_VULKAN
-		VkResult result = commandQueue->Present(graphics.swapChain);
-		HandleVulkanSwapChainResult(result, "presentation");
-		graphics.hasPresented = true;
-#endif
+		swapChain.hasPresented = true;
 
 		endOfFrame.at(frameIndex).graphicsReceipt = commandQueue->SubmitSignal(CommandListType::Graphics);
 	}
@@ -2732,61 +2683,48 @@ namespace ig
 		descriptorHeap->NextFrame();
 		uploadHeap->NextFrame();
 
-#ifdef IGLO_D3D12
-		if (graphics.hasPresented)
+		if (!deviceLost)
 		{
-			graphics.hasPresented = false;
+			if (PollDeviceLost()) NotifyDeviceLost();
+		}
+		if (deviceLost) return;
 
-			// Wait until the swap chain is ready to present the next frame.
-			// This ensures that the value passed to SetMaximumFrameLatency() is respected.
-			// Waiting for this at the start of the next frame reduces input latency.
-			// Info:
-			// https://learn.microsoft.com/en-us/windows/uwp/gaming/reduce-latency-with-dxgi-1-3-swap-chains
-			// https://www.intel.com/content/www/us/en/developer/articles/code-sample/sample-application-for-direct3d-12-flip-model-swap-chains.html
-			HANDLE swapchainWaitableObject = graphics.swapChain->GetFrameLatencyWaitableObject();
-			WaitForSingleObjectEx(swapchainWaitableObject, 1000, true);
-		}
-#endif
-#ifdef IGLO_VULKAN
-		if (graphics.validSwapChain && graphics.hasPresented)
+		if (swapChain.hasPresented && swapChain.isValid)
 		{
-			graphics.hasPresented = false;
-			VkResult result = commandQueue->AcquireNextVulkanSwapChainImage(graphics.device, graphics.swapChain, UINT64_MAX);
-			HandleVulkanSwapChainResult(result, "image acquisition");
+			swapChain.hasPresented = false;
+			PostPresent();
 		}
-		// Broken swapchain must be fixed outside Present(),
-		// because Draw() is only called if swapchain is valid.
-		if (!graphics.validSwapChain)
+		if (!swapChain.isValid)
 		{
-			graphics.hasPresented = false;
-			WaitForIdleDevice();
-
-			// To prevent error messages from being spammed when user resizes window to {0,0},
-			// we wait with replacing the swapchain until window size is valid.
-			VkSurfaceCapabilitiesKHR caps = {};
-			vkGetPhysicalDeviceSurfaceCapabilitiesKHR(graphics.physicalDevice, graphics.surface, &caps);
-			if (caps.maxImageExtent.width > 0 && caps.maxImageExtent.height > 0)
-			{
-				DetailedResult dr = CreateSwapChain(swapChain.extent, swapChain.format, swapChain.numBackBuffers,
-					numFramesInFlight, swapChain.presentMode);
-				if (!dr)
-				{
-					Log(LogType::Error, "Failed to replace swapchain. Reason: " + dr.errorMessage);
-				}
-			}
-			WaitForIdleDevice();
+			swapChain.hasPresented = false;
+			AttemptRepairSwapChain();
 		}
-#endif
 	}
 
-	bool IGLOContext::IsSwapchainValid() const
+	void IGLOContext::NotifyDeviceLost()
 	{
+		swapChain.isValid = false;
+		if (deviceLost) return;
+
+		deviceLost = true;
+
+		std::string errStr = "Graphics device lost";
+
 #ifdef IGLO_D3D12
-		return true;
+		HRESULT hr = graphics.device->GetDeviceRemovedReason();
+		switch (hr)
+		{
+		case DXGI_ERROR_DEVICE_HUNG: errStr += " (hung)"; break;
+		case DXGI_ERROR_DEVICE_REMOVED: errStr += " (removed)"; break;
+		case DXGI_ERROR_DEVICE_RESET: errStr += " (reset)"; break;
+
+		default:
+			break;
+		}
 #endif
-#ifdef IGLO_VULKAN
-		return graphics.validSwapChain;
-#endif
+
+		Log(LogType::Error, ToString(errStr, "."));
+		if (callbackOnDeviceLost) callbackOnDeviceLost();
 	}
 
 	Receipt IGLOContext::Submit(const CommandList& commandList)
@@ -3618,7 +3556,7 @@ namespace ig
 		}
 
 		cmd.CopyTempBufferToTexture(tempBuffer, *this);
-		}
+	}
 
 	void Texture::SetPixels(CommandList& cmd, const void* pixelData)
 	{
@@ -3785,4 +3723,4 @@ namespace ig
 		return descriptor;
 	}
 
-	} //end of namespace ig
+} //end of namespace ig

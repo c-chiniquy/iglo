@@ -20,8 +20,6 @@ namespace ig
 		VkDevice device = VK_NULL_HANDLE;
 		VkSurfaceKHR surface = VK_NULL_HANDLE;
 		VkSwapchainKHR swapChain = VK_NULL_HANDLE;
-		bool validSwapChain = false;
-		bool hasPresented = false;
 		bool usesMemoryBudgetExt = false;
 #ifndef NDEBUG
 		VkDebugUtilsMessengerEXT debugMessenger = VK_NULL_HANDLE;
@@ -46,6 +44,8 @@ namespace ig
 
 		std::mutex receiptMutex;
 		std::mutex waitMutex;
+
+		bool deviceLossDetected = false;
 	};
 
 	struct VulkanRenderInfo
