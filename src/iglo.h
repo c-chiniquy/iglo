@@ -2470,7 +2470,7 @@ namespace ig
 		bool IsInsideModalLoopCallback() const { return insideModalLoopCallback; }
 
 		void SetOnDeviceLostCallback(CallbackOnDeviceLost callback) { callbackOnDeviceLost = callback; }
-		CallbackOnDeviceLost GetOnDeviceRemovedCallback() const { return callbackOnDeviceLost; }
+		CallbackOnDeviceLost GetOnDeviceLostCallback() const { return callbackOnDeviceLost; }
 
 		// Gets the mouse position relative to the topleft corner of the window.
 		IntPoint GetMousePosition() const { return mousePosition; }
