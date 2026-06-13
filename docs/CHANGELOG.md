@@ -1,6 +1,28 @@
 
 # Changelog
 
+## v0.6.0
+
+### Changes
+
+- Major/breaking changes:
+  - `IGLOContext::MoveToNextFrame()` is now a public function that must be called once per frame. `ig::MainLoop` calls this once per frame so you don't have to.
+  - Renamed `CallbackOnDeviceRemoved` to `CallbackOnDeviceLost` and removed its `const std::string& deviceRemovalReason` parameter.
+  - `WindowMinimizedBehaviour` enum moved outside of `ig::MainLoop`.
+- New features:
+  - Added `IGLOContext::IsSwapChainValid()`.
+  - Added `IGLOContext::IsDeviceLost()`.
+  - Added double precision `ig::Lerp()`.
+- Improvements:
+  - `ig::MainLoop` now skips `Draw()` on invalid swapchain and on lost device.
+  - `SimpleBarrier::Discard` now uses `BarrierSync::All`.
+  - Some Vulkan barrier values have been updated.
+  - Synchronization validation is now always enabled on Vulkan Debug.
+  - Improved presentation and swapchain handling for both backends.
+  - Improved the handling of device loss.
+- Bug fixes:
+  - Now using correct Vulkan barriers for clearing UAV and inactive render targets.
+
 ## v0.5.2
 
 ### Changes
