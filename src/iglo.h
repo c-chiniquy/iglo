@@ -8,7 +8,7 @@
 
 // -------------------- Version --------------------//
 #define IGLO_VERSION_MAJOR 0
-#define IGLO_VERSION_MINOR 7
+#define IGLO_VERSION_MINOR 6
 #define IGLO_VERSION_PATCH 0
 
 #define IGLO_STRINGIFY_HELPER(x) #x
