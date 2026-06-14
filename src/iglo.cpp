@@ -1906,6 +1906,10 @@ namespace ig
 		{
 			return DetailedResult::Fail("mipLevels and numFaces must be 1 or higher.");
 		}
+		if (mipLevels >= 32) // 32-bit bitshift limit
+		{
+			return DetailedResult::Fail("mipLevels is too high.");
+		}
 		if (isCubemap && (numFaces % 6 != 0))
 		{
 			return DetailedResult::Fail("The number of faces in a cubemap image must be a multiple of 6.");
@@ -1991,6 +1995,8 @@ namespace ig
 
 	size_t Image::CalculateMipSize(Extent2D extent, Format format, uint32_t mipIndex)
 	{
+		if (mipIndex >= 32) Fatal("mipIndex too high");
+
 		FormatInfo info = GetFormatInfo(format);
 		uint32_t mipWidth = std::max(uint32_t(1), extent.width >> mipIndex);
 		uint32_t mipHeight = std::max(uint32_t(1), extent.height >> mipIndex);
@@ -2006,6 +2012,8 @@ namespace ig
 
 	uint32_t Image::CalculateMipRowPitch(Extent2D extent, Format format, uint32_t mipIndex)
 	{
+		if (mipIndex >= 32) Fatal("mipIndex too high");
+
 		FormatInfo info = GetFormatInfo(format);
 		uint32_t mipWidth = std::max(uint32_t(1), extent.width >> mipIndex);
 		if (info.blockSize > 0) // Block-compressed format
@@ -2020,6 +2028,8 @@ namespace ig
 
 	Extent2D Image::CalculateMipExtent(Extent2D extent, uint32_t mipIndex)
 	{
+		if (mipIndex >= 32) Fatal("mipIndex too high");
+
 		Extent2D mipExtent;
 		mipExtent.width = std::max(uint32_t(1), extent.width >> mipIndex);
 		mipExtent.height = std::max(uint32_t(1), extent.height >> mipIndex);
@@ -2804,6 +2814,7 @@ namespace ig
 				currentView = VK_NULL_HANDLE;
 			}
 		}
+		delayedDestroyVulkanImageViews.clear();
 #endif
 	}
 

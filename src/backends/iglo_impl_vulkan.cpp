@@ -1417,7 +1417,11 @@ namespace ig
 		submitInfo.pWaitSemaphores = &binarySemaphore;
 		submitInfo.pWaitDstStageMask = &flags;
 
-		vkQueueSubmit(impl.queues[cmdTypeInt], 1, &submitInfo, VK_NULL_HANDLE);
+		VkResult result = vkQueueSubmit(impl.queues[cmdTypeInt], 1, &submitInfo, VK_NULL_HANDLE);
+		if (result == VK_ERROR_DEVICE_LOST)
+		{
+			impl.deviceLossDetected = true;
+		}
 
 		return { signalValue, impl.timelineSemaphores[cmdTypeInt] };
 	}

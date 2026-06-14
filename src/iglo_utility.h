@@ -159,7 +159,7 @@ namespace ig
 	private:
 		static uint64_t GetElementCount(uint64_t numBooleans, uint32_t sizeOfEachElement);
 
-		static constexpr uint32_t elementSize = 8;
+		static constexpr uint32_t ElementSize = 8;
 		uint64_t booleanCount = 0;
 		std::unique_ptr<uint8_t[]> data;
 	};

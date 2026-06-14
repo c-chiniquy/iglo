@@ -451,15 +451,32 @@ namespace ig
 			return false;
 		}
 
-		// Make sure file is not smaller than expected
-		if (numBytes < header->GetTotalFileSize())
+		const ImageDesc imageDesc =
+		{
+			.extent = Extent2D(header->imageWidth, header->imageHeight),
+			.format = (Format)header->imageFormat,
+			.numFaces = header->imageNumFaces,
+			.mipLevels = header->imageMipLevels,
+		};
+
+		DetailedResult descValidationResult = imageDesc.Validate();
+		if (!descValidationResult)
+		{
+			Log(LogType::Error, ToString(errStr, "Invalid image description."));
+			return false;
+		}
+
+		const uint64_t totalFileSize = header->GetTotalFileSize();
+
+		// Smaller than expected
+		if (numBytes < totalFileSize)
 		{
 			Log(LogType::Error, ToString(errStr, "File is corrupt (it is smaller than expected)."));
 			return false;
 		}
 
 		// Larger than expected
-		if (numBytes > header->GetTotalFileSize())
+		if (numBytes > totalFileSize)
 		{
 			Log(LogType::Warning, "Prebaked font file was larger than expected.");
 		}
@@ -500,13 +517,6 @@ namespace ig
 			src += sizeof(int16_t);
 		}
 
-		ImageDesc imageDesc =
-		{
-			.extent = Extent2D(header->imageWidth, header->imageHeight),
-			.format = (Format)header->imageFormat,
-			.numFaces = header->imageNumFaces,
-			.mipLevels = header->imageMipLevels,
-		};
 		this->image = Image::Create(imageDesc);
 		if (!this->image)
 		{
@@ -639,7 +649,7 @@ namespace ig
 		tableCodepoints.resize((size_t)out->stbttFontInfo.numGlyphs + 1);
 		exists.Resize(tableCodepoints.size());
 		uint32_t totalNumValidCodepoints = 0;
-		for (uint32_t codepoint = 0; codepoint < 0x10FFFF; codepoint++)
+		for (uint32_t codepoint = 0; codepoint <= 0x10FFFF; codepoint++)
 		{
 			int index = stbtt_FindGlyphIndex(&out->stbttFontInfo, codepoint);
 			if (index != 0)
@@ -654,6 +664,12 @@ namespace ig
 		kerning.resize(kernEntry.size());
 		for (size_t i = 0; i < kernEntry.size(); i++)
 		{
+			if ((uint32_t)kernEntry[i].glyph1 >= tableCodepoints.size() ||
+				(uint32_t)kernEntry[i].glyph2 >= tableCodepoints.size())
+			{
+				Log(LogType::Error, "Failed to load font '" + fontName + "'. Font contains invalid kerning pairs.");
+				return nullptr;
+			}
 			kerning[i].codepointPrev = tableCodepoints[kernEntry[i].glyph1];
 			kerning[i].codepointNext = tableCodepoints[kernEntry[i].glyph2];
 			kerning[i].x = int16_t(roundf(float(kernEntry[i].advance) * out->stbttScale));
