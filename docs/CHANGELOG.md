@@ -20,15 +20,15 @@
   - Synchronization validation is now always enabled on Vulkan Debug.
   - Improved presentation and swapchain handling for both backends.
   - Improved the handling of device loss.
-  - Improved mipLevel validation in ig::Image.
+  - Improved mipLevel validation in `ig::Image`.
   - Improved image validation when loading prebaked font files.
   - Font loading code now checks for invalid kerning pairs.
 - Bug fixes:
   - Now using correct Vulkan barriers for clearing UAV and inactive render targets.
   - Fixed small memory leak caused by forgetting to clear `delayedDestroyVulkanImageViews` vector.
   - Fixed font loading bug that always ignored codepoint 0x10FFFF.
-  - Fixed bug in PackedBoolArray where asserts could wrongly fire in SetTrue() and SetFalse() when resizing (this only affected Debug builds).
-  - Fixed bug in PackedBoolArray where it would set already set booleans when growing in elements (this only affected performance).
+  - Fixed bug in `ig::PackedBoolArray` where asserts could wrongly fire in SetTrue() and SetFalse() when resizing (this only affected Debug builds).
+  - Fixed bug in `ig::PackedBoolArray` where it would set already set booleans when growing in elements (this only affected performance).
 
 ## v0.5.2
 
