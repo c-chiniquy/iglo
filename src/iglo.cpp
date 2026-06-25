@@ -2061,11 +2061,11 @@ namespace ig
 		return numLevels;
 	}
 
-	void* Image::GetMipPixels(uint32_t faceIndex, uint32_t mipIndex) const
+	void* Image::GetPixelsAtSubresource(uint32_t faceIndex, uint32_t mipIndex) const
 	{
 		if (faceIndex >= desc.numFaces || mipIndex >= desc.mipLevels)
 		{
-			Fatal("Out of bounds Image::GetMipPixels");
+			Fatal("Out of bounds Image::GetPixelsAtSubresource");
 		}
 		byte* out = pixelsPtr;
 		out += faceIndex * CalculateTotalSize(desc.extent, desc.format, desc.mipLevels, 1);

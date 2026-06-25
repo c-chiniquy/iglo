@@ -946,8 +946,7 @@ namespace ig
 		void* GetPixels() const { return (void*)pixelsPtr; }
 
 		// Gets the pixel data starting at specified mip index and face index.
-		// faceIndex=0, mipIndex=0 will get the pixels located at the first mip at the first face.
-		void* GetMipPixels(uint32_t faceIndex, uint32_t mipIndex) const;
+		void* GetPixelsAtSubresource(uint32_t faceIndex, uint32_t mipIndex) const;
 
 		bool IsWrapped() const { return ownership == PixelOwnership::Wrapped; }
 
