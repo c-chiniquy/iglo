@@ -226,13 +226,11 @@ namespace ig
 		static float Distance(float x1, float y1, float x2, float y2);
 		static float Distance(const Vector2& p0, const Vector2& p1);
 
-		// Returns the length of this vector.
+		// Gets the length of this vector
 		float GetMagnitude() const;
 		float GetSquaredMagnitude() const;
 		Vector2 GetNormalized() const;
-		//TODO: i want the option of rotating by degrees 0-360.
 		Vector2 GetRotated(float rotationInRadians) const;
-		//TODO: More serious rotation functions for 2D and 3D vectors.
 
 		std::string ToString() const;
 
