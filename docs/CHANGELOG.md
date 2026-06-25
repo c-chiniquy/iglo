@@ -1,6 +1,21 @@
 
 # Changelog
 
+## v0.7.0
+
+### Changes
+
+- Major/breaking changes:
+  - Split `SimpleBarrier::ClearInactiveRenderTarget` into `ClearInactiveRenderTexture` and `ClearInactiveDepthBuffer`.
+- New features:
+  - Added `CommandList::BeginRenderPass_Vulkan(const VulkanRenderInfo&)`.
+    This function gives you finer control over the render pass parameters.
+- Improvements:
+  - Added bounds checking in mip gen shader.
+  - `bool IsPowerOf2(uint64_t value)` is now constexpr.
+- Bug fixes:
+  - Fixed validation error in `ClearDepth()` on Vulkan when attempting to clear a stencil of an inactive non-stencil depth buffer.
+
 ## v0.6.0
 
 ### Changes
