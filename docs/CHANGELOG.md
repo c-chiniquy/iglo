@@ -7,6 +7,7 @@
 
 - Major/breaking changes:
   - Split `SimpleBarrier::ClearInactiveRenderTarget` into `ClearInactiveRenderTexture` and `ClearInactiveDepthBuffer`.
+  - Renamed `Image::GetMipPixels()` to `Image::GetPixelsAtSubresource()`
 - New features:
   - Added `CommandList::BeginRenderPass_Vulkan(const VulkanRenderInfo&)`.
     This function gives you finer control over the render pass parameters.
