@@ -1216,8 +1216,15 @@ namespace ig
 
 		if (destination.GetUsage() == TextureUsage::Readable)
 		{
-			Log(LogType::Error, "Failed to issue a copy texture subresource command."
-				" Reason: The ability to copy a texture subresource to a readable texture subresource is not yet implemented.");
+			// Destination must be a single subresource sized to the source mip being copied.
+			assert(destination.GetMSAA() == MSAA::Disabled && "Readable dest must not be multisampled");
+			assert(destination.GetMipLevels() == 1 && destination.GetNumFaces() == 1 && "Readable dest must be 1 mip and 1 face");
+			assert(destFaceIndex == 0 && destMipIndex == 0 && "Readable dest face and mip index must be 0");
+			assert(destination.GetFormat() == source.GetFormat() && "format mismatch");
+			assert(destination.GetExtent() == Image::CalculateMipExtent(source.GetExtent(), sourceMipIndex) &&
+				"Readable dest extent must match source mip extent");
+
+			Impl_CopyTextureSubresourceToReadableTexture(source, sourceFaceIndex, sourceMipIndex, destination);
 			return;
 		}
 
@@ -1229,7 +1236,7 @@ namespace ig
 		assert(
 			source.GetUsage() != TextureUsage::Readable &&
 			destination.GetUsage() == TextureUsage::Readable &&
-			"dest must be Readable, source must be non-readable");
+			"source must not be Readable, dest must be Readable");
 
 		Impl_CopyTextureToReadableTexture(source, destination);
 	}
@@ -3253,6 +3260,11 @@ namespace ig
 			Log(LogType::Error, ToString(errStr, "MSAA is not supported for unordered access textures."));
 			return nullptr;
 		}
+		if (desc.msaa != MSAA::Disabled && desc.usage == TextureUsage::Readable)
+		{
+			Log(LogType::Error, ToString(errStr, "MSAA is not supported for Readable textures."));
+			return nullptr;
+		}
 		if (HasFlag(desc.flags, TextureFlags::DepthBuffer_DenyShaderResource) && desc.usage != TextureUsage::DepthBuffer)
 		{
 			Log(LogType::Error, ToString(errStr, "DepthBuffer_DenyShaderResource flag requires DepthBuffer usage."));
@@ -3662,30 +3674,12 @@ namespace ig
 		assert(destImage.GetNumFaces() == desc.numFaces && "image must match texture");
 		assert(destImage.GetMipLevels() == desc.mipLevels && "image must match texture");
 
-		const uint32_t frameIndex = context.GetFrameIndex();
+		uint32_t frameIndex = context.GetFrameIndex();
 
 		assert(frameIndex < GetPerFrameArrayLength());
 		assert(implPerFrame);
-		assert(implPerFrame[frameIndex].mapped);
 
-		byte* destPtr = (byte*)destImage.GetPixels();
-		byte* srcPtr = (byte*)implPerFrame[frameIndex].mapped;
-		const uint32_t textureRowPitch = context.GetGraphicsSpecs().bufferPlacementAlignments.textureRowPitch;
-		for (uint32_t faceIndex = 0; faceIndex < desc.numFaces; faceIndex++)
-		{
-			for (uint32_t mipIndex = 0; mipIndex < desc.mipLevels; mipIndex++)
-			{
-				size_t srcRowPitch = AlignUp(Image::CalculateMipRowPitch(desc.extent, desc.format, mipIndex), textureRowPitch);
-				size_t destRowPitch = destImage.GetMipRowPitch(mipIndex);
-				for (uint64_t destProgress = 0; destProgress < destImage.GetMipSize(mipIndex); destProgress += destRowPitch)
-				{
-					memcpy(destPtr, srcPtr, destRowPitch);
-					srcPtr += srcRowPitch;
-					destPtr += destRowPitch;
-					assert(destProgress + destRowPitch <= destImage.GetMipSize(mipIndex));
-				}
-			}
-		}
+		Impl_ReadPixels(destImage, frameIndex);
 	}
 
 	std::unique_ptr<Image> Texture::ReadPixels()

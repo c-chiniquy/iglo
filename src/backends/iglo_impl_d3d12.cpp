@@ -633,6 +633,7 @@ namespace ig
 		BarrierSync syncBefore, BarrierAccess accessBefore, BarrierLayout layoutBefore,
 		BarrierSync syncAfter, BarrierAccess accessAfter, BarrierLayout layoutAfter, bool discard)
 	{
+		if (texture.GetUsage() == TextureUsage::Readable) return;
 		if (impl.numTextureBarriers >= MAX_QUEUED_BARRIERS_PER_TYPE) FlushBarriers();
 
 		D3D12_TEXTURE_BARRIER& barrier = impl.textureBarriers[impl.numTextureBarriers];
@@ -654,6 +655,7 @@ namespace ig
 		BarrierSync syncAfter, BarrierAccess accessAfter, BarrierLayout layoutAfter,
 		uint32_t faceIndex, uint32_t mipIndex, bool discard)
 	{
+		if (texture.GetUsage() == TextureUsage::Readable) return;
 		if (impl.numTextureBarriers >= MAX_QUEUED_BARRIERS_PER_TYPE) FlushBarriers();
 
 		D3D12_TEXTURE_BARRIER& barrier = impl.textureBarriers[impl.numTextureBarriers];
@@ -939,6 +941,29 @@ namespace ig
 
 			impl.graphicsCommandList->CopyTextureRegion(&destLoc, 0, 0, 0, &srcLoc, nullptr);
 		}
+	}
+
+	void CommandList::Impl_CopyTextureSubresourceToReadableTexture(const Texture& source, uint32_t sourceFaceIndex,
+		uint32_t sourceMipIndex, const Texture& destination)
+	{
+		D3D12_RESOURCE_DESC srcDesc = source.GetD3D12Resource()->GetDesc();
+		uint32_t srcSubresourceIndex = (sourceFaceIndex * source.GetMipLevels()) + sourceMipIndex;
+
+		D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint = {};
+		context.GetD3D12Device()->GetCopyableFootprints(&srcDesc, srcSubresourceIndex, 1, 0, &footprint, nullptr, nullptr, nullptr);
+
+		D3D12_TEXTURE_COPY_LOCATION srcLoc = {};
+		srcLoc.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+		srcLoc.pResource = source.GetD3D12Resource();
+		srcLoc.SubresourceIndex = srcSubresourceIndex;
+
+		D3D12_TEXTURE_COPY_LOCATION destLoc = {};
+		destLoc.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+		destLoc.pResource = destination.GetD3D12Resource();
+		destLoc.PlacedFootprint = footprint;
+		destLoc.PlacedFootprint.Offset = 0;
+
+		impl.graphicsCommandList->CopyTextureRegion(&destLoc, 0, 0, 0, &srcLoc, nullptr);
 	}
 
 	void CommandList::CopyBuffer(const Buffer& source, const Buffer& destination)
@@ -1456,6 +1481,31 @@ namespace ig
 		}
 
 		return out;
+	}
+
+	void Texture::Impl_ReadPixels(Image& destImage, uint32_t frameIndex)
+	{
+		assert(implPerFrame[frameIndex].mapped);
+
+		byte* srcPtr = (byte*)implPerFrame[frameIndex].mapped;
+		byte* destPtr = (byte*)destImage.GetPixels();
+
+		const uint32_t textureRowPitch = context.GetGraphicsSpecs().bufferPlacementAlignments.textureRowPitch;
+		for (uint32_t faceIndex = 0; faceIndex < desc.numFaces; faceIndex++)
+		{
+			for (uint32_t mipIndex = 0; mipIndex < desc.mipLevels; mipIndex++)
+			{
+				size_t srcRowPitch = AlignUp(Image::CalculateMipRowPitch(desc.extent, desc.format, mipIndex), textureRowPitch);
+				size_t destRowPitch = destImage.GetMipRowPitch(mipIndex);
+				for (uint64_t destProgress = 0; destProgress < destImage.GetMipSize(mipIndex); destProgress += destRowPitch)
+				{
+					memcpy(destPtr, srcPtr, destRowPitch);
+					srcPtr += srcRowPitch;
+					destPtr += destRowPitch;
+					assert(destProgress + destRowPitch <= destImage.GetMipSize(mipIndex));
+				}
+			}
+		}
 	}
 
 	void Buffer::Impl_Destroy()

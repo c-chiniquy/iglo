@@ -1136,6 +1136,7 @@ namespace ig
 
 		void Impl_Destroy();
 		DetailedResult Impl_Create();
+		void Impl_ReadPixels(Image& destImage, uint32_t frameIndex);
 		DetailedResult GenerateMips(CommandList& cmd, const Image& image);
 		uint32_t GetPerFrameArrayLength() const;
 		static DetailedResult ValidateMipGeneration(CommandListType, const Image& image);
@@ -2022,6 +2023,8 @@ namespace ig
 		void Impl_CopyTextureSubresource(const Texture& source, uint32_t sourceFaceIndex, uint32_t sourceMipIndex,
 			const Texture& destination, uint32_t destFaceIndex, uint32_t destMipIndex);
 		void Impl_CopyTextureToReadableTexture(const Texture& source, const Texture& destination);
+		void Impl_CopyTextureSubresourceToReadableTexture(const Texture& source, uint32_t sourceFaceIndex,
+			uint32_t sourceMipIndex, const Texture& destination);
 
 		void CopyTextureToReadableTexture(const Texture& source, const Texture& destination);
 		static void AssertPushConstants(const void* data, uint32_t sizeInBytes, uint32_t destOffsetInBytes);

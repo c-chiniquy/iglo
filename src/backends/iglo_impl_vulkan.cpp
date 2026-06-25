@@ -2157,6 +2157,34 @@ namespace ig
 			(uint32_t)regionList.size(), regionList.data());
 	}
 
+	void CommandList::Impl_CopyTextureSubresourceToReadableTexture(const Texture& source, uint32_t sourceFaceIndex,
+		uint32_t sourceMipIndex, const Texture& destination)
+	{
+		VkImageCopy region = {};
+		region.srcSubresource.aspectMask = GetFullImageAspect(source.GetFormat());
+		region.srcSubresource.mipLevel = sourceMipIndex;
+		region.srcSubresource.baseArrayLayer = sourceFaceIndex;
+		region.srcSubresource.layerCount = 1;
+
+		// Destination is single-subresource
+		region.dstSubresource.aspectMask = GetFullImageAspect(destination.GetFormat());
+		region.dstSubresource.mipLevel = 0;
+		region.dstSubresource.baseArrayLayer = 0;
+		region.dstSubresource.layerCount = 1;
+
+		region.extent =
+		{
+			std::max(source.GetWidth() >> sourceMipIndex, 1u),
+			std::max(source.GetHeight() >> sourceMipIndex, 1u),
+			1u  // Depth is always 1 for 2D textures
+		};
+
+		vkCmdCopyImage(impl.currentCommandBuffer,
+			source.GetVulkanImage(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+			destination.GetVulkanImage(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+			1, &region);
+	}
+
 	void CommandList::CopyBuffer(const Buffer& source, const Buffer& destination)
 	{
 		VkBufferCopy copyRegion = {};
@@ -2448,6 +2476,14 @@ namespace ig
 
 	DetailedResult Texture::Impl_Create()
 	{
+		if (desc.usage == TextureUsage::Readable)
+		{
+			if (desc.numFaces > 1 || desc.mipLevels > 1)
+			{
+				return DetailedResult::Fail("On Vulkan, Readable textures must have 1 face and 1 mip.");
+			}
+		}
+
 		VkDevice device = context.GetVulkanDevice();
 		VkPhysicalDevice physicalDevice = context.GetVulkanPhysicalDevice();
 		DescriptorHeap& heap = context.GetDescriptorHeap();
@@ -2718,6 +2754,42 @@ namespace ig
 			return implPerFrame[context.GetFrameIndex()].memory;
 		}
 		return impl.memory;
+	}
+
+	void Texture::Impl_ReadPixels(Image& destImage, uint32_t frameIndex)
+	{
+		assert(implPerFrame[frameIndex].mapped);
+
+		byte* srcPtr = (byte*)implPerFrame[frameIndex].mapped;
+		byte* destPtr = (byte*)destImage.GetPixels();
+
+		VkDevice device = context.GetVulkanDevice();
+		VkImage image = implPerFrame[frameIndex].image;
+
+		for (uint32_t faceIndex = 0; faceIndex < desc.numFaces; faceIndex++)
+		{
+			for (uint32_t mipIndex = 0; mipIndex < desc.mipLevels; mipIndex++)
+			{
+				VkImageSubresource subresource = {};
+				subresource.aspectMask = GetFullImageAspect(desc.format);
+				subresource.mipLevel = mipIndex;
+				subresource.arrayLayer = faceIndex;
+
+				VkSubresourceLayout layout = {};
+				vkGetImageSubresourceLayout(device, image, &subresource, &layout);
+
+				byte* srcRow = srcPtr + layout.offset;
+				size_t destRowPitch = destImage.GetMipRowPitch(mipIndex);
+
+				for (uint64_t destProgress = 0; destProgress < destImage.GetMipSize(mipIndex); destProgress += destRowPitch)
+				{
+					memcpy(destPtr, srcRow, destRowPitch);
+					srcRow += layout.rowPitch;
+					destPtr += destRowPitch;
+					assert(destProgress + destRowPitch <= destImage.GetMipSize(mipIndex));
+				}
+			}
+		}
 	}
 
 	void Buffer::Impl_Destroy()
