@@ -1025,11 +1025,24 @@ namespace ig
 #endif
 			break;
 
-		case SimpleBarrier::ClearInactiveRenderTarget:
+		case SimpleBarrier::ClearInactiveRenderTexture:
 #ifdef IGLO_D3D12
 			out.sync = BarrierSync::RenderTarget;
 			out.access = BarrierAccess::RenderTarget;
 			out.layout = BarrierLayout::RenderTarget;
+#endif
+#ifdef IGLO_VULKAN
+			out.sync = BarrierSync::Clear;
+			out.access = BarrierAccess::CopyDest;
+			out.layout = BarrierLayout::CopyDest;
+#endif
+			break;
+
+		case SimpleBarrier::ClearInactiveDepthBuffer:
+#ifdef IGLO_D3D12
+			out.sync = BarrierSync::DepthStencil;
+			out.access = BarrierAccess::DepthStencilWrite;
+			out.layout = BarrierLayout::DepthStencilWrite;
 #endif
 #ifdef IGLO_VULKAN
 			out.sync = BarrierSync::Clear;
@@ -3378,19 +3391,19 @@ namespace ig
 	{
 		if (GetFormatInfo(image.GetFormat()).blockSize != 0)
 		{
-			return DetailedResult::Fail("Mipmap generation is not supported for block compression formats.");
+			return DetailedResult::Fail("Mip generation is not supported for block compression formats.");
 		}
 		else if (image.GetNumFaces() > 1)
 		{
-			return DetailedResult::Fail("Mipmap generation is not yet supported for cube maps and texture arrays.");
+			return DetailedResult::Fail("Mip generation is not yet supported for cube maps and texture arrays.");
 		}
 		else if (!IsPowerOf2(image.GetWidth()) || !IsPowerOf2(image.GetHeight()))
 		{
-			return DetailedResult::Fail("Mipmap generation is not yet supported for non power of 2 textures.");
+			return DetailedResult::Fail("Mip generation is not yet supported for non power of 2 textures.");
 		}
 		else if (cmdListType == CommandListType::Copy)
 		{
-			return DetailedResult::Fail("Mipmap generation can't be performed with a 'Copy' command list type.");
+			return DetailedResult::Fail("Mip generation can't be performed with a 'Copy' command list type.");
 		}
 
 		return DetailedResult::Success();
@@ -3429,15 +3442,16 @@ namespace ig
 		// Upload the first and largest mipmap to this texture
 		SetPixelsAtSubresource(cmd, image, 0, 0);
 
-		struct MipmapGenPushConstants
+		struct MipGenPushConstants
 		{
+			Vector2 inverseDestTextureSize;
+			Extent2D destTextureSize;
 			uint32_t srcTextureIndex = IGLO_UINT32_MAX;
 			uint32_t destTextureIndex = IGLO_UINT32_MAX;
 			uint32_t bilinearClampSamplerIndex = IGLO_UINT32_MAX;
 			uint32_t is_sRGB = 0;
-			Vector2 inverseDestTextureSize;
 		};
-		MipmapGenPushConstants pushConstants;
+		MipGenPushConstants pushConstants;
 		pushConstants.bilinearClampSamplerIndex = context.GetBilinearClampSamplerDescriptor().heapIndex;
 		pushConstants.is_sRGB = formatInfo.is_sRGB;
 
@@ -3450,8 +3464,9 @@ namespace ig
 			pushConstants.srcTextureIndex = srv.heapIndex;
 			pushConstants.destTextureIndex = uav.heapIndex;
 
-			Extent2D destDimensions = Image::CalculateMipExtent(image.GetExtent(), i + 1);
-			pushConstants.inverseDestTextureSize = Vector2(1.0f / (float)destDimensions.width, 1.0f / (float)destDimensions.height);
+			Extent2D destExtent = Image::CalculateMipExtent(image.GetExtent(), i + 1);
+			pushConstants.inverseDestTextureSize = Vector2(1.0f / (float)destExtent.width, 1.0f / (float)destExtent.height);
+			pushConstants.destTextureSize = destExtent;
 
 #ifdef IGLO_D3D12
 			auto device = context.GetD3D12Device();
@@ -3506,8 +3521,8 @@ namespace ig
 			cmd.SetPipeline(context.GetMipmapGenerationPipeline());
 			cmd.SetComputePushConstants(&pushConstants, sizeof(pushConstants));
 			cmd.DispatchCompute(
-				std::max(destDimensions.width / 8, 1U),
-				std::max(destDimensions.height / 8, 1U),
+				std::max(destExtent.width / 8, 1U),
+				std::max(destExtent.height / 8, 1U),
 				1);
 
 			cmd.AddTextureBarrierAtSubresource(*this, SimpleBarrier::ComputeShaderResource, SimpleBarrier::PixelShaderResource, 0, i);

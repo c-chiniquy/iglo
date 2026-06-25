@@ -8,7 +8,7 @@
 
 // -------------------- Version --------------------//
 #define IGLO_VERSION_MAJOR 0
-#define IGLO_VERSION_MINOR 6
+#define IGLO_VERSION_MINOR 7
 #define IGLO_VERSION_PATCH 0
 
 #define IGLO_STRINGIFY_HELPER(x) #x
@@ -1855,7 +1855,8 @@ namespace ig
 		ResolveSource,
 		ResolveDest,
 		ClearUnorderedAccess,
-		ClearInactiveRenderTarget, // For clearing render targets that aren't set as current render target.
+		ClearInactiveRenderTexture, // For clearing render textures that aren't active render targets.
+		ClearInactiveDepthBuffer, // For clearing depth buffers that aren't active render targets.
 	};
 	struct SimpleBarrierInfo
 	{
@@ -1920,6 +1921,10 @@ namespace ig
 		void BeginRenderPass(const Texture* renderTexture, const Texture* depthBuffer = nullptr, bool optimizedClear = false);
 		void BeginRenderPassMultiTarget(const Texture* const* renderTextures, uint32_t numRenderTextures,
 			const Texture* depthBuffer = nullptr, bool optimizedClear = false);
+
+#ifdef IGLO_VULKAN
+		void BeginRenderPass_Vulkan(const VulkanRenderInfo& info);
+#endif
 
 		void EndRenderPass();
 
@@ -2021,6 +2026,11 @@ namespace ig
 
 		void CopyTextureToReadableTexture(const Texture& source, const Texture& destination);
 		static void AssertPushConstants(const void* data, uint32_t sizeInBytes, uint32_t destOffsetInBytes);
+#ifdef IGLO_VULKAN
+		//NOTE: The returned VkRenderingInfo should be considered temporary because
+		//      it contains pointers that point to VulkanRenderInfo items.
+		static VkRenderingInfo ConstructTemporaryVkRenderingInfo(const VulkanRenderInfo&);
+#endif
 	};
 
 	struct TempBuffer

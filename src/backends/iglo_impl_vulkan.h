@@ -50,10 +50,14 @@ namespace ig
 
 	struct VulkanRenderInfo
 	{
-		VkRenderingInfo renderingInfo = {};
+		VkRenderingFlags flags = 0;
+		VkRect2D renderArea = {};
+		uint32_t layerCount = 0;
+		uint32_t viewMask = 0;
+		uint32_t colorAttachmentCount = 0;
 		std::array<VkRenderingAttachmentInfo, MAX_SIMULTANEOUS_RENDER_TARGETS> colorAttachments = {};
-		VkRenderingAttachmentInfo depthAttachment = {};
-		VkRenderingAttachmentInfo stencilAttachment = {};
+		std::optional<VkRenderingAttachmentInfo> depthAttachment;
+		std::optional<VkRenderingAttachmentInfo> stencilAttachment;
 	};
 
 	struct Impl_CommandList
@@ -70,13 +74,10 @@ namespace ig
 		uint32_t numTextureBarriers = 0;
 		uint32_t numBufferBarriers = 0;
 
-		std::array<const Texture*, MAX_SIMULTANEOUS_RENDER_TARGETS> currentRenderTextures = {};
-		uint32_t numCurrentRenderTextures = 0;
-		const Texture* currentDepthTexture = nullptr;
 		VkCommandBuffer currentCommandBuffer = VK_NULL_HANDLE;
 
 		bool activeRenderPass = false;
-		uint32_t nestedPauseCounter = false;
+		uint32_t nestedPauseCounter = 0;
 	};
 
 	struct Impl_Pipeline

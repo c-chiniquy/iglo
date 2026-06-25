@@ -1482,7 +1482,6 @@ namespace ig
 		impl.textureBarriers = {};
 		impl.bufferBarriers = {};
 
-		impl.currentRenderTextures = {};
 		impl.renderInfo = {};
 
 		return DetailedResult::Success();
@@ -1686,14 +1685,12 @@ namespace ig
 		if (numRenderTextures > 0) assert(renderTextures);
 		assert(numRenderTextures <= MAX_SIMULTANEOUS_RENDER_TARGETS && "too many render textures provided");
 
-		if (impl.activeRenderPass) Fatal("Can't begin new render pass while a previous render pass is active.");
-		if (impl.nestedPauseCounter > 0) Fatal("Can't begin new render pass while inside a pause/resume block.");
-		if (numRenderTextures == 0 && !depthBuffer) Fatal("Must specify at least one render target when beginning render pass.");
+		VulkanRenderInfo info = {};
 
-		impl.renderInfo.colorAttachments = {};
+		info.colorAttachmentCount = numRenderTextures;
 		for (uint32_t i = 0; i < numRenderTextures; i++)
 		{
-			VkRenderingAttachmentInfo& attachment = impl.renderInfo.colorAttachments[i];
+			VkRenderingAttachmentInfo& attachment = info.colorAttachments[i];
 			attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
 			attachment.imageView = renderTextures[i]->GetVulkanImageView_UAV_RTV_DSV();
 			attachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
@@ -1708,13 +1705,11 @@ namespace ig
 		}
 
 		bool hasStencil = false;
-		impl.renderInfo.depthAttachment = {};
-		impl.renderInfo.stencilAttachment = {};
 		if (depthBuffer)
 		{
 			hasStencil = GetFormatInfo(depthBuffer->GetFormat()).hasStencilComponent;
 
-			impl.renderInfo.depthAttachment =
+			info.depthAttachment =
 			{
 				.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
 				.imageView = depthBuffer->GetVulkanImageView_UAV_RTV_DSV(),
@@ -1724,7 +1719,7 @@ namespace ig
 			};
 			if (hasStencil)
 			{
-				impl.renderInfo.stencilAttachment =
+				info.stencilAttachment =
 				{
 					 .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
 					 .imageView = depthBuffer->GetVulkanImageView_UAV_RTV_DSV(),
@@ -1737,46 +1732,67 @@ namespace ig
 			if (optimizedClear)
 			{
 				ClearValue clearValue = depthBuffer->GetOptimizedClearValue();
-				impl.renderInfo.depthAttachment.clearValue.depthStencil.depth = clearValue.depth;
-				if (hasStencil) impl.renderInfo.stencilAttachment.clearValue.depthStencil.stencil = clearValue.stencil;
+				info.depthAttachment.value().clearValue.depthStencil.depth = clearValue.depth;
+				if (hasStencil) info.stencilAttachment.value().clearValue.depthStencil.stencil = clearValue.stencil;
 			}
 
 		}
 
-		impl.renderInfo.renderingInfo = {};
-		impl.renderInfo.renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
-		impl.renderInfo.renderingInfo.renderArea.offset = { 0, 0 };
-		impl.renderInfo.renderingInfo.renderArea.extent =
+		if (numRenderTextures > 0)
 		{
-			(numRenderTextures > 0) ? renderTextures[0]->GetWidth() : depthBuffer->GetWidth(),
-			(numRenderTextures > 0) ? renderTextures[0]->GetHeight() : depthBuffer->GetHeight()
-		};
-		impl.renderInfo.renderingInfo.layerCount = 1;
-		impl.renderInfo.renderingInfo.colorAttachmentCount = numRenderTextures;
-		impl.renderInfo.renderingInfo.pColorAttachments = impl.renderInfo.colorAttachments.data();
-		impl.renderInfo.renderingInfo.pDepthAttachment = depthBuffer ? &impl.renderInfo.depthAttachment : nullptr;
-		impl.renderInfo.renderingInfo.pStencilAttachment = (hasStencil) ? &impl.renderInfo.stencilAttachment : nullptr;
+			info.renderArea.extent = { renderTextures[0]->GetWidth(), renderTextures[0]->GetHeight() };
+		}
+		else if (depthBuffer)
+		{
+			info.renderArea.extent = { depthBuffer->GetWidth(),depthBuffer->GetHeight() };
+		}
+		info.layerCount = 1;
 
-		vkCmdBeginRendering(impl.currentCommandBuffer, &impl.renderInfo.renderingInfo);
+		BeginRenderPass_Vulkan(info);
+	}
 
-		// It's important we don't clear these render targets again when pausing and resuming render passes later.
-		for (uint32_t i = 0; i < numRenderTextures; i++)
+	void CommandList::BeginRenderPass_Vulkan(const VulkanRenderInfo& info)
+	{
+		assert(info.colorAttachmentCount <= MAX_SIMULTANEOUS_RENDER_TARGETS && "too many render textures provided");
+		if (impl.activeRenderPass) Fatal("Can't begin new render pass while a previous render pass is active.");
+		if (impl.nestedPauseCounter > 0) Fatal("Can't begin new render pass while inside a pause/resume block.");
+		if (info.colorAttachmentCount == 0 && !info.depthAttachment.has_value() && !info.stencilAttachment.has_value())
+		{
+			Fatal("Must specify at least one render target when beginning render pass.");
+		}
+
+		impl.renderInfo = info;
+
+		VkRenderingInfo tempInfo = ConstructTemporaryVkRenderingInfo(impl.renderInfo);
+		vkCmdBeginRendering(impl.currentCommandBuffer, &tempInfo);
+
+		// Don't clear the attachments again when pausing and resuming render passes later.
+		for (uint32_t i = 0; i < impl.renderInfo.colorAttachmentCount; i++)
 		{
 			impl.renderInfo.colorAttachments[i].loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
 		}
-		if (depthBuffer) impl.renderInfo.depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
-		if (hasStencil) impl.renderInfo.stencilAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
-
-		// Remember which render targets are active
-		impl.numCurrentRenderTextures = numRenderTextures;
-		for (uint32_t i = 0; i < numRenderTextures; i++)
-		{
-			impl.currentRenderTextures[i] = renderTextures[i];
-		}
-		impl.currentDepthTexture = depthBuffer;
+		if (impl.renderInfo.depthAttachment.has_value()) impl.renderInfo.depthAttachment.value().loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+		if (impl.renderInfo.stencilAttachment.has_value()) impl.renderInfo.stencilAttachment.value().loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
 
 		// Render pass has begun
 		impl.activeRenderPass = true;
+	}
+
+	VkRenderingInfo CommandList::ConstructTemporaryVkRenderingInfo(const VulkanRenderInfo& info)
+	{
+		VkRenderingInfo out =
+		{
+			.sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
+			.flags = info.flags,
+			.renderArea = info.renderArea,
+			.layerCount = info.layerCount,
+			.viewMask = info.viewMask,
+			.colorAttachmentCount = info.colorAttachmentCount,
+			.pColorAttachments = info.colorAttachments.data(),
+			.pDepthAttachment = info.depthAttachment.has_value() ? &info.depthAttachment.value() : nullptr,
+			.pStencilAttachment = info.stencilAttachment.has_value() ? &info.stencilAttachment.value() : nullptr,
+		};
+		return out;
 	}
 
 	void CommandList::Impl_ClearColor(const Texture& renderTexture, Color color, uint32_t numRects, const IntRect* rects)
@@ -1785,9 +1801,9 @@ namespace ig
 		std::optional<uint32_t> attachmentIndex;
 		if (impl.activeRenderPass)
 		{
-			for (uint32_t i = 0; i < impl.numCurrentRenderTextures; i++)
+			for (uint32_t i = 0; i < impl.renderInfo.colorAttachmentCount; i++)
 			{
-				if (impl.currentRenderTextures[i] == &renderTexture)
+				if (impl.renderInfo.colorAttachments[i].imageView == renderTexture.GetVulkanImageView_UAV_RTV_DSV())
 				{
 					attachmentIndex = i;
 					break;
@@ -1846,7 +1862,18 @@ namespace ig
 	void CommandList::Impl_ClearDepth(const Texture& depthBuffer, float depth, byte stencil, bool clearDepth, bool clearStencil,
 		uint32_t numRects, const IntRect* rects)
 	{
-		if (impl.activeRenderPass && (impl.currentDepthTexture == &depthBuffer))
+		bool isActiveDepthBuffer = false;
+		if (impl.activeRenderPass)
+		{
+			if (impl.renderInfo.depthAttachment.has_value())
+			{
+				if (impl.renderInfo.depthAttachment.value().imageView == depthBuffer.GetVulkanImageView_UAV_RTV_DSV())
+				{
+					isActiveDepthBuffer = true;
+				}
+			}
+		}
+		if (isActiveDepthBuffer)
 		{
 			VkClearAttachment clearAttachment = {};
 			clearAttachment.aspectMask = (clearDepth ? VK_IMAGE_ASPECT_DEPTH_BIT : 0) | (clearStencil ? VK_IMAGE_ASPECT_STENCIL_BIT : 0);
@@ -1875,9 +1902,13 @@ namespace ig
 		}
 		else
 		{
+			// Validation will complain if we attempt to clear a stencil that doesn't exist
+			const bool hasStencil = GetFormatInfo(depthBuffer.GetFormat()).hasStencilComponent;
+			const bool safeClearStencil = clearStencil && hasStencil;
+
 			VkClearDepthStencilValue clearValue = { depth, stencil };
 			VkImageSubresourceRange range = {};
-			range.aspectMask = (clearDepth ? VK_IMAGE_ASPECT_DEPTH_BIT : 0) | (clearStencil ? VK_IMAGE_ASPECT_STENCIL_BIT : 0);
+			range.aspectMask = (clearDepth ? VK_IMAGE_ASPECT_DEPTH_BIT : 0) | (safeClearStencil ? VK_IMAGE_ASPECT_STENCIL_BIT : 0);
 			range.baseMipLevel = 0;
 			range.levelCount = 1;
 			range.baseArrayLayer = 0;
@@ -2225,8 +2256,6 @@ namespace ig
 		vkCmdEndRendering(impl.currentCommandBuffer);
 
 		impl.activeRenderPass = false;
-		impl.numCurrentRenderTextures = 0;
-		impl.currentDepthTexture = nullptr;
 	}
 
 	void CommandList::SafePauseRenderPass()
@@ -2245,7 +2274,8 @@ namespace ig
 
 		if (impl.nestedPauseCounter == 0 && impl.activeRenderPass)
 		{
-			vkCmdBeginRendering(impl.currentCommandBuffer, &impl.renderInfo.renderingInfo);
+			VkRenderingInfo tempInfo = ConstructTemporaryVkRenderingInfo(impl.renderInfo);
+			vkCmdBeginRendering(impl.currentCommandBuffer, &tempInfo);
 		}
 	}
 
@@ -3529,7 +3559,7 @@ namespace ig
 			{
 				return DetailedResult::Fail(VulkanErrorMsg("vkCreateXlibSurfaceKHR", result));
 			}
-		}
+	}
 #endif
 
 		// Find most suitable physical device
@@ -3775,7 +3805,7 @@ namespace ig
 		}
 
 		return DetailedResult::Success();
-	}
+}
 
 	void IGLOContext::Impl_DestroyGraphicsDevice()
 	{

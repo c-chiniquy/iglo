@@ -2513,12 +2513,6 @@ namespace ig
 		}
 	}
 
-	bool IsPowerOf2(uint64_t value)
-	{
-		if (value == 0) return false;
-		return ((value & (value - 1)) == 0);
-	}
-
 	float Lerp(float a, float b, float t)
 	{
 		if (t <= 0.0f) return a;

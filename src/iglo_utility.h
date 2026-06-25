@@ -856,7 +856,7 @@ namespace ig
 		// 50% chance of returning true.
 		bool NextBool();
 
-		// 'probability' must be in the range 0.0f to 1.0f. Higher probability means higher chance of returning true.
+		// 'probability' must be in the range [0.0f, 1.0f]. Higher probability means higher chance of returning true.
 		// Example: 0.2f = returns true 20% of the time.
 		bool NextProbability(float probability);
 
@@ -893,9 +893,14 @@ namespace ig
 
 	// The alignment is required to be a power of 2.
 	uint64_t AlignUp(uint64_t value, uint64_t alignment);
-	bool IsPowerOf2(uint64_t value);
 	float Lerp(float a, float b, float t);
 	double Lerp(double a, double b, double t);
+
+	constexpr bool IsPowerOf2(uint64_t value)
+	{
+		if (value == 0) return false;
+		return ((value & (value - 1)) == 0);
+	}
 
 } // namespace ig
 

@@ -1,11 +1,12 @@
 
 struct PushConstants
 {
+	float2 inverseDestTextureSize;
+	uint2 destTextureSize;
 	uint srcTextureIndex;
 	uint destTextureIndex;
 	uint bilinearClampSamplerIndex;
 	uint is_sRGB; // 1 if texture is sRGB, 0 otherwise
-	float2 inverseDestTextureSize;
 };
 
 [[vk::push_constant]] ConstantBuffer<PushConstants> pushConstants : register(b0);
@@ -19,6 +20,9 @@ float3 LinearToSRGB(float3 linearColor)
 [numthreads( 8, 8, 1)]
 void CSMain(uint3 id : SV_DispatchThreadID)
 {
+	if (id.x >= pushConstants.destTextureSize.x ||
+		id.y >= pushConstants.destTextureSize.y) return;
+
 	Texture2D<float4> srcTexture = ResourceDescriptorHeap[pushConstants.srcTextureIndex];
 	RWTexture2D<float4> destTexture = ResourceDescriptorHeap[pushConstants.destTextureIndex];
 	SamplerState bilinearClampSampler = SamplerDescriptorHeap[pushConstants.bilinearClampSamplerIndex];
