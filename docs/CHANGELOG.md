@@ -12,12 +12,16 @@
   - Added `CommandList::BeginRenderPass_Vulkan(const VulkanRenderInfo&)`.
     This function gives you finer control over the render pass parameters.
   - Added support for copying a texture subresource to a Readable texture.
+  - Added `ig::LogLimited()`
 - Improvements:
   - Added bounds checking in mip gen shader.
   - `bool IsPowerOf2(uint64_t value)` is now constexpr.
+  - Optimized glyph placement and dynamic font texture growth.
+  - There is now a hard limit to how much a dynamic font texture can grow (16k x 16k).
 - Bug fixes:
   - Fixed validation error in `ClearDepth()` on Vulkan when attempting to clear a stencil of an inactive non-stencil depth buffer.
   - Fixed Vulkan bug where Texture::ReadPixels() would read the pixels incorrectly (wrong row pitch).
+  - Fixed Vulkan bug where `CopyTempBufferToTexture()` and `CopyTempBufferToTextureSubresource()` would copy incorrectly in some cases.
 
 ## v0.6.0
 
