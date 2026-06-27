@@ -13,6 +13,7 @@
 
 namespace ig
 {
+	constexpr uint32_t MaxDynamicFontGrowthTextureSize = 16384;
 
 	PrebakedFontData GetDefaultFont()
 	{
@@ -1190,17 +1191,26 @@ namespace ig
 		// Check if glyph can fit on the right side of this rectangle
 		IntRect extended = bestRect;
 		extended.right += glyphWidth;
+		const uint32_t cappedMaxTextureSize = std::min(MaxDynamicFontGrowthTextureSize, context.GetGraphicsSpecs().maxTextureDimension);
 		while ((int64_t)extended.right > (int64_t)newWidth || (int64_t)extended.bottom > (int64_t)newHeight)
 		{
 			// Glyph doesn't fit. Expand texture size until it fits or reaches max texture size.
 			uint32_t powerOf2 = 1;
-			const uint32_t maxTextureSize = context.GetGraphicsSpecs().maxTextureDimension;
 			while (true)
 			{
-				if (powerOf2 > maxTextureSize) // Reached max texture size
+				if (powerOf2 > cappedMaxTextureSize) // Reached max texture size
 				{
-					Log(LogType::Warning, ToString("Failed to load new glyph for font '", fontDesc.fontName,
-						"'. Reason: Reached max texture size (", maxTextureSize, ")."));
+					static int numWarningLogs = 0;
+					numWarningLogs++;
+					if (numWarningLogs <= 10)
+					{
+						Log(LogType::Warning, ToString("Failed to load new glyph for font '", fontDesc.fontName,
+							"'. Reason: Reached max dynamic font texture size (", cappedMaxTextureSize, ")."));
+						if (numWarningLogs == 10)
+						{
+							Log(LogType::Warning, "Last warning was printed 10 times. It will be ignored from now on.");
+						}
+					}
 					return IntRect(0, 0, 0, 0);
 				}
 				if (powerOf2 > newWidth) break;
@@ -1218,10 +1228,7 @@ namespace ig
 			newPixels.resize((size_t)newWidth * newHeight, 0);
 			for (uint32_t y = 0; y < page.height; y++)
 			{
-				for (uint32_t x = 0; x < page.width; x++)
-				{
-					newPixels[((size_t)y * newWidth) + x] = page.pixels[((size_t)y * page.width) + x];
-				}
+				memcpy(&newPixels[(size_t)y * newWidth], &page.pixels[(size_t)y * page.width], page.width);
 			}
 			page.pixels.swap(newPixels);
 			page.width = newWidth;
@@ -1248,17 +1255,16 @@ namespace ig
 		if (isPrebaked) return;
 		if (bitmapWidth == 0 || bitmapHeight == 0 || !bitmap) return;
 
+		assert(
+			(size_t)texPosY + bitmapHeight <= page.height &&
+			(size_t)texPosX + bitmapWidth <= page.width);
+
 		// Write pixels
-		for (int y = 0; y < bitmapHeight; y++)
+		for (uint32_t y = 0; y < bitmapHeight; y++)
 		{
-			int pixelY = texPosY + y;
-			for (int x = 0; x < bitmapWidth; x++)
-			{
-				int pixelX = texPosX + x;
-				int p = pixelX + (page.width * pixelY);
-				byte alpha = bitmap[x + (bitmapWidth * y)];
-				page.pixels[p] = alpha;
-			}
+			size_t destPixelX = (size_t)texPosX;
+			size_t destPixelY = (size_t)texPosY + y;
+			memcpy(&page.pixels[destPixelX + ((size_t)page.width * destPixelY)], &bitmap[bitmapWidth * y], bitmapWidth);
 		}
 
 		page.dirty = true;
