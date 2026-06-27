@@ -2123,7 +2123,7 @@ namespace ig
 		const uint32_t numFaces = source.GetNumFaces();
 		const uint32_t numMips = source.GetMipLevels();
 		std::vector<VkImageCopy> regionList;
-		regionList.reserve(numFaces * numMips);
+		regionList.reserve((size_t)numFaces * numMips);
 
 		for (uint32_t face = 0; face < numFaces; face++)
 		{
@@ -2198,22 +2198,29 @@ namespace ig
 	void CommandList::CopyTempBufferToTexture(const TempBuffer& source, const Texture& destination)
 	{
 		std::vector<VkBufferImageCopy> regionList;
-		regionList.reserve(destination.GetNumFaces() * destination.GetMipLevels());
+		regionList.reserve((size_t)destination.GetNumFaces() * destination.GetMipLevels());
 
-		FormatInfo formatInfo = GetFormatInfo(destination.GetFormat());
-		bool blockCompressed = (formatInfo.blockSize > 0);
-		uint32_t texelBlockSize = blockCompressed ? 4 : 1;
+		const FormatInfo formatInfo = GetFormatInfo(destination.GetFormat());
+		const bool blockCompressed = (formatInfo.blockSize > 0);
+		const uint32_t texelBlockSize = blockCompressed ? 4 : 1;
+		const uint32_t bytesPerBlock = blockCompressed ? formatInfo.blockSize : formatInfo.bytesPerPixel;
+		const uint32_t textureRowPitch = context.GetGraphicsSpecs().bufferPlacementAlignments.textureRowPitch;
 
 		uint64_t vkBufferOffset = source.offset;
 		for (uint32_t face = 0; face < destination.GetNumFaces(); face++)
 		{
 			for (uint32_t mip = 0; mip < destination.GetMipLevels(); mip++)
 			{
-				Extent2D mipExtent = Image::CalculateMipExtent(destination.GetExtent(), mip);
+				const Extent2D mipExtent = Image::CalculateMipExtent(destination.GetExtent(), mip);
+				const uint64_t basicRowPitch = Image::CalculateMipRowPitch(destination.GetExtent(), destination.GetFormat(), mip);
+				const uint64_t basicMipSize = Image::CalculateMipSize(destination.GetExtent(), destination.GetFormat(), mip);
+				const uint64_t alignedRowPitch = AlignUp(basicRowPitch, textureRowPitch);
+				const uint64_t numScanLines = basicMipSize / basicRowPitch;
+				assert(alignedRowPitch % bytesPerBlock == 0 && "aligned row pitch must be a whole number of texel blocks");
 
 				VkBufferImageCopy region = {};
 				region.bufferOffset = vkBufferOffset;
-				region.bufferRowLength = (uint32_t)AlignUp(mipExtent.width, texelBlockSize);
+				region.bufferRowLength = (uint32_t)((alignedRowPitch / bytesPerBlock) * texelBlockSize);
 				region.bufferImageHeight = (uint32_t)AlignUp(mipExtent.height, texelBlockSize);
 				region.imageSubresource.aspectMask = GetFullImageAspect(destination.GetFormat());
 				region.imageSubresource.mipLevel = mip;
@@ -2224,10 +2231,6 @@ namespace ig
 
 				regionList.push_back(region);
 
-				uint64_t basicRowPitch = Image::CalculateMipRowPitch(destination.GetExtent(), destination.GetFormat(), mip);
-				uint64_t basicMipSize = Image::CalculateMipSize(destination.GetExtent(), destination.GetFormat(), mip);
-				uint64_t alignedRowPitch = AlignUp(basicRowPitch, context.GetGraphicsSpecs().bufferPlacementAlignments.textureRowPitch);
-				uint64_t numScanLines = basicMipSize / basicRowPitch;
 				vkBufferOffset += (alignedRowPitch * numScanLines);
 			}
 		}
@@ -2239,14 +2242,19 @@ namespace ig
 
 	void CommandList::CopyTempBufferToTextureSubresource(const TempBuffer& source, const Texture& destination, uint32_t destFaceIndex, uint32_t destMipIndex)
 	{
-		Extent2D mipExtent = Image::CalculateMipExtent(destination.GetExtent(), destMipIndex);
-		FormatInfo formatInfo = GetFormatInfo(destination.GetFormat());
-		bool blockCompressed = (formatInfo.blockSize > 0);
-		uint32_t texelBlockSize = blockCompressed ? 4 : 1;
+		const Extent2D mipExtent = Image::CalculateMipExtent(destination.GetExtent(), destMipIndex);
+		const FormatInfo formatInfo = GetFormatInfo(destination.GetFormat());
+		const bool blockCompressed = (formatInfo.blockSize > 0);
+		const uint32_t texelBlockSize = blockCompressed ? 4 : 1;
+		const uint32_t bytesPerBlock = blockCompressed ? formatInfo.blockSize : formatInfo.bytesPerPixel;
+		const uint32_t textureRowPitch = context.GetGraphicsSpecs().bufferPlacementAlignments.textureRowPitch;
+		const uint64_t basicRowPitch = Image::CalculateMipRowPitch(destination.GetExtent(), destination.GetFormat(), destMipIndex);
+		const uint64_t alignedRowPitch = AlignUp(basicRowPitch, textureRowPitch);
+		assert(alignedRowPitch % bytesPerBlock == 0 && "aligned row pitch must be a whole number of texel blocks");
 
 		VkBufferImageCopy region = {};
 		region.bufferOffset = source.offset;
-		region.bufferRowLength = (uint32_t)AlignUp(mipExtent.width, texelBlockSize);
+		region.bufferRowLength = (uint32_t)((alignedRowPitch / bytesPerBlock) * texelBlockSize);
 		region.bufferImageHeight = (uint32_t)AlignUp(mipExtent.height, texelBlockSize);
 		region.imageSubresource.aspectMask = GetFullImageAspect(destination.GetFormat());
 		region.imageSubresource.mipLevel = destMipIndex;
