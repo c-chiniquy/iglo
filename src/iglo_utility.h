@@ -118,7 +118,7 @@ namespace ig
 
 	// Logs a debug message and increments 'counter', but only while 'counter' is below 'maxLogCount'.
 	// If 'counter' reaches 'maxLogCount', it will log an additional message saying it will stop logging this message from now on.
-	void LogLimited(uint32_t& counter, LogType type, const std::string& message, uint32_t maxLogCount = 10);
+	void LogLimited(uint32_t& in_out_counter, LogType type, const std::string& message, uint32_t maxLogCount = 10);
 
 	// Logs a debug message (FatalError) and aborts the app
 	[[noreturn]] void Fatal(const std::string& message);
