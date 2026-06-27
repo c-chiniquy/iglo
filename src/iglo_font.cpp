@@ -1200,17 +1200,12 @@ namespace ig
 			{
 				if (powerOf2 > cappedMaxTextureSize) // Reached max texture size
 				{
-					static int numWarningLogs = 0;
-					numWarningLogs++;
-					if (numWarningLogs <= 10)
-					{
-						Log(LogType::Warning, ToString("Failed to load new glyph for font '", fontDesc.fontName,
-							"'. Reason: Reached max dynamic font texture size (", cappedMaxTextureSize, ")."));
-						if (numWarningLogs == 10)
-						{
-							Log(LogType::Warning, "Last warning was printed 10 times. It will be ignored from now on.");
-						}
-					}
+					static uint32_t logCounter = 0;
+					LogLimited(logCounter, LogType::Warning, ToString
+					(
+						"Failed to load new glyph for font '", fontDesc.fontName,
+						"'. Reason: Reached max dynamic font texture size (", cappedMaxTextureSize, ")."
+					));
 					return IntRect(0, 0, 0, 0);
 				}
 				if (powerOf2 > newWidth) break;

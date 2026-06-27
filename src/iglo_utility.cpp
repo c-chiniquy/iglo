@@ -70,6 +70,22 @@ namespace ig
 		}
 	}
 
+	void LogLimited(uint32_t& counter, LogType type, const std::string& message, uint32_t maxLogCount)
+	{
+		if (counter >= maxLogCount) return;
+
+		counter++;
+		
+		if (counter >= maxLogCount)
+		{
+			Log(type, ToString(message, "\n(This message was logged ", maxLogCount, " times and will not be logged again.)"));
+		}
+		else
+		{
+			Log(type, message);
+		}
+	}
+
 	void SetLogCallback(CallbackLog logFunc)
 	{
 		logCallback = logFunc;

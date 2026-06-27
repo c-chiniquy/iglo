@@ -116,6 +116,10 @@ namespace ig
 	// You can decide how a debug message is handled with SetLogCallback(myFunc).
 	void Log(LogType type, const std::string& message);
 
+	// Logs a debug message and increments 'counter', but only while 'counter' is below 'maxLogCount'.
+	// If 'counter' reaches 'maxLogCount', it will log an additional message saying it will stop logging this message from now on.
+	void LogLimited(uint32_t& counter, LogType type, const std::string& message, uint32_t maxLogCount = 10);
+
 	// Logs a debug message (FatalError) and aborts the app
 	[[noreturn]] void Fatal(const std::string& message);
 
