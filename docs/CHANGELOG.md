@@ -20,8 +20,8 @@
   - There is now a hard limit to how much a dynamic font texture can grow (16k x 16k).
 - Bug fixes:
   - Fixed validation error in `ClearDepth()` on Vulkan when attempting to clear a stencil of an inactive non-stencil depth buffer.
-  - Fixed Vulkan bug where Texture::ReadPixels() would read the pixels incorrectly (wrong row pitch).
-  - Fixed Vulkan bug where `CopyTempBufferToTexture()` and `CopyTempBufferToTextureSubresource()` would copy incorrectly in some cases.
+  - Fixed Vulkan bug where `Texture::ReadPixels()` would read the pixels incorrectly (wrong row pitch).
+  - Fixed Vulkan bug where `CopyTempBufferToTexture()` and `CopyTempBufferToTextureSubresource()` would copy incorrectly on devices where `bufferPlacementAlignments.textureRowPitch` > 1.
 
 ## v0.6.0
 
