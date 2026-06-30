@@ -305,16 +305,17 @@ private:
 		{
 			defaultFont = ig::Font::CreatePrebaked(*context, *cmd, ig::GetDefaultFont());
 
-			buttonTexture = ig::Texture::LoadFromFile(*context, *cmd, resourceFolder + "button.png");
-			spriteTexture = ig::Texture::LoadFromFile(*context, *cmd, resourceFolder + "sprite-animation.png");
-			leafTexture = ig::Texture::LoadFromFile(*context, *cmd, resourceFolder + "transparent-leaf.png");
-			woodTexture = ig::Texture::LoadFromFile(*context, *cmd, resourceFolder + "wood-planks.jpg");
+			const bool genMips = true;
+			buttonTexture = ig::Texture::LoadFromFile(*context, *cmd, resourceFolder + "button.png", genMips);
+			spriteTexture = ig::Texture::LoadFromFile(*context, *cmd, resourceFolder + "sprite-animation.png", genMips);
+			leafTexture = ig::Texture::LoadFromFile(*context, *cmd, resourceFolder + "transparent-leaf.png", genMips);
+			woodTexture = ig::Texture::LoadFromFile(*context, *cmd, resourceFolder + "wood-planks.jpg", genMips);
 
-			mono16bitTexture = ig::Texture::LoadFromFile(*context, *cmd, resourceFolder + "16-bit-mono.png", false);
-			duo16bitTexture = ig::Texture::LoadFromFile(*context, *cmd, resourceFolder + "16-bit-duo.png", false);
-			rgba16bitTexture = ig::Texture::LoadFromFile(*context, *cmd, resourceFolder + "16-bit-RGBA.png", false);
-			hdrTexture = ig::Texture::LoadFromFile(*context, *cmd, resourceFolder + "hdr.hdr");
-			appleTexture = ig::Texture::LoadFromFile(*context, *cmd, resourceFolder + "green-apple.png");
+			mono16bitTexture = ig::Texture::LoadFromFile(*context, *cmd, resourceFolder + "16-bit-mono.png", genMips);
+			duo16bitTexture = ig::Texture::LoadFromFile(*context, *cmd, resourceFolder + "16-bit-duo.png", genMips);
+			rgba16bitTexture = ig::Texture::LoadFromFile(*context, *cmd, resourceFolder + "16-bit-RGBA.png", genMips);
+			hdrTexture = ig::Texture::LoadFromFile(*context, *cmd, resourceFolder + "hdr.hdr", genMips);
+			appleTexture = ig::Texture::LoadFromFile(*context, *cmd, resourceFolder + "green-apple.png", genMips);
 
 			// Create the quad index buffer that's used by the custom batch types that use indexing
 			std::vector<uint16_t> indices;

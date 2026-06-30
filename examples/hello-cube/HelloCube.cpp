@@ -210,7 +210,7 @@ private:
 
 		cmd->Begin();
 		{
-			cubeTexture = ig::Texture::LoadFromFile(*context, *cmd, resourceFolder + "wood-planks.jpg");
+			cubeTexture = ig::Texture::LoadFromFile(*context, *cmd, resourceFolder + "wood-planks.jpg", true);
 			if (!cubeTexture)
 			{
 				PopupMessage("Failed to load texture.", "Error", context.get());

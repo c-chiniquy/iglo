@@ -399,7 +399,7 @@ private:
 			{
 				cube = GenerateCubeMesh(*cmd, 1.0f);
 				skybox = GenerateSkyboxMesh(*cmd, 10.0f);
-				skyboxCubemapTexture = ig::Texture::LoadFromFile(*context, *cmd, resourceFolder + "cubemap.dds", false);
+				skyboxCubemapTexture = ig::Texture::LoadFromFile(*context, *cmd, resourceFolder + "cubemap.dds");
 
 				const uint32_t numVertices = 6;
 				Vertex vertices[numVertices] =

@@ -912,7 +912,6 @@ namespace ig
 		uint32_t GetHeight() const { return desc.extent.height; }
 		Format GetFormat() const { return desc.format; }
 		uint32_t GetMipLevels() const { return desc.mipLevels; }
-		bool HasMipmaps() const { return desc.mipLevels > 1; }
 		uint32_t GetNumFaces() const { return desc.numFaces; }
 		bool IsCubemap() const { return desc.isCubemap; }
 
@@ -938,7 +937,7 @@ namespace ig
 		// Gets the byte size of this image (including all faces and mipLevels).
 		size_t GetSize() const { return size; }
 
-		// Gets the byte size of a mipmap slice. 'mipIndex' is zero based.
+		// Gets the byte size of a mip slice. 'mipIndex' is zero based.
 		size_t GetMipSize(uint32_t mipIndex) const;
 		uint32_t GetMipRowPitch(uint32_t mipIndex) const;
 		Extent2D GetMipExtent(uint32_t mipIndex) const;
@@ -1055,13 +1054,13 @@ namespace ig
 		static std::unique_ptr<Texture> Create(const IGLOContext&, const TextureDesc&);
 
 		static std::unique_ptr<Texture> LoadFromFile(const IGLOContext&, CommandList&,
-			const std::string& filename, bool generateMipmaps = true, bool sRGB = false);
+			const std::string& filename, bool generateMips = false, bool sRGB = false);
 
 		static std::unique_ptr<Texture> LoadFromMemory(const IGLOContext&, CommandList&,
-			const byte* fileData, size_t numBytes, bool generateMipmaps = true, bool sRGB = false);
+			const byte* fileData, size_t numBytes, bool generateMips = false, bool sRGB = false);
 
 		static std::unique_ptr<Texture> LoadFromMemory(const IGLOContext&, CommandList&,
-			const Image& image, bool generateMipmaps = true);
+			const Image& image, bool generateMips = false);
 
 		// Creates a non-owning wrapper for existing graphics API resources and descriptors.
 		// NOTE: This texture has no ownership over its resources/descriptors, and will not free them when destroyed.
@@ -2670,10 +2669,11 @@ namespace ig
 		// Gets the max allowed MSAA per texture format.
 		MSAA GetMaxMultiSampleCount(Format textureFormat) const;
 
-		const Pipeline& GetMipmapGenerationPipeline() const { return *genMipsPipeline; }
+		const Pipeline& GetPipeline_GenerateMips_Pow2() const { return *pipeline_genMips_pow2; }
+		const Pipeline& GetPipeline_GenerateMips_NonPow2() const { return *pipeline_genMips_nonPow2; }
 
-		// The bilinear clamp sampler is needed for the mipmap generation pipeline.
-		Descriptor GetBilinearClampSamplerDescriptor() const { return bilinearClampSampler->GetDescriptor(); }
+		// Bilinear clamp sampler is needed for the mip gen shaders
+		Descriptor GetSampler_BilinearClamp() const { return sampler_bilinearClamp->GetDescriptor(); }
 
 		// All queried memory info (RAM/VRAM) are estimations and should only be used for debugging/warnings.
 		SystemMemoryInfo QuerySystemMemoryInfo();
@@ -2784,8 +2784,9 @@ namespace ig
 		uint32_t numFramesInFlight = 0; // Can change at runtime. Can't be higher than maxFramesInFlight.
 		uint32_t frameIndex = 0; // always capped by numFramesInFlight
 
-		std::unique_ptr<Pipeline> genMipsPipeline;
-		std::unique_ptr<Sampler> bilinearClampSampler; // For the mipmap generation compute shader
+		std::unique_ptr<Pipeline> pipeline_genMips_pow2;
+		std::unique_ptr<Pipeline> pipeline_genMips_nonPow2;
+		std::unique_ptr<Sampler> sampler_bilinearClamp; // For the mip gen shaders
 
 		mutable std::unique_ptr<DescriptorHeap> descriptorHeap;
 		mutable std::unique_ptr<UploadHeap> uploadHeap;
