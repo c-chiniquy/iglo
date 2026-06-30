@@ -7,17 +7,21 @@
 
 - Major/breaking changes:
   - Split `SimpleBarrier::ClearInactiveRenderTarget` into `ClearInactiveRenderTexture` and `ClearInactiveDepthBuffer`.
-  - Renamed `Image::GetMipPixels()` to `Image::GetPixelsAtSubresource()`
+  - Renamed `Image::GetMipPixels()` to `Image::GetPixelsAtSubresource()`.
+  - `generateMips=false` is now the default when loading textures.
+    Passing `generateMips=true` for textures that already have >= 2 mips will skip mip gen and log a warning message.
 - New features:
   - Added `CommandList::BeginRenderPass_Vulkan(const VulkanRenderInfo&)`.
     This function gives you finer control over the render pass parameters.
   - Added support for copying a texture subresource to a Readable texture.
-  - Added `ig::LogLimited()`
+  - Added `ig::LogLimited()`.
+  - iglo can now generate mips for non-pow-2 textures.
 - Improvements:
-  - Added bounds checking in mip gen shader.
+  - All mip gen shaders now do bounds checking (Vulkan needs it).
   - `bool IsPowerOf2(uint64_t value)` is now constexpr.
-  - Optimized glyph placement and dynamic font texture growth.
+  - Optimized glyph placement and dynamic font texture growth (now uses memcpy).
   - There is now a hard limit to how much a dynamic font texture can grow (16k x 16k).
+  - iglo can now generate up to 4 mips per dispatch for pow-2 textures (optimization).
 - Bug fixes:
   - Fixed validation error in `ClearDepth()` on Vulkan when attempting to clear a stencil of an inactive non-stencil depth buffer.
   - Fixed Vulkan bug where `Texture::ReadPixels()` would read the pixels incorrectly (wrong row pitch).
