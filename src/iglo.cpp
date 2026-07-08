@@ -921,12 +921,20 @@ namespace ig
 		// Advance to next frame
 		frameIndex = (frameIndex + 1) % maxFrames;
 
+#ifndef NDEBUG
+		context.DebugIncrementNumRecordingCommandLists();
+#endif
+
 		Impl_Begin();
 	}
 
 	void CommandList::End()
 	{
 		Impl_End();
+
+#ifndef NDEBUG
+		context.DebugDecrementNumRecordingCommandLists();
+#endif
 	}
 
 	SimpleBarrierInfo GetSimpleBarrierInfo(SimpleBarrier simpleBarrier, CommandListType queueType)
@@ -2863,6 +2871,14 @@ namespace ig
 
 	void IGLOContext::FreeAllTempResources()
 	{
+#ifndef NDEBUG
+		if (debugNumRecordingCommandLists > 0)
+		{
+			Fatal(
+				"Don't wait for idle device (or wait for commands to finish) while a command list is actively being recorded!"
+				" This can cause temporary resources belonging to a command list to be freed before those commands are submitted.");
+		}
+#endif
 		descriptorHeap->FreeAllTempResources();
 		uploadHeap->FreeAllTempPages();
 		for (size_t i = 0; i < endOfFrame.size(); i++)

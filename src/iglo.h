@@ -9,7 +9,7 @@
 // -------------------- Version --------------------//
 #define IGLO_VERSION_MAJOR 0
 #define IGLO_VERSION_MINOR 7
-#define IGLO_VERSION_PATCH 1
+#define IGLO_VERSION_PATCH 2
 
 #define IGLO_STRINGIFY_HELPER(x) #x
 #define IGLO_STRINGIFY(x) IGLO_STRINGIFY_HELPER(x)
@@ -2693,6 +2693,13 @@ namespace ig
 		VkSurfaceKHR GetVulkanSurface() const { return graphics.surface; }
 		VkSwapchainKHR GetVulkanSwapChain() const { return graphics.swapChain; }
 #endif
+#ifndef NDEBUG
+		void DebugIncrementNumRecordingCommandLists() const { debugNumRecordingCommandLists++; }
+		void DebugDecrementNumRecordingCommandLists() const
+		{
+			if (debugNumRecordingCommandLists.fetch_sub(1) == 0) ig::Fatal("A command list has stopped recording commands one too many times.");
+		}
+#endif
 
 	private:
 		//------------------ Core ------------------//
@@ -2798,6 +2805,9 @@ namespace ig
 
 		CallbackOnDeviceLost callbackOnDeviceLost = nullptr;
 
+#ifndef NDEBUG
+		mutable std::atomic<uint32_t> debugNumRecordingCommandLists = 0;
+#endif
 		void FreeAllTempResources();
 
 #ifdef IGLO_D3D12
