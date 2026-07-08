@@ -9,7 +9,7 @@
 // -------------------- Version --------------------//
 #define IGLO_VERSION_MAJOR 0
 #define IGLO_VERSION_MINOR 7
-#define IGLO_VERSION_PATCH 0
+#define IGLO_VERSION_PATCH 1
 
 #define IGLO_STRINGIFY_HELPER(x) #x
 #define IGLO_STRINGIFY(x) IGLO_STRINGIFY_HELPER(x)
@@ -137,7 +137,7 @@ namespace ig
 #define IGLO_GRAPHICS_API_STRING "Vulkan"
 #endif
 
-// -------------------- Backend Header Dependencies --------------------//
+	// -------------------- Backend Header Dependencies --------------------//
 
 	enum class DescriptorType
 	{
@@ -2254,7 +2254,7 @@ namespace ig
 	enum class EventType
 	{
 		None = 0,
-		Resize, // The backbuffer changed size.
+		Resize, // The backbuffer changed size. Emitted while the GPU is idle, so feel free to destroy resources instantly.
 		CloseRequest, // User either pressed Alt F4 or pressed the X button to close the window.
 		LostFocus,
 		GainedFocus,
@@ -2626,6 +2626,9 @@ namespace ig
 		void WaitForCompletion(Receipt receipt);
 
 		// Waits for the graphics device to finish executing all commands.
+		// NOTE: This frees all temporary resources. Don't call it in the middle of recording commands
+		//       while the command list holds unsubmitted temp resources,
+		//       or those resources will be destroyed before the GPU reads them.
 		void WaitForIdleDevice();
 
 		// Destroying a GPU resource while it's still in use by a previous frame

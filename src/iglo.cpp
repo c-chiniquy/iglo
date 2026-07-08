@@ -19,118 +19,166 @@ namespace ig
 {
 	const BlendDesc BlendDesc::BlendDisabled =
 	{
-		false, // enabled
-		BlendData::SourceAlpha, BlendData::InverseSourceAlpha, BlendOperation::Add,
-		BlendData::One, BlendData::InverseSourceAlpha, BlendOperation::Add,
-		(byte)ColorWriteMask::All
+		.enabled = false,
+		.srcBlend = BlendData::SourceAlpha,
+		.destBlend = BlendData::InverseSourceAlpha,
+		.blendOp = BlendOperation::Add,
+		.srcBlendAlpha = BlendData::One,
+		.destBlendAlpha = BlendData::InverseSourceAlpha,
+		.blendOpAlpha = BlendOperation::Add,
+		.colorWriteMask = (byte)ColorWriteMask::All,
 	};
 	const BlendDesc BlendDesc::StraightAlpha =
 	{
-		true, // enabled
-		BlendData::SourceAlpha, BlendData::InverseSourceAlpha, BlendOperation::Add,
-		// Dest alpha is affected by src alpha, which is useful for when drawing to transparent rendertargets.
-		BlendData::One, BlendData::InverseSourceAlpha, BlendOperation::Add,
-		(byte)ColorWriteMask::All
+		.enabled = true,
+		.srcBlend = BlendData::SourceAlpha,
+		.destBlend = BlendData::InverseSourceAlpha,
+		.blendOp = BlendOperation::Add,
+		// Dest alpha is affected by src alpha, which is useful when drawing to transparent render targets.
+		.srcBlendAlpha = BlendData::One,
+		.destBlendAlpha = BlendData::InverseSourceAlpha,
+		.blendOpAlpha = BlendOperation::Add,
+		.colorWriteMask = (byte)ColorWriteMask::All,
 	};
 	const BlendDesc BlendDesc::PremultipliedAlpha =
 	{
-		true, // enabled
-		BlendData::One, BlendData::InverseSourceAlpha, BlendOperation::Add,
-		BlendData::One, BlendData::InverseSourceAlpha, BlendOperation::Add,
-		(byte)ColorWriteMask::All
+		.enabled = true,
+		.srcBlend = BlendData::One,
+		.destBlend = BlendData::InverseSourceAlpha,
+		.blendOp = BlendOperation::Add,
+		.srcBlendAlpha = BlendData::One,
+		.destBlendAlpha = BlendData::InverseSourceAlpha,
+		.blendOpAlpha = BlendOperation::Add,
+		.colorWriteMask = (byte)ColorWriteMask::All,
 	};
 
 	const DepthDesc DepthDesc::DepthDisabled =
 	{
-		false, // enableDepth
-		DepthWriteMask::All, // depthWriteMask
-		ComparisonFunc::Less, // depthFunc
-		false, // enableStencil
-		0xff, // stencilReadMask
-		0xff, // stencilWriteMask
-		StencilOp::Keep,
-		StencilOp::Increase,
-		StencilOp::Keep,
-		ComparisonFunc::Always,
-		StencilOp::Keep,
-		StencilOp::Decrease,
-		StencilOp::Keep,
-		ComparisonFunc::Always
+		.enableDepth = false,
+		.depthWriteMask = DepthWriteMask::All,
+		.depthFunc = ComparisonFunc::Less,
+		.enableStencil = false,
+		.stencilReadMask = 0xff,
+		.stencilWriteMask = 0xff,
+		.frontFaceStencilFailOp = StencilOp::Keep,
+		.frontFaceStencilDepthFailOp = StencilOp::Increase,
+		.frontFaceStencilPassOp = StencilOp::Keep,
+		.frontFaceStencilFunc = ComparisonFunc::Always,
+		.backFaceStencilFailOp = StencilOp::Keep,
+		.backFaceStencilDepthFailOp = StencilOp::Decrease,
+		.backFaceStencilPassOp = StencilOp::Keep,
+		.backFaceStencilFunc = ComparisonFunc::Always,
 	};
 	const DepthDesc DepthDesc::DepthEnabled =
 	{
-		true, // enableDepth
-		DepthWriteMask::All, // depthWriteMask
-		ComparisonFunc::Less, // depthFunc
-		false, // enableStencil
-		0xff, // stencilReadMask
-		0xff, // stencilWriteMask
-		StencilOp::Keep,
-		StencilOp::Increase,
-		StencilOp::Keep,
-		ComparisonFunc::Always,
-		StencilOp::Keep,
-		StencilOp::Decrease,
-		StencilOp::Keep,
-		ComparisonFunc::Always
+		.enableDepth = true,
+		.depthWriteMask = DepthWriteMask::All,
+		.depthFunc = ComparisonFunc::Less,
+		.enableStencil = false,
+		.stencilReadMask = 0xff,
+		.stencilWriteMask = 0xff,
+		.frontFaceStencilFailOp = StencilOp::Keep,
+		.frontFaceStencilDepthFailOp = StencilOp::Increase,
+		.frontFaceStencilPassOp = StencilOp::Keep,
+		.frontFaceStencilFunc = ComparisonFunc::Always,
+		.backFaceStencilFailOp = StencilOp::Keep,
+		.backFaceStencilDepthFailOp = StencilOp::Decrease,
+		.backFaceStencilPassOp = StencilOp::Keep,
+		.backFaceStencilFunc = ComparisonFunc::Always,
 	};
 	const DepthDesc DepthDesc::DepthAndStencilEnabled =
 	{
-		true, // enableDepth
-		DepthWriteMask::All, // depthWriteMask
-		ComparisonFunc::Less, // depthFunc
-		true, // enableStencil
-		0xff, // stencilReadMask
-		0xff, // stencilWriteMask
-		StencilOp::Keep,
-		StencilOp::Increase,
-		StencilOp::Keep,
-		ComparisonFunc::Always,
-		StencilOp::Keep,
-		StencilOp::Decrease,
-		StencilOp::Keep,
-		ComparisonFunc::Always
+		.enableDepth = true,
+		.depthWriteMask = DepthWriteMask::All,
+		.depthFunc = ComparisonFunc::Less,
+		.enableStencil = true,
+		.stencilReadMask = 0xff,
+		.stencilWriteMask = 0xff,
+		.frontFaceStencilFailOp = StencilOp::Keep,
+		.frontFaceStencilDepthFailOp = StencilOp::Increase,
+		.frontFaceStencilPassOp = StencilOp::Keep,
+		.frontFaceStencilFunc = ComparisonFunc::Always,
+		.backFaceStencilFailOp = StencilOp::Keep,
+		.backFaceStencilDepthFailOp = StencilOp::Decrease,
+		.backFaceStencilPassOp = StencilOp::Keep,
+		.backFaceStencilFunc = ComparisonFunc::Always,
 	};
 
 	const RasterizerDesc RasterizerDesc::NoCull =
 	{
-		false, Cull::Disabled, FrontFace::CW, 0, 0.0f, 0.0f, true, LineRasterizationMode::Smooth, 0, false
+		.enableWireframe = false,
+		.cull = Cull::Disabled,
+		.frontFace = FrontFace::CW,
+		.depthBias = 0,
+		.depthBiasClamp = 0.0f,
+		.slopeScaledDepthBias = 0.0f,
+		.enableDepthClip = true,
+		.lineRasterizationMode = LineRasterizationMode::Smooth,
+		.forcedSampleCount = 0,
+		.enableConservativeRaster = false,
 	};
 	const RasterizerDesc RasterizerDesc::BackCull =
 	{
-		false, Cull::Back, FrontFace::CW, 0, 0.0f, 0.0f, true, LineRasterizationMode::Smooth, 0, false
+		.enableWireframe = false,
+		.cull = Cull::Back,
+		.frontFace = FrontFace::CW,
+		.depthBias = 0,
+		.depthBiasClamp = 0.0f,
+		.slopeScaledDepthBias = 0.0f,
+		.enableDepthClip = true,
+		.lineRasterizationMode = LineRasterizationMode::Smooth,
+		.forcedSampleCount = 0,
+		.enableConservativeRaster = false,
 	};
 	const RasterizerDesc RasterizerDesc::FrontCull =
 	{
-		false, Cull::Front, FrontFace::CW, 0, 0.0f, 0.0f, true, LineRasterizationMode::Smooth, 0, false
+		.enableWireframe = false,
+		.cull = Cull::Front,
+		.frontFace = FrontFace::CW,
+		.depthBias = 0,
+		.depthBiasClamp = 0.0f,
+		.slopeScaledDepthBias = 0.0f,
+		.enableDepthClip = true,
+		.lineRasterizationMode = LineRasterizationMode::Smooth,
+		.forcedSampleCount = 0,
+		.enableConservativeRaster = false,
 	};
 
 	const SamplerDesc SamplerDesc::PixelatedRepeatSampler =
 	{
-		TextureFilter::Point, TextureWrapMode::Repeat, TextureWrapMode::Repeat, TextureWrapMode::Repeat,
-		0, // minLOD
-		IGLO_FLOAT32_MAX, // maxLOD
-		0, // mipMapLODBias
-		ComparisonFunc::None,
-		Colors::Black // borderColor
+		.filter = TextureFilter::Point,
+		.wrapU = TextureWrapMode::Repeat,
+		.wrapV = TextureWrapMode::Repeat,
+		.wrapW = TextureWrapMode::Repeat,
+		.minLOD = 0,
+		.maxLOD = IGLO_FLOAT32_MAX,
+		.mipMapLODBias = 0,
+		.comparisonFunc = ComparisonFunc::None,
+		.borderColor = Colors::Black,
 	};
 	const SamplerDesc SamplerDesc::SmoothRepeatSampler =
 	{
-		TextureFilter::AnisotropicX16, TextureWrapMode::Repeat, TextureWrapMode::Repeat, TextureWrapMode::Repeat,
-		0, // minLOD
-		IGLO_FLOAT32_MAX, // maxLOD
-		0, // mipMapLODBias
-		ComparisonFunc::None,
-		Colors::Black // borderColor
+		.filter = TextureFilter::AnisotropicX16,
+		.wrapU = TextureWrapMode::Repeat,
+		.wrapV = TextureWrapMode::Repeat,
+		.wrapW = TextureWrapMode::Repeat,
+		.minLOD = 0,
+		.maxLOD = IGLO_FLOAT32_MAX,
+		.mipMapLODBias = 0,
+		.comparisonFunc = ComparisonFunc::None,
+		.borderColor = Colors::Black,
 	};
 	const SamplerDesc SamplerDesc::SmoothClampSampler =
 	{
-		TextureFilter::AnisotropicX16, TextureWrapMode::Clamp, TextureWrapMode::Clamp, TextureWrapMode::Clamp,
-		0, // minLOD
-		IGLO_FLOAT32_MAX, // maxLOD
-		0, // mipMapLODBias
-		ComparisonFunc::None,
-		Colors::Black // borderColor
+		.filter = TextureFilter::AnisotropicX16,
+		.wrapU = TextureWrapMode::Clamp,
+		.wrapV = TextureWrapMode::Clamp,
+		.wrapW = TextureWrapMode::Clamp,
+		.minLOD = 0,
+		.maxLOD = IGLO_FLOAT32_MAX,
+		.mipMapLODBias = 0,
+		.comparisonFunc = ComparisonFunc::None,
+		.borderColor = Colors::Black,
 	};
 
 	std::string GetGpuVendorNameFromID(uint32_t vendorID)
