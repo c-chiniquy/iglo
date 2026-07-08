@@ -1,6 +1,12 @@
 
 # Changelog
 
+## v0.7.2
+
+### Changes
+
+- Added debug checks to catch `WaitForIdleDevice()` misuse.
+
 ## v0.7.1
 
 ### Changes
