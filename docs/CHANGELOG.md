@@ -1,6 +1,14 @@
 
 # Changelog
 
+## v0.7.1
+
+### Changes
+
+- Added a comment clarifying that `Resize` event is emitted on idle device, so feel free to destroy resources instantly on this event.
+- Added a comment clarifying that `WaitForIdleDevice()` must not be called while in the middle of recording commands that rely on temp resources.
+  This is because this function frees all temp resources.
+
 ## v0.7.0
 
 ### Changes
