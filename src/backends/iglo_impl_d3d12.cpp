@@ -2083,7 +2083,7 @@ namespace ig
 		return out;
 	}
 
-	uint32_t IGLOContext::Impl_GetMaxMultiSampleCount(Format textureFormat) const
+	uint32_t IGLOContext::Impl_GetMaxMSAA(Format textureFormat) const
 	{
 		DXGI_FORMAT dxgiFormat = GetFormatInfoDXGI(textureFormat).dxgiFormat;
 

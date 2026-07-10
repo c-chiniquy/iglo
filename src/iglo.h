@@ -9,7 +9,7 @@
 // -------------------- Version --------------------//
 #define IGLO_VERSION_MAJOR 0
 #define IGLO_VERSION_MINOR 7
-#define IGLO_VERSION_PATCH 2
+#define IGLO_VERSION_PATCH 3
 
 #define IGLO_STRINGIFY_HELPER(x) #x
 #define IGLO_STRINGIFY(x) IGLO_STRINGIFY_HELPER(x)
@@ -802,6 +802,8 @@ namespace ig
 		DEPTHFORMAT_UINT24_BYTE, // 24-bit unsigned normalized integer for depth component, 8-bit unsigned non normalized integer for stencil component.
 		DEPTHFORMAT_FLOAT,  // 32-bit float for depth component
 		DEPTHFORMAT_FLOAT_BYTE, // 32-bit float for depth component, 8-bit unsigned non normalized integer for stencil component.
+	
+		COUNT, // Not a format. Used to keep count.
 	};
 
 	enum class IndexFormat
@@ -2669,8 +2671,8 @@ namespace ig
 		UploadHeap& GetUploadHeap() const { return *uploadHeap; }
 		CommandQueue& GetCommandQueue() const { return *commandQueue; }
 
-		// Gets the max allowed MSAA per texture format.
-		MSAA GetMaxMultiSampleCount(Format textureFormat) const;
+		// Gets the max supported MSAA for the given texture format.
+		MSAA GetMaxMSAA(Format textureFormat) const;
 
 		const Pipeline& GetPipeline_GenerateMips_Pow2() const { return *pipeline_genMips_pow2; }
 		const Pipeline& GetPipeline_GenerateMips_NonPow2() const { return *pipeline_genMips_nonPow2; }
@@ -2826,7 +2828,7 @@ namespace ig
 		void NotifyDeviceLost();
 
 		void Impl_Present();
-		uint32_t Impl_GetMaxMultiSampleCount(Format textureFormat) const;
+		uint32_t Impl_GetMaxMSAA(Format textureFormat) const;
 		DetailedResult Impl_InitGraphicsDevice();
 		void Impl_DestroyGraphicsDevice();
 	};

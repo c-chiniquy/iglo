@@ -1640,19 +1640,19 @@ namespace ig
 		}
 	}
 
-	MSAA IGLOContext::GetMaxMultiSampleCount(Format textureFormat) const
+	MSAA IGLOContext::GetMaxMSAA(Format textureFormat) const
 	{
-		constexpr uint32_t MaxIgloFormats = 256; // An arbitrary safe upper bound
+		constexpr uint32_t MaxIgloFormats = (uint32_t)Format::COUNT;
 
 		uint32_t formatIndex = (uint32_t)textureFormat;
-		if (formatIndex >= MaxIgloFormats) Fatal("Failed GetMaxMultiSampleCount(). Reason: Invalid format.");
+		if (formatIndex >= MaxIgloFormats) Fatal("Failed GetMaxMSAA(). Reason: Invalid format.");
 
 		if (maxMSAAPerFormat.size() == 0) maxMSAAPerFormat.resize(MaxIgloFormats, 0);
 
 		// If the max MSAA has already been retrieved for this format, then return it.
 		if (maxMSAAPerFormat[formatIndex] != 0) return (MSAA)maxMSAAPerFormat[formatIndex];
 
-		uint32_t maxMSAA = Impl_GetMaxMultiSampleCount(textureFormat);
+		uint32_t maxMSAA = Impl_GetMaxMSAA(textureFormat);
 		maxMSAAPerFormat[formatIndex] = maxMSAA;
 		return (MSAA)maxMSAA;
 	}

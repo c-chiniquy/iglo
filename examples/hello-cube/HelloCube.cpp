@@ -177,7 +177,7 @@ private:
 	void Start()
 	{
 		// Cap MSAA to highest possible value
-		targetDesc.msaa = context->GetMaxMultiSampleCount(targetDesc.colorFormats[0]);
+		targetDesc.msaa = context->GetMaxMSAA(targetDesc.colorFormats[0]);
 
 		cmd = ig::CommandList::Create(*context, ig::CommandListType::Graphics);
 		r = ig::BatchRenderer::Create(*context, targetDesc);

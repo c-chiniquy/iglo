@@ -307,7 +307,7 @@ private:
 			.depthFormat = ig::Format::DEPTHFORMAT_FLOAT,
 		};
 		renderDescMSAA = renderDesc;
-		renderDescMSAA.msaa = context->GetMaxMultiSampleCount(renderDesc.colorFormats[0]);
+		renderDescMSAA.msaa = context->GetMaxMSAA(renderDesc.colorFormats[0]);
 
 		// Create pipelines
 		{

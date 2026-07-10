@@ -355,7 +355,7 @@ private:
 			.depthFormat = useStencilFormat ? ig::Format::DEPTHFORMAT_UINT24_BYTE : ig::Format::DEPTHFORMAT_FLOAT,
 		};
 		sceneDescMSAA = sceneDesc;
-		sceneDescMSAA.msaa = context->GetMaxMultiSampleCount(sceneDesc.colorFormats[0]);
+		sceneDescMSAA.msaa = context->GetMaxMSAA(sceneDesc.colorFormats[0]);
 
 		// Shadow map
 		shadowMapDesc =

@@ -3132,7 +3132,7 @@ namespace ig
 		return out;
 	}
 
-	uint32_t IGLOContext::Impl_GetMaxMultiSampleCount(Format textureFormat) const
+	uint32_t IGLOContext::Impl_GetMaxMSAA(Format textureFormat) const
 	{
 		VkPhysicalDevice physicalDevice = GetVulkanPhysicalDevice();
 		VkFormat vkFormat = ToVulkanFormat(textureFormat);
@@ -3141,6 +3141,9 @@ namespace ig
 		VkImageUsageFlags usage = formatInfo.isDepthFormat
 			? VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT
 			: VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+		usage |= VK_IMAGE_USAGE_SAMPLED_BIT;
+		usage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+		usage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
 
 		VkImageFormatProperties formatProps = {};
 		VkResult result = vkGetPhysicalDeviceImageFormatProperties(physicalDevice, vkFormat,
@@ -3149,14 +3152,21 @@ namespace ig
 		uint32_t maxMSAA = 1;
 		if (result == VK_SUCCESS)
 		{
-			VkSampleCountFlags counts = formatProps.sampleCounts;
+			VkPhysicalDeviceProperties deviceProps = {};
+			vkGetPhysicalDeviceProperties(physicalDevice, &deviceProps);
+			const VkSampleCountFlags frameBufferLimit = formatInfo.isDepthFormat
+				? deviceProps.limits.framebufferDepthSampleCounts
+				: deviceProps.limits.framebufferColorSampleCounts;
+
+			// We need support from both the format sample count and the framebuffer sample count.
+			const VkSampleCountFlags counts = formatProps.sampleCounts & frameBufferLimit;
 
 			if (counts & VK_SAMPLE_COUNT_2_BIT) maxMSAA = 2;
 			if (counts & VK_SAMPLE_COUNT_4_BIT) maxMSAA = 4;
 			if (counts & VK_SAMPLE_COUNT_8_BIT) maxMSAA = 8;
 			if (counts & VK_SAMPLE_COUNT_16_BIT) maxMSAA = 16;
-			if (counts & VK_SAMPLE_COUNT_32_BIT) maxMSAA = 16; // Capped to x16
-			if (counts & VK_SAMPLE_COUNT_64_BIT) maxMSAA = 16; // Capped to x16
+			if (counts & VK_SAMPLE_COUNT_32_BIT) maxMSAA = 16; // iglo caps at x16
+			if (counts & VK_SAMPLE_COUNT_64_BIT) maxMSAA = 16; // iglo caps at x16
 		}
 
 		return maxMSAA;
