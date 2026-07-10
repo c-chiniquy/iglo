@@ -1,6 +1,13 @@
 
 # Changelog
 
+## v0.7.3
+
+### Changes
+
+- Renamed `IGLOContext::GetMaxMultiSampleCount()` to `IGLOContext::GetMaxMSAA()`.
+- Improved `IGLOContext::GetMaxMSAA()` on the Vulkan backend (correct usage flags + framebuffer-limit).
+
 ## v0.7.2
 
 ### Changes
