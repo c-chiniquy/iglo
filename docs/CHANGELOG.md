@@ -5,10 +5,13 @@
 
 ### Changes
 
-- Added `CommandList::CopyTextureRegion()`.
-- The global constants in iglo_utility.h are now constexpr.
-- Renamed `IGLO_SQR2` to `IGLO_SQRT2`.
-- Replaced `IGLO_ToRadian`/`IGLO_ToDegree` macros with constexpr functions `ig::ToRadians()`/`ig::ToDegrees()`.
+- Major/breaking changes:
+  - Renamed `IGLO_SQR2` to `IGLO_SQRT2`.
+  - Replaced `IGLO_ToRadian`/`IGLO_ToDegree` macros with constexpr functions `ig::ToRadians()`/`ig::ToDegrees()`.
+- New features:
+  - Added `CommandList::CopyTextureRegion()`.
+- Improvements:
+  - The global constants in iglo_utility.h are now constexpr.
 
 ## v0.7.3
 
