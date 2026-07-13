@@ -1253,49 +1253,57 @@ namespace ig
 		SetScissorRectangles(&scissorRect, 1);
 	}
 
-	void CommandList::CopyTexture(const Texture& source, const Texture& destination)
+	void CommandList::CopyTexture(const Texture& src, const Texture& dest)
 	{
-		assert(source.GetUsage() != TextureUsage::Readable && "source texture must not have Readable usage");
+		assert(src.GetUsage() != TextureUsage::Readable && "src texture must not have Readable usage");
 
-		if (destination.GetUsage() == TextureUsage::Readable)
+		if (dest.GetUsage() == TextureUsage::Readable)
 		{
-			CopyTextureToReadableTexture(source, destination);
+			CopyTextureToReadableTexture(src, dest);
 			return;
 		}
 
-		Impl_CopyTexture(source, destination);
+		Impl_CopyTexture(src, dest);
 	}
 
-	void CommandList::CopyTextureSubresource(const Texture& source, uint32_t sourceFaceIndex, uint32_t sourceMipIndex,
-		const Texture& destination, uint32_t destFaceIndex, uint32_t destMipIndex)
+	void CommandList::CopyTextureSubresource(
+		const Texture& src, uint32_t srcFaceIndex, uint32_t srcMipIndex,
+		const Texture& dest, uint32_t destFaceIndex, uint32_t destMipIndex)
 	{
-		assert(source.GetUsage() != TextureUsage::Readable && "source texture must not have Readable usage");
+		assert(src.GetUsage() != TextureUsage::Readable && "src texture must not have Readable usage");
 
-		if (destination.GetUsage() == TextureUsage::Readable)
+		if (dest.GetUsage() == TextureUsage::Readable)
 		{
 			// Destination must be a single subresource sized to the source mip being copied.
-			assert(destination.GetMSAA() == MSAA::Disabled && "Readable dest must not be multisampled");
-			assert(destination.GetMipLevels() == 1 && destination.GetNumFaces() == 1 && "Readable dest must be 1 mip and 1 face");
+			assert(dest.GetMSAA() == MSAA::Disabled && "Readable dest must not be multisampled");
+			assert(dest.GetMipLevels() == 1 && dest.GetNumFaces() == 1 && "Readable dest must be 1 mip and 1 face");
 			assert(destFaceIndex == 0 && destMipIndex == 0 && "Readable dest face and mip index must be 0");
-			assert(destination.GetFormat() == source.GetFormat() && "format mismatch");
-			assert(destination.GetExtent() == Image::CalculateMipExtent(source.GetExtent(), sourceMipIndex) &&
-				"Readable dest extent must match source mip extent");
+			assert(dest.GetFormat() == src.GetFormat() && "format mismatch");
+			assert(dest.GetExtent() == Image::CalculateMipExtent(src.GetExtent(), srcMipIndex) && "Readable dest extent must match src mip extent");
 
-			Impl_CopyTextureSubresourceToReadableTexture(source, sourceFaceIndex, sourceMipIndex, destination);
+			Impl_CopyTextureSubresourceToReadableTexture(src, srcFaceIndex, srcMipIndex, dest);
 			return;
 		}
 
-		Impl_CopyTextureSubresource(source, sourceFaceIndex, sourceMipIndex, destination, destFaceIndex, destMipIndex);
+		Impl_CopyTextureSubresource(src, srcFaceIndex, srcMipIndex, dest, destFaceIndex, destMipIndex);
 	}
 
-	void CommandList::CopyTextureToReadableTexture(const Texture& source, const Texture& destination)
+	void CommandList::CopyTextureRegion(
+		const Texture& src, TextureCopyLocation srcLocation,
+		const Texture& dest, TextureCopyLocation destLocation, Extent2D regionExtent)
 	{
-		assert(
-			source.GetUsage() != TextureUsage::Readable &&
-			destination.GetUsage() == TextureUsage::Readable &&
-			"source must not be Readable, dest must be Readable");
+		assert(src.GetUsage() != TextureUsage::Readable && "src texture must not have Readable usage");
+		assert(dest.GetUsage() != TextureUsage::Readable && "dest texture must not have Readable usage");
 
-		Impl_CopyTextureToReadableTexture(source, destination);
+		Impl_CopyTextureRegion(src, srcLocation, dest, destLocation, regionExtent);
+	}
+
+	void CommandList::CopyTextureToReadableTexture(const Texture& src, const Texture& dest)
+	{
+		assert(src.GetUsage() != TextureUsage::Readable && "src must not be Readable");
+		assert(dest.GetUsage() == TextureUsage::Readable && "dest must be Readable");
+
+		Impl_CopyTextureToReadableTexture(src, dest);
 	}
 
 	void UploadHeap::Page::Free(const IGLOContext& context)

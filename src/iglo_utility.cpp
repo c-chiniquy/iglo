@@ -716,8 +716,8 @@ namespace ig
 	Matrix4x4 Matrix4x4::PerspectiveFovLH(float aspectRatio, float fovInDegrees, float zNear, float zFar)
 	{
 		return Matrix4x4(
-			(1.0f / std::tan(float(IGLO_ToRadian(fovInDegrees)) / 2.0f)) / aspectRatio, 0, 0, 0,
-			0, 1.0f / std::tan(float(IGLO_ToRadian(fovInDegrees)) / 2.0f), 0, 0,
+			(1.0f / std::tan(float(ToRadians(fovInDegrees)) / 2.0f)) / aspectRatio, 0, 0, 0,
+			0, 1.0f / std::tan(float(ToRadians(fovInDegrees)) / 2.0f), 0, 0,
 			0, 0, zFar / (zFar - zNear), 1.0f,
 			0, 0, -zNear * zFar / (zFar - zNear), 0);
 	}
@@ -725,8 +725,8 @@ namespace ig
 	Matrix4x4 Matrix4x4::PerspectiveFovRH(float aspectRatio, float fovInDegrees, float zNear, float zFar)
 	{
 		return Matrix4x4(
-			(1.0f / std::tan(float(IGLO_ToRadian(fovInDegrees)) / 2.0f)) / aspectRatio, 0, 0, 0,
-			0, 1.0f / std::tan(float(IGLO_ToRadian(fovInDegrees)) / 2.0f), 0, 0,
+			(1.0f / std::tan(float(ToRadians(fovInDegrees)) / 2.0f)) / aspectRatio, 0, 0, 0,
+			0, 1.0f / std::tan(float(ToRadians(fovInDegrees)) / 2.0f), 0, 0,
 			0, 0, zFar / (zNear - zFar), -1.0f,
 			0, 0, -zNear * zFar / (zFar - zNear), 0);
 	}

@@ -895,37 +895,63 @@ namespace ig
 		impl.graphicsCommandList->Dispatch(threadGroupCountX, threadGroupCountY, threadGroupCountZ);
 	}
 
-	void CommandList::Impl_CopyTexture(const Texture& source, const Texture& destination)
+	void CommandList::Impl_CopyTexture(const Texture& src, const Texture& dest)
 	{
-		impl.graphicsCommandList->CopyResource(destination.GetD3D12Resource(), source.GetD3D12Resource());
+		impl.graphicsCommandList->CopyResource(dest.GetD3D12Resource(), src.GetD3D12Resource());
 	}
 
-	void CommandList::Impl_CopyTextureSubresource(const Texture& source, uint32_t sourceFaceIndex, uint32_t sourceMipIndex,
-		const Texture& destination, uint32_t destFaceIndex, uint32_t destMipIndex)
+	void CommandList::Impl_CopyTextureSubresource(
+		const Texture& src, uint32_t srcFaceIndex, uint32_t srcMipIndex,
+		const Texture& dest, uint32_t destFaceIndex, uint32_t destMipIndex)
 	{
 		D3D12_TEXTURE_COPY_LOCATION srcLoc = {};
 		srcLoc.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
-		srcLoc.pResource = source.GetD3D12Resource();
-		srcLoc.SubresourceIndex = (sourceFaceIndex * source.GetMipLevels()) + sourceMipIndex;
+		srcLoc.pResource = src.GetD3D12Resource();
+		srcLoc.SubresourceIndex = (srcFaceIndex * src.GetMipLevels()) + srcMipIndex;
 
 		D3D12_TEXTURE_COPY_LOCATION destLoc = {};
 		destLoc.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
-		destLoc.pResource = destination.GetD3D12Resource();
-		destLoc.SubresourceIndex = (destFaceIndex * destination.GetMipLevels()) + destMipIndex;
+		destLoc.pResource = dest.GetD3D12Resource();
+		destLoc.SubresourceIndex = (destFaceIndex * dest.GetMipLevels()) + destMipIndex;
 
 		impl.graphicsCommandList->CopyTextureRegion(&destLoc, 0, 0, 0, &srcLoc, nullptr);
 	}
 
-	void CommandList::Impl_CopyTextureToReadableTexture(const Texture& source, const Texture& destination)
+	void CommandList::Impl_CopyTextureRegion(
+		const Texture& src, TextureCopyLocation srcLocation,
+		const Texture& dest, TextureCopyLocation destLocation, Extent2D regionExtent)
 	{
-		D3D12_RESOURCE_DESC desc = source.GetD3D12Resource()->GetDesc();
-		uint32_t numSubResources = source.GetNumFaces() * source.GetMipLevels();
+		D3D12_TEXTURE_COPY_LOCATION srcLoc = {};
+		srcLoc.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+		srcLoc.pResource = src.GetD3D12Resource();
+		srcLoc.SubresourceIndex = (srcLocation.faceIndex * src.GetMipLevels()) + srcLocation.mipIndex;
+
+		D3D12_TEXTURE_COPY_LOCATION destLoc = {};
+		destLoc.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+		destLoc.pResource = dest.GetD3D12Resource();
+		destLoc.SubresourceIndex = (destLocation.faceIndex * dest.GetMipLevels()) + destLocation.mipIndex;
+
+		D3D12_BOX srcBox = {};
+		srcBox.left = srcLocation.offsetX;
+		srcBox.top = srcLocation.offsetY;
+		srcBox.front = 0;
+		srcBox.right = srcLocation.offsetX + regionExtent.width;
+		srcBox.bottom = srcLocation.offsetY + regionExtent.height;
+		srcBox.back = 1;
+
+		impl.graphicsCommandList->CopyTextureRegion(&destLoc, destLocation.offsetX, destLocation.offsetY, 0, &srcLoc, &srcBox);
+	}
+
+	void CommandList::Impl_CopyTextureToReadableTexture(const Texture& src, const Texture& dest)
+	{
+		D3D12_RESOURCE_DESC desc = src.GetD3D12Resource()->GetDesc();
+		uint32_t numSubResources = src.GetNumFaces() * src.GetMipLevels();
 		uint64_t currentOffset = 0;
 		for (uint32_t i = 0; i < numSubResources; i++)
 		{
 			D3D12_TEXTURE_COPY_LOCATION srcLoc = {};
 			srcLoc.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
-			srcLoc.pResource = source.GetD3D12Resource();
+			srcLoc.pResource = src.GetD3D12Resource();
 			srcLoc.SubresourceIndex = i;
 
 			D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint = {};
@@ -934,7 +960,7 @@ namespace ig
 
 			D3D12_TEXTURE_COPY_LOCATION destLoc = {};
 			destLoc.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
-			destLoc.pResource = destination.GetD3D12Resource();
+			destLoc.pResource = dest.GetD3D12Resource();
 			destLoc.PlacedFootprint = footprint;
 			destLoc.PlacedFootprint.Offset = currentOffset;
 			currentOffset += AlignUp(totalBytes, context.GetGraphicsSpecs().bufferPlacementAlignments.textureRowPitch);
@@ -943,40 +969,40 @@ namespace ig
 		}
 	}
 
-	void CommandList::Impl_CopyTextureSubresourceToReadableTexture(const Texture& source, uint32_t sourceFaceIndex,
-		uint32_t sourceMipIndex, const Texture& destination)
+	void CommandList::Impl_CopyTextureSubresourceToReadableTexture(const Texture& src,
+		uint32_t srcFaceIndex, uint32_t srcMipIndex, const Texture& dest)
 	{
-		D3D12_RESOURCE_DESC srcDesc = source.GetD3D12Resource()->GetDesc();
-		uint32_t srcSubresourceIndex = (sourceFaceIndex * source.GetMipLevels()) + sourceMipIndex;
+		D3D12_RESOURCE_DESC srcDesc = src.GetD3D12Resource()->GetDesc();
+		uint32_t srcSubresourceIndex = (srcFaceIndex * src.GetMipLevels()) + srcMipIndex;
 
 		D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint = {};
 		context.GetD3D12Device()->GetCopyableFootprints(&srcDesc, srcSubresourceIndex, 1, 0, &footprint, nullptr, nullptr, nullptr);
 
 		D3D12_TEXTURE_COPY_LOCATION srcLoc = {};
 		srcLoc.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
-		srcLoc.pResource = source.GetD3D12Resource();
+		srcLoc.pResource = src.GetD3D12Resource();
 		srcLoc.SubresourceIndex = srcSubresourceIndex;
 
 		D3D12_TEXTURE_COPY_LOCATION destLoc = {};
 		destLoc.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
-		destLoc.pResource = destination.GetD3D12Resource();
+		destLoc.pResource = dest.GetD3D12Resource();
 		destLoc.PlacedFootprint = footprint;
 		destLoc.PlacedFootprint.Offset = 0;
 
 		impl.graphicsCommandList->CopyTextureRegion(&destLoc, 0, 0, 0, &srcLoc, nullptr);
 	}
 
-	void CommandList::CopyBuffer(const Buffer& source, const Buffer& destination)
+	void CommandList::CopyBuffer(const Buffer& src, const Buffer& dest)
 	{
-		impl.graphicsCommandList->CopyResource(destination.GetD3D12Resource(), source.GetD3D12Resource());
+		impl.graphicsCommandList->CopyResource(dest.GetD3D12Resource(), src.GetD3D12Resource());
 	}
 
-	void CommandList::CopyTempBufferToTexture(const TempBuffer& source, const Texture& destination)
+	void CommandList::CopyTempBufferToTexture(const TempBuffer& src, const Texture& dest)
 	{
-		D3D12_RESOURCE_DESC desc = destination.GetD3D12Resource()->GetDesc();
+		D3D12_RESOURCE_DESC desc = dest.GetD3D12Resource()->GetDesc();
 		uint32_t numSubResources = desc.MipLevels * desc.DepthOrArraySize;
 
-		uint64_t currentOffset = source.offset;
+		uint64_t currentOffset = src.offset;
 		for (uint32_t i = 0; i < numSubResources; i++)
 		{
 			D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint = {};
@@ -985,24 +1011,24 @@ namespace ig
 
 			D3D12_TEXTURE_COPY_LOCATION srcLoc = {};
 			srcLoc.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
-			srcLoc.pResource = source.impl.resource;
+			srcLoc.pResource = src.impl.resource;
 			srcLoc.PlacedFootprint = footprint;
 			srcLoc.PlacedFootprint.Offset = currentOffset;
 			currentOffset += AlignUp(totalBytes, context.GetGraphicsSpecs().bufferPlacementAlignments.textureRowPitch);
 
 			D3D12_TEXTURE_COPY_LOCATION destLoc = {};
 			destLoc.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
-			destLoc.pResource = destination.GetD3D12Resource();
+			destLoc.pResource = dest.GetD3D12Resource();
 			destLoc.SubresourceIndex = i;
 
 			impl.graphicsCommandList->CopyTextureRegion(&destLoc, 0, 0, 0, &srcLoc, nullptr);
 		}
 	}
 
-	void CommandList::CopyTempBufferToTextureSubresource(const TempBuffer& source, const Texture& destination, uint32_t destFaceIndex, uint32_t destMipIndex)
+	void CommandList::CopyTempBufferToTextureSubresource(const TempBuffer& src, const Texture& dest, uint32_t destFaceIndex, uint32_t destMipIndex)
 	{
-		D3D12_RESOURCE_DESC desc = destination.GetD3D12Resource()->GetDesc();
-		uint32_t subResourceIndex = (destFaceIndex * destination.GetMipLevels()) + destMipIndex;
+		D3D12_RESOURCE_DESC desc = dest.GetD3D12Resource()->GetDesc();
+		uint32_t subResourceIndex = (destFaceIndex * dest.GetMipLevels()) + destMipIndex;
 
 		D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint = {};
 		uint64_t totalBytes = 0;
@@ -1010,29 +1036,29 @@ namespace ig
 
 		D3D12_TEXTURE_COPY_LOCATION srcLoc = {};
 		srcLoc.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
-		srcLoc.pResource = source.impl.resource;
+		srcLoc.pResource = src.impl.resource;
 		srcLoc.PlacedFootprint = footprint;
-		srcLoc.PlacedFootprint.Offset = source.offset;
+		srcLoc.PlacedFootprint.Offset = src.offset;
 
 		D3D12_TEXTURE_COPY_LOCATION destLoc = {};
 		destLoc.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
-		destLoc.pResource = destination.GetD3D12Resource();
+		destLoc.pResource = dest.GetD3D12Resource();
 		destLoc.SubresourceIndex = subResourceIndex;
 
 		impl.graphicsCommandList->CopyTextureRegion(&destLoc, 0, 0, 0, &srcLoc, nullptr);
 	}
 
-	void CommandList::CopyTempBufferToBuffer(const TempBuffer& source, const Buffer& destination)
+	void CommandList::CopyTempBufferToBuffer(const TempBuffer& src, const Buffer& dest)
 	{
-		impl.graphicsCommandList->CopyBufferRegion(destination.GetD3D12Resource(), 0, source.impl.resource,
-			source.offset, destination.GetSize());
+		impl.graphicsCommandList->CopyBufferRegion(dest.GetD3D12Resource(), 0, src.impl.resource, src.offset, dest.GetSize());
 	}
 
-	void CommandList::ResolveTexture(const Texture& source, const Texture& destination)
+	void CommandList::ResolveTexture(const Texture& src, const Texture& dest)
 	{
 		//TODO: Add support for resolving cubemaps
-		impl.graphicsCommandList->ResolveSubresource(destination.GetD3D12Resource(), 0, source.GetD3D12Resource(), 0,
-			GetFormatInfoDXGI(source.GetFormat()).dxgiFormat);
+		impl.graphicsCommandList->ResolveSubresource(
+			dest.GetD3D12Resource(), 0,
+			src.GetD3D12Resource(), 0, GetFormatInfoDXGI(src.GetFormat()).dxgiFormat);
 	}
 
 	void Texture::Impl_Destroy()

@@ -1043,24 +1043,22 @@ namespace ig
 		Color32 colorCenter, Color32 colorBorder)
 	{
 		const uint32_t maxCircleSides = 360;
-		if (sides > maxCircleSides)sides = maxCircleSides;
-		if (sides < 3)sides = 3;
+		if (sides > maxCircleSides) sides = maxCircleSides;
+		if (sides < 3) sides = 3;
 
 		UsingBatch((BatchType)StandardBatchType::Triangles_XYC);
 		for (uint32_t i = 0; i < sides; i++)
 		{
-			float rotA = degreesLength * (float(i) / (float)sides);
-			float rotB = degreesLength * (float(i + 1) / (float)sides);
-			Vector2 edgeA;
-			edgeA.x = cosf((float)IGLO_ToRadian((rotA - 90) + degreesStart)) * radius;
-			edgeA.y = sinf((float)IGLO_ToRadian((rotA - 90) + degreesStart)) * radius;
-			Vector2 edgeB;
-			edgeB.x = cosf((float)IGLO_ToRadian((rotB - 90) + degreesStart)) * radius;
-			edgeB.y = sinf((float)IGLO_ToRadian((rotB - 90) + degreesStart)) * radius;
+			const float rotA = degreesLength * (float(i) / (float)sides);
+			const float rotB = degreesLength * (float(i + 1) / (float)sides);
+			const float radA = ToRadians((rotA - 90.0f) + degreesStart);
+			const float radB = ToRadians((rotB - 90.0f) + degreesStart);
+			const Vector2 edgeA = Vector2(cosf(radA), sinf(radA)) * radius;
+			const Vector2 edgeB = Vector2(cosf(radB), sinf(radB)) * radius;
 			Vertex_XYC V[] = {
 				Vector2(x, y), colorCenter,
-				Vector2(x + edgeA.x, y + edgeA.y), colorBorder,
-				Vector2(x + edgeB.x, y + edgeB.y), colorBorder };
+				Vector2(x, y) + edgeA, colorBorder,
+				Vector2(x, y) + edgeB, colorBorder };
 			AddPrimitive(V);
 		}
 	}
@@ -1069,31 +1067,29 @@ namespace ig
 		Color32 colorCenter, Color32 colorBorder)
 	{
 		const uint32_t maxCircleSides = 360;
-		if (sides > maxCircleSides)sides = maxCircleSides;
-		if (sides < 3)sides = 3;
+		if (sides > maxCircleSides) sides = maxCircleSides;
+		if (sides < 3) sides = 3;
 
 		UsingBatch((BatchType)StandardBatchType::Lines_XYC);
 		for (uint32_t i = 0; i < sides; i++)
 		{
-			float rotA = degreesLength * (float(i) / (float)sides);
-			float rotB = degreesLength * (float(i + 1) / (float)sides);
-			Vector2 edgeA;
-			edgeA.x = cosf((float)IGLO_ToRadian((rotA - 90) + degreesStart)) * radius;
-			edgeA.y = sinf((float)IGLO_ToRadian((rotA - 90) + degreesStart)) * radius;
-			Vector2 edgeB;
-			edgeB.x = cosf((float)IGLO_ToRadian((rotB - 90) + degreesStart)) * radius;
-			edgeB.y = sinf((float)IGLO_ToRadian((rotB - 90) + degreesStart)) * radius;
+			const float rotA = degreesLength * (float(i) / (float)sides);
+			const float rotB = degreesLength * (float(i + 1) / (float)sides);
+			const float radA = ToRadians((rotA - 90.0f) + degreesStart);
+			const float radB = ToRadians((rotB - 90.0f) + degreesStart);
+			const Vector2 edgeA = Vector2(cosf(radA), sinf(radA)) * radius;
+			const Vector2 edgeB = Vector2(cosf(radB), sinf(radB)) * radius;
 			if (i == 0)
 			{
-				Vertex_XYC V[] = { Vector2(x, y), colorCenter, Vector2(x + edgeA.x, y + edgeA.y), colorBorder };
+				Vertex_XYC V[] = { Vector2(x, y), colorCenter, Vector2(x, y) + edgeA, colorBorder };
 				AddPrimitive(V);
 			}
 			if (i == sides - 1)
 			{
-				Vertex_XYC V[] = { Vector2(x, y), colorCenter, Vector2(x + edgeB.x, y + edgeB.y), colorBorder };
+				Vertex_XYC V[] = { Vector2(x, y), colorCenter, Vector2(x, y) + edgeB, colorBorder };
 				AddPrimitive(V);
 			}
-			Vertex_XYC V[] = { Vector2(x + edgeA.x, y + edgeA.y), colorBorder, Vector2(x + edgeB.x, y + edgeB.y), colorBorder };
+			Vertex_XYC V[] = { Vector2(x, y) + edgeA, colorBorder, Vector2(x, y) + edgeB, colorBorder };
 			AddPrimitive(V);
 		}
 	}
@@ -1111,8 +1107,8 @@ namespace ig
 		const uint32_t minCircleSides = 1;
 		if (circleSides > maxCircleSides) circleSides = maxCircleSides;
 		if (circleSides < minCircleSides) circleSides = minCircleSides;
-		if (circleRadius > width / 2)circleRadius = width / 2;
-		if (circleRadius > height / 2)circleRadius = height / 2;
+		if (circleRadius > width / 2) circleRadius = width / 2;
+		if (circleRadius > height / 2) circleRadius = height / 2;
 		FloatRect centerBox = FloatRect(x + circleRadius, y + circleRadius, x + width - circleRadius, y + height - circleRadius);
 		FloatRect topBox = FloatRect(x + circleRadius, y, x + width - circleRadius, y + circleRadius);
 		FloatRect bottomBox = topBox;
@@ -1180,13 +1176,13 @@ namespace ig
 		};
 		AddPrimitives(V, 10);
 
-		float degreePerTriangle = (float)IGLO_ToRadian(90); // each circle is a quarter size
-		degreePerTriangle /= circleSides;
-		for (unsigned int i = 0; i < circleSides; i++)
+		float radiansPerTriangle = ToRadians(90.0f); // Each circle is a quarter size
+		radiansPerTriangle /= circleSides;
+		for (uint32_t i = 0; i < circleSides; i++)
 		{
 			// Top left circle triangle
-			Vector2 edgeA = Vector2(-circleRadius, 0).GetRotated(degreePerTriangle * i);
-			Vector2 edgeB = edgeA.GetRotated(degreePerTriangle);
+			Vector2 edgeA = Vector2(-circleRadius, 0).GetRotated(radiansPerTriangle * i);
+			Vector2 edgeB = edgeA.GetRotated(radiansPerTriangle);
 			Vertex_XYC V0[] = {
 				Vector2(topLeft.x, topLeft.y), color,
 				Vector2(topLeft.x + edgeA.x, topLeft.y + edgeA.y), color,
@@ -1194,8 +1190,8 @@ namespace ig
 			AddPrimitive(V0);
 
 			// Top right circle triangle
-			edgeA = Vector2(0, -circleRadius).GetRotated(degreePerTriangle * i);
-			edgeB = edgeA.GetRotated(degreePerTriangle);
+			edgeA = Vector2(0, -circleRadius).GetRotated(radiansPerTriangle * i);
+			edgeB = edgeA.GetRotated(radiansPerTriangle);
 			Vertex_XYC V1[] = {
 				Vector2(topRight.x, topRight.y), color,
 				Vector2(topRight.x + edgeA.x, topRight.y + edgeA.y), color,
@@ -1203,8 +1199,8 @@ namespace ig
 			AddPrimitive(V1);
 
 			// Bottom left circle triangle
-			edgeA = Vector2(0, circleRadius).GetRotated(degreePerTriangle * i);
-			edgeB = edgeA.GetRotated(degreePerTriangle);
+			edgeA = Vector2(0, circleRadius).GetRotated(radiansPerTriangle * i);
+			edgeB = edgeA.GetRotated(radiansPerTriangle);
 			Vertex_XYC V2[] = {
 				Vector2(bottomLeft.x, bottomLeft.y), color,
 				Vector2(bottomLeft.x + edgeA.x, bottomLeft.y + edgeA.y), color,
@@ -1212,8 +1208,8 @@ namespace ig
 			AddPrimitive(V2);
 
 			// Bottom right circle triangle
-			edgeA = Vector2(circleRadius, 0).GetRotated(degreePerTriangle * i);
-			edgeB = edgeA.GetRotated(degreePerTriangle);
+			edgeA = Vector2(circleRadius, 0).GetRotated(radiansPerTriangle * i);
+			edgeB = edgeA.GetRotated(radiansPerTriangle);
 			Vertex_XYC V3[] = {
 				Vector2(bottomRight.x, bottomRight.y), color,
 				Vector2(bottomRight.x + edgeA.x, bottomRight.y + edgeA.y), color,
@@ -1228,8 +1224,8 @@ namespace ig
 		const uint32_t minCircleSides = 1;
 		if (circleSides > maxCircleSides) circleSides = maxCircleSides;
 		if (circleSides < minCircleSides) circleSides = minCircleSides;
-		if (circleRadius > width / 2)circleRadius = width / 2;
-		if (circleRadius > height / 2)circleRadius = height / 2;
+		if (circleRadius > width / 2) circleRadius = width / 2;
+		if (circleRadius > height / 2) circleRadius = height / 2;
 		FloatRect centerBox = FloatRect(x + circleRadius, y + circleRadius, x + width - circleRadius, y + height - circleRadius);
 		FloatRect topBox = FloatRect(x + circleRadius, y, x + width - circleRadius, y + circleRadius);
 		FloatRect bottomBox = topBox;
@@ -1268,37 +1264,37 @@ namespace ig
 		};
 		AddPrimitives(V, 4);
 
-		float degreePerTriangle = (float)IGLO_ToRadian(90); // each circle is a quarter size
-		degreePerTriangle /= circleSides;
-		for (unsigned int i = 0; i < circleSides; i++)
+		float radiansPerTriangle = ToRadians(90.0f); // Each circle is a quarter size
+		radiansPerTriangle /= circleSides;
+		for (uint32_t i = 0; i < circleSides; i++)
 		{
 			// Top left
-			Vector2 edgeA = Vector2(-circleRadius, 0).GetRotated(degreePerTriangle * i);
-			Vector2 edgeB = edgeA.GetRotated(degreePerTriangle);
+			Vector2 edgeA = Vector2(-circleRadius, 0).GetRotated(radiansPerTriangle * i);
+			Vector2 edgeB = edgeA.GetRotated(radiansPerTriangle);
 			Vertex_XYC V0[] = {
 				Vector2(topLeft.x + edgeA.x, topLeft.y + edgeA.y), color,
 				Vector2(topLeft.x + edgeB.x, topLeft.y + edgeB.y), color };
 			AddPrimitive(V0);
 
 			// Top right
-			edgeA = Vector2(0, -circleRadius).GetRotated(degreePerTriangle * i);
-			edgeB = edgeA.GetRotated(degreePerTriangle);
+			edgeA = Vector2(0, -circleRadius).GetRotated(radiansPerTriangle * i);
+			edgeB = edgeA.GetRotated(radiansPerTriangle);
 			Vertex_XYC V1[] = {
 				Vector2(topRight.x + edgeA.x, topRight.y + edgeA.y), color,
 				Vector2(topRight.x + edgeB.x, topRight.y + edgeB.y), color };
 			AddPrimitive(V1);
 
 			// Bottom left
-			edgeA = Vector2(0, circleRadius).GetRotated(degreePerTriangle * i);
-			edgeB = edgeA.GetRotated(degreePerTriangle);
+			edgeA = Vector2(0, circleRadius).GetRotated(radiansPerTriangle * i);
+			edgeB = edgeA.GetRotated(radiansPerTriangle);
 			Vertex_XYC V2[] = {
 				Vector2(bottomLeft.x + edgeA.x, bottomLeft.y + edgeA.y), color,
 				Vector2(bottomLeft.x + edgeB.x, bottomLeft.y + edgeB.y), color };
 			AddPrimitive(V2);
 
 			// Bottom right
-			edgeA = Vector2(circleRadius, 0).GetRotated(degreePerTriangle * i);
-			edgeB = edgeA.GetRotated(degreePerTriangle);
+			edgeA = Vector2(circleRadius, 0).GetRotated(radiansPerTriangle * i);
+			edgeB = edgeA.GetRotated(radiansPerTriangle);
 			Vertex_XYC V3[] = {
 				Vector2(bottomRight.x + edgeA.x, bottomRight.y + edgeA.y), color,
 				Vector2(bottomRight.x + edgeB.x, bottomRight.y + edgeB.y), color };

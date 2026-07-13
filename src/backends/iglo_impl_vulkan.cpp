@@ -2056,29 +2056,29 @@ namespace ig
 		vkCmdDispatch(impl.currentCommandBuffer, threadGroupCountX, threadGroupCountY, threadGroupCountZ);
 	}
 
-	void CommandList::Impl_CopyTexture(const Texture& source, const Texture& destination)
+	void CommandList::Impl_CopyTexture(const Texture& src, const Texture& dest)
 	{
 		// Copy all mip levels and faces
 		std::vector<VkImageCopy> regionList;
-		regionList.reserve(source.GetMipLevels());
-		for (uint32_t mip = 0; mip < source.GetMipLevels(); mip++)
+		regionList.reserve(src.GetMipLevels());
+		for (uint32_t mip = 0; mip < src.GetMipLevels(); mip++)
 		{
 			VkImageCopy region = {};
 
-			region.srcSubresource.aspectMask = GetFullImageAspect(source.GetFormat());
+			region.srcSubresource.aspectMask = GetFullImageAspect(src.GetFormat());
 			region.srcSubresource.mipLevel = mip;
 			region.srcSubresource.baseArrayLayer = 0;
-			region.srcSubresource.layerCount = source.GetNumFaces();
+			region.srcSubresource.layerCount = src.GetNumFaces();
 
-			region.dstSubresource.aspectMask = GetFullImageAspect(destination.GetFormat());
+			region.dstSubresource.aspectMask = GetFullImageAspect(dest.GetFormat());
 			region.dstSubresource.mipLevel = mip;
 			region.dstSubresource.baseArrayLayer = 0;
-			region.dstSubresource.layerCount = destination.GetNumFaces();
+			region.dstSubresource.layerCount = dest.GetNumFaces();
 
 			region.extent =
 			{
-				std::max(source.GetWidth() >> mip, 1u),
-				std::max(source.GetHeight() >> mip, 1u),
+				std::max(src.GetWidth() >> mip, 1u),
+				std::max(src.GetHeight() >> mip, 1u),
 				1u // Depth is always 1 for 2D textures
 			};
 
@@ -2086,42 +2086,73 @@ namespace ig
 		}
 
 		vkCmdCopyImage(impl.currentCommandBuffer,
-			source.GetVulkanImage(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-			destination.GetVulkanImage(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+			src.GetVulkanImage(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+			dest.GetVulkanImage(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
 			(uint32_t)regionList.size(), regionList.data());
 	}
 
-	void CommandList::Impl_CopyTextureSubresource(const Texture& source, uint32_t sourceFaceIndex, uint32_t sourceMipIndex,
-		const Texture& destination, uint32_t destFaceIndex, uint32_t destMipIndex)
+	void CommandList::Impl_CopyTextureSubresource(
+		const Texture& src, uint32_t srcFaceIndex, uint32_t srcMipIndex,
+		const Texture& dest, uint32_t destFaceIndex, uint32_t destMipIndex)
 	{
 		VkImageCopy region = {};
-		region.srcSubresource.aspectMask = GetFullImageAspect(source.GetFormat());
-		region.srcSubresource.mipLevel = sourceMipIndex;
-		region.srcSubresource.baseArrayLayer = sourceFaceIndex;
+		region.srcSubresource.aspectMask = GetFullImageAspect(src.GetFormat());
+		region.srcSubresource.mipLevel = srcMipIndex;
+		region.srcSubresource.baseArrayLayer = srcFaceIndex;
 		region.srcSubresource.layerCount = 1;
 
-		region.dstSubresource.aspectMask = GetFullImageAspect(destination.GetFormat());
+		region.dstSubresource.aspectMask = GetFullImageAspect(dest.GetFormat());
 		region.dstSubresource.mipLevel = destMipIndex;
 		region.dstSubresource.baseArrayLayer = destFaceIndex;
 		region.dstSubresource.layerCount = 1;
 
 		region.extent =
 		{
-			std::max(source.GetWidth() >> sourceMipIndex, 1u),
-			std::max(source.GetHeight() >> sourceMipIndex, 1u),
+			std::max(src.GetWidth() >> srcMipIndex, 1u),
+			std::max(src.GetHeight() >> srcMipIndex, 1u),
 			1u  // Depth is always 1 for 2D textures
 		};
 
 		vkCmdCopyImage(impl.currentCommandBuffer,
-			source.GetVulkanImage(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-			destination.GetVulkanImage(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+			src.GetVulkanImage(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+			dest.GetVulkanImage(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
 			1, &region);
 	}
 
-	void CommandList::Impl_CopyTextureToReadableTexture(const Texture& source, const Texture& destination)
+	void CommandList::Impl_CopyTextureRegion(
+		const Texture& src, TextureCopyLocation srcLocation,
+		const Texture& dest, TextureCopyLocation destLocation, Extent2D regionExtent)
 	{
-		const uint32_t numFaces = source.GetNumFaces();
-		const uint32_t numMips = source.GetMipLevels();
+		VkImageCopy region = {};
+		region.srcSubresource.aspectMask = GetFullImageAspect(src.GetFormat());
+		region.srcSubresource.mipLevel = srcLocation.mipIndex;
+		region.srcSubresource.baseArrayLayer = srcLocation.faceIndex;
+		region.srcSubresource.layerCount = 1;
+		region.srcOffset = { (int32_t)srcLocation.offsetX, (int32_t)srcLocation.offsetY, 0 };
+
+		region.dstSubresource.aspectMask = GetFullImageAspect(dest.GetFormat());
+		region.dstSubresource.mipLevel = destLocation.mipIndex;
+		region.dstSubresource.baseArrayLayer = destLocation.faceIndex;
+		region.dstSubresource.layerCount = 1;
+		region.dstOffset = { (int32_t)destLocation.offsetX, (int32_t)destLocation.offsetY, 0 };
+
+		region.extent =
+		{
+			regionExtent.width,
+			regionExtent.height,
+			1u // Depth is always 1 for 2D textures
+		};
+
+		vkCmdCopyImage(impl.currentCommandBuffer,
+			src.GetVulkanImage(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+			dest.GetVulkanImage(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+			1, &region);
+	}
+
+	void CommandList::Impl_CopyTextureToReadableTexture(const Texture& src, const Texture& dest)
+	{
+		const uint32_t numFaces = src.GetNumFaces();
+		const uint32_t numMips = src.GetMipLevels();
 		std::vector<VkImageCopy> regionList;
 		regionList.reserve((size_t)numFaces * numMips);
 
@@ -2130,20 +2161,20 @@ namespace ig
 			for (uint32_t mip = 0; mip < numMips; mip++)
 			{
 				VkImageCopy region = {};
-				region.srcSubresource.aspectMask = GetFullImageAspect(source.GetFormat());
+				region.srcSubresource.aspectMask = GetFullImageAspect(src.GetFormat());
 				region.srcSubresource.mipLevel = mip;
 				region.srcSubresource.baseArrayLayer = face;
 				region.srcSubresource.layerCount = 1;
 
-				region.dstSubresource.aspectMask = GetFullImageAspect(destination.GetFormat());
+				region.dstSubresource.aspectMask = GetFullImageAspect(dest.GetFormat());
 				region.dstSubresource.mipLevel = mip;
 				region.dstSubresource.baseArrayLayer = face;
 				region.dstSubresource.layerCount = 1;
 
 				region.extent =
 				{
-					std::max(source.GetWidth() >> mip, 1u),
-					std::max(source.GetHeight() >> mip, 1u),
+					std::max(src.GetWidth() >> mip, 1u),
+					std::max(src.GetHeight() >> mip, 1u),
 					1u  // Depth is always 1 for 2D textures
 				};
 
@@ -2152,68 +2183,68 @@ namespace ig
 		}
 
 		vkCmdCopyImage(impl.currentCommandBuffer,
-			source.GetVulkanImage(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-			destination.GetVulkanImage(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+			src.GetVulkanImage(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+			dest.GetVulkanImage(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
 			(uint32_t)regionList.size(), regionList.data());
 	}
 
-	void CommandList::Impl_CopyTextureSubresourceToReadableTexture(const Texture& source, uint32_t sourceFaceIndex,
-		uint32_t sourceMipIndex, const Texture& destination)
+	void CommandList::Impl_CopyTextureSubresourceToReadableTexture(const Texture& src, uint32_t srcFaceIndex,
+		uint32_t srcMipIndex, const Texture& dest)
 	{
 		VkImageCopy region = {};
-		region.srcSubresource.aspectMask = GetFullImageAspect(source.GetFormat());
-		region.srcSubresource.mipLevel = sourceMipIndex;
-		region.srcSubresource.baseArrayLayer = sourceFaceIndex;
+		region.srcSubresource.aspectMask = GetFullImageAspect(src.GetFormat());
+		region.srcSubresource.mipLevel = srcMipIndex;
+		region.srcSubresource.baseArrayLayer = srcFaceIndex;
 		region.srcSubresource.layerCount = 1;
 
 		// Destination is single-subresource
-		region.dstSubresource.aspectMask = GetFullImageAspect(destination.GetFormat());
+		region.dstSubresource.aspectMask = GetFullImageAspect(dest.GetFormat());
 		region.dstSubresource.mipLevel = 0;
 		region.dstSubresource.baseArrayLayer = 0;
 		region.dstSubresource.layerCount = 1;
 
 		region.extent =
 		{
-			std::max(source.GetWidth() >> sourceMipIndex, 1u),
-			std::max(source.GetHeight() >> sourceMipIndex, 1u),
+			std::max(src.GetWidth() >> srcMipIndex, 1u),
+			std::max(src.GetHeight() >> srcMipIndex, 1u),
 			1u  // Depth is always 1 for 2D textures
 		};
 
 		vkCmdCopyImage(impl.currentCommandBuffer,
-			source.GetVulkanImage(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-			destination.GetVulkanImage(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+			src.GetVulkanImage(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+			dest.GetVulkanImage(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
 			1, &region);
 	}
 
-	void CommandList::CopyBuffer(const Buffer& source, const Buffer& destination)
+	void CommandList::CopyBuffer(const Buffer& src, const Buffer& dest)
 	{
 		VkBufferCopy copyRegion = {};
 		copyRegion.srcOffset = 0;
 		copyRegion.dstOffset = 0;
-		copyRegion.size = source.GetSize();
+		copyRegion.size = src.GetSize();
 
-		vkCmdCopyBuffer(impl.currentCommandBuffer, source.GetVulkanBuffer(), destination.GetVulkanBuffer(), 1, &copyRegion);
+		vkCmdCopyBuffer(impl.currentCommandBuffer, src.GetVulkanBuffer(), dest.GetVulkanBuffer(), 1, &copyRegion);
 	}
 
-	void CommandList::CopyTempBufferToTexture(const TempBuffer& source, const Texture& destination)
+	void CommandList::CopyTempBufferToTexture(const TempBuffer& src, const Texture& dest)
 	{
 		std::vector<VkBufferImageCopy> regionList;
-		regionList.reserve((size_t)destination.GetNumFaces() * destination.GetMipLevels());
+		regionList.reserve((size_t)dest.GetNumFaces() * dest.GetMipLevels());
 
-		const FormatInfo formatInfo = GetFormatInfo(destination.GetFormat());
+		const FormatInfo formatInfo = GetFormatInfo(dest.GetFormat());
 		const bool blockCompressed = (formatInfo.blockSize > 0);
 		const uint32_t texelBlockSize = blockCompressed ? 4 : 1;
 		const uint32_t bytesPerBlock = blockCompressed ? formatInfo.blockSize : formatInfo.bytesPerPixel;
 		const uint32_t textureRowPitch = context.GetGraphicsSpecs().bufferPlacementAlignments.textureRowPitch;
 
-		uint64_t vkBufferOffset = source.offset;
-		for (uint32_t face = 0; face < destination.GetNumFaces(); face++)
+		uint64_t vkBufferOffset = src.offset;
+		for (uint32_t face = 0; face < dest.GetNumFaces(); face++)
 		{
-			for (uint32_t mip = 0; mip < destination.GetMipLevels(); mip++)
+			for (uint32_t mip = 0; mip < dest.GetMipLevels(); mip++)
 			{
-				const Extent2D mipExtent = Image::CalculateMipExtent(destination.GetExtent(), mip);
-				const uint64_t basicRowPitch = Image::CalculateMipRowPitch(destination.GetExtent(), destination.GetFormat(), mip);
-				const uint64_t basicMipSize = Image::CalculateMipSize(destination.GetExtent(), destination.GetFormat(), mip);
+				const Extent2D mipExtent = Image::CalculateMipExtent(dest.GetExtent(), mip);
+				const uint64_t basicRowPitch = Image::CalculateMipRowPitch(dest.GetExtent(), dest.GetFormat(), mip);
+				const uint64_t basicMipSize = Image::CalculateMipSize(dest.GetExtent(), dest.GetFormat(), mip);
 				const uint64_t alignedRowPitch = AlignUp(basicRowPitch, textureRowPitch);
 				const uint64_t numScanLines = basicMipSize / basicRowPitch;
 				assert(alignedRowPitch % bytesPerBlock == 0 && "aligned row pitch must be a whole number of texel blocks");
@@ -2222,7 +2253,7 @@ namespace ig
 				region.bufferOffset = vkBufferOffset;
 				region.bufferRowLength = (uint32_t)((alignedRowPitch / bytesPerBlock) * texelBlockSize);
 				region.bufferImageHeight = (uint32_t)AlignUp(mipExtent.height, texelBlockSize);
-				region.imageSubresource.aspectMask = GetFullImageAspect(destination.GetFormat());
+				region.imageSubresource.aspectMask = GetFullImageAspect(dest.GetFormat());
 				region.imageSubresource.mipLevel = mip;
 				region.imageSubresource.baseArrayLayer = face;
 				region.imageSubresource.layerCount = 1;
@@ -2236,46 +2267,45 @@ namespace ig
 		}
 
 		vkCmdCopyBufferToImage(impl.currentCommandBuffer,
-			source.impl.buffer, destination.GetVulkanImage(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+			src.impl.buffer, dest.GetVulkanImage(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
 			(uint32_t)regionList.size(), regionList.data());
 	}
 
-	void CommandList::CopyTempBufferToTextureSubresource(const TempBuffer& source, const Texture& destination, uint32_t destFaceIndex, uint32_t destMipIndex)
+	void CommandList::CopyTempBufferToTextureSubresource(const TempBuffer& src, const Texture& dest, uint32_t destFaceIndex, uint32_t destMipIndex)
 	{
-		const Extent2D mipExtent = Image::CalculateMipExtent(destination.GetExtent(), destMipIndex);
-		const FormatInfo formatInfo = GetFormatInfo(destination.GetFormat());
+		const Extent2D mipExtent = Image::CalculateMipExtent(dest.GetExtent(), destMipIndex);
+		const FormatInfo formatInfo = GetFormatInfo(dest.GetFormat());
 		const bool blockCompressed = (formatInfo.blockSize > 0);
 		const uint32_t texelBlockSize = blockCompressed ? 4 : 1;
 		const uint32_t bytesPerBlock = blockCompressed ? formatInfo.blockSize : formatInfo.bytesPerPixel;
 		const uint32_t textureRowPitch = context.GetGraphicsSpecs().bufferPlacementAlignments.textureRowPitch;
-		const uint64_t basicRowPitch = Image::CalculateMipRowPitch(destination.GetExtent(), destination.GetFormat(), destMipIndex);
+		const uint64_t basicRowPitch = Image::CalculateMipRowPitch(dest.GetExtent(), dest.GetFormat(), destMipIndex);
 		const uint64_t alignedRowPitch = AlignUp(basicRowPitch, textureRowPitch);
 		assert(alignedRowPitch % bytesPerBlock == 0 && "aligned row pitch must be a whole number of texel blocks");
 
 		VkBufferImageCopy region = {};
-		region.bufferOffset = source.offset;
+		region.bufferOffset = src.offset;
 		region.bufferRowLength = (uint32_t)((alignedRowPitch / bytesPerBlock) * texelBlockSize);
 		region.bufferImageHeight = (uint32_t)AlignUp(mipExtent.height, texelBlockSize);
-		region.imageSubresource.aspectMask = GetFullImageAspect(destination.GetFormat());
+		region.imageSubresource.aspectMask = GetFullImageAspect(dest.GetFormat());
 		region.imageSubresource.mipLevel = destMipIndex;
 		region.imageSubresource.baseArrayLayer = destFaceIndex;
 		region.imageSubresource.layerCount = 1;
 		region.imageOffset = { 0, 0, 0 };
 		region.imageExtent = { mipExtent.width, mipExtent.height, 1 };
 
-		vkCmdCopyBufferToImage(impl.currentCommandBuffer, source.impl.buffer, destination.GetVulkanImage(),
-			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+		vkCmdCopyBufferToImage(impl.currentCommandBuffer, src.impl.buffer, dest.GetVulkanImage(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
 	}
 
-	void CommandList::CopyTempBufferToBuffer(const TempBuffer& source, const Buffer& destination)
+	void CommandList::CopyTempBufferToBuffer(const TempBuffer& src, const Buffer& dest)
 	{
 		VkBufferCopy copyRegion =
 		{
-			.srcOffset = source.offset,
+			.srcOffset = src.offset,
 			.dstOffset = 0,
-			.size = destination.GetSize(),
+			.size = dest.GetSize(),
 		};
-		vkCmdCopyBuffer(impl.currentCommandBuffer, source.impl.buffer, destination.GetVulkanBuffer(), 1, &copyRegion);
+		vkCmdCopyBuffer(impl.currentCommandBuffer, src.impl.buffer, dest.GetVulkanBuffer(), 1, &copyRegion);
 	}
 
 	void CommandList::EndRenderPass()

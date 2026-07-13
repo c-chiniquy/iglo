@@ -20,15 +20,13 @@
 #include <functional>
 #include <filesystem>
 
-#define IGLO_PI	(3.14159265358979323846)
-#define IGLO_SQR2 (1.41421356237309504880)
-#define IGLO_ToRadian(degree) ((degree) * (IGLO_PI / 180.0))
-#define IGLO_ToDegree(radian) ((radian) * (180.0 / IGLO_PI))
-#define IGLO_FLOAT32_MAX (3.402823466e+38f)
-#define IGLO_UINT16_MAX (0xffff)
-#define IGLO_UINT32_MAX (0xffffffff)
-#define IGLO_UINT64_MAX (0xffffffffffffffff)
-#define IGLO_MEGABYTE (1024 * 1024)
+constexpr double IGLO_PI = 3.14159265358979323846;
+constexpr double IGLO_SQRT2 = 1.41421356237309504880;
+constexpr float IGLO_FLOAT32_MAX = 3.402823466e+38f;
+constexpr uint32_t IGLO_UINT16_MAX = 0xffff;
+constexpr uint32_t IGLO_UINT32_MAX = 0xffffffff;
+constexpr uint64_t IGLO_UINT64_MAX = 0xffffffffffffffff;
+constexpr uint64_t IGLO_MEGABYTE = 1024 * 1024;
 
 #define IGLO_DEFINE_FLAG_OPERATORS(EnumType, UnderlyingType) \
     constexpr inline EnumType operator|(EnumType a, EnumType b) \
@@ -902,6 +900,23 @@ namespace ig
 	{
 		if (value == 0) return false;
 		return ((value & (value - 1)) == 0);
+	}
+
+	constexpr float ToRadians(float degrees)
+	{
+		return degrees * (float)(IGLO_PI / 180.0);
+	}
+	constexpr double ToRadians(double degrees)
+	{
+		return degrees * (IGLO_PI / 180.0);
+	}
+	constexpr float ToDegrees(float radians)
+	{
+		return radians * (float)(180.0 / IGLO_PI);
+	}
+	constexpr double ToDegrees(double radians)
+	{
+		return radians * (180.0 / IGLO_PI);
 	}
 
 } // namespace ig

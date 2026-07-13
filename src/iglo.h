@@ -9,7 +9,7 @@
 // -------------------- Version --------------------//
 #define IGLO_VERSION_MAJOR 0
 #define IGLO_VERSION_MINOR 7
-#define IGLO_VERSION_PATCH 3
+#define IGLO_VERSION_PATCH 4
 
 #define IGLO_STRINGIFY_HELPER(x) #x
 #define IGLO_STRINGIFY(x) IGLO_STRINGIFY_HELPER(x)
@@ -79,6 +79,7 @@ namespace ig
 	enum class BarrierLayout : uint64_t;
 	enum class SimpleBarrier;
 	struct SimpleBarrierInfo;
+	struct TextureCopyLocation;
 	class CommandList;
 	struct TempBuffer;
 	class UploadHeap;
@@ -1868,6 +1869,14 @@ namespace ig
 	};
 	SimpleBarrierInfo GetSimpleBarrierInfo(SimpleBarrier simpleBarrier, CommandListType queueType);
 
+	struct TextureCopyLocation
+	{
+		uint32_t faceIndex = 0;
+		uint32_t mipIndex = 0;
+		uint32_t offsetX = 0;
+		uint32_t offsetY = 0;
+	};
+
 	class CommandList
 	{
 	private:
@@ -1979,16 +1988,21 @@ namespace ig
 
 		void DispatchCompute(uint32_t threadGroupCountX, uint32_t threadGroupCountY, uint32_t threadGroupCountZ);
 
-		void CopyTexture(const Texture& source, const Texture& destination);
-		void CopyTextureSubresource(const Texture& source, uint32_t sourceFaceIndex, uint32_t sourceMipIndex,
-			const Texture& destination, uint32_t destFaceIndex, uint32_t destMipIndex);
-		void CopyBuffer(const Buffer& source, const Buffer& destination);
+		void CopyTexture(const Texture& src, const Texture& dest);
+		void CopyTextureSubresource(
+			const Texture& src, uint32_t srcFaceIndex, uint32_t srcMipIndex,
+			const Texture& dest, uint32_t destFaceIndex, uint32_t destMipIndex);
+		void CopyTextureRegion(
+			const Texture& src, TextureCopyLocation srcLocation,
+			const Texture& dest, TextureCopyLocation destLocation, Extent2D regionExtent);
 
-		void CopyTempBufferToTexture(const TempBuffer& source, const Texture& destination);
-		void CopyTempBufferToTextureSubresource(const TempBuffer& source, const Texture& destination, uint32_t destFaceIndex, uint32_t destMipIndex);
-		void CopyTempBufferToBuffer(const TempBuffer& source, const Buffer& destination);
+		void CopyBuffer(const Buffer& src, const Buffer& dest);
 
-		void ResolveTexture(const Texture& source, const Texture& destination);
+		void CopyTempBufferToTexture(const TempBuffer& src, const Texture& dest);
+		void CopyTempBufferToTextureSubresource(const TempBuffer& src, const Texture& dest, uint32_t destFaceIndex, uint32_t destMipIndex);
+		void CopyTempBufferToBuffer(const TempBuffer& src, const Buffer& dest);
+
+		void ResolveTexture(const Texture& src, const Texture& dest);
 
 		CommandListType GetCommandListType() const { return commandListType; }
 
@@ -2020,14 +2034,17 @@ namespace ig
 		void Impl_SetPushConstants(const void* data, uint32_t sizeInBytes, uint32_t destOffsetInBytes);
 		void Impl_SetComputePushConstants(const void* data, uint32_t sizeInBytes, uint32_t destOffsetInBytes);
 		void Impl_SetVertexBuffers(const Buffer* const* vertexBuffers, uint32_t count, uint32_t startSlot);
-		void Impl_CopyTexture(const Texture& source, const Texture& destination);
-		void Impl_CopyTextureSubresource(const Texture& source, uint32_t sourceFaceIndex, uint32_t sourceMipIndex,
-			const Texture& destination, uint32_t destFaceIndex, uint32_t destMipIndex);
-		void Impl_CopyTextureToReadableTexture(const Texture& source, const Texture& destination);
-		void Impl_CopyTextureSubresourceToReadableTexture(const Texture& source, uint32_t sourceFaceIndex,
-			uint32_t sourceMipIndex, const Texture& destination);
+		void Impl_CopyTexture(const Texture& src, const Texture& dest);
+		void Impl_CopyTextureSubresource(
+			const Texture& src, uint32_t srcFaceIndex, uint32_t srcMipIndex,
+			const Texture& dest, uint32_t destFaceIndex, uint32_t destMipIndex);
+		void Impl_CopyTextureRegion(
+			const Texture& src, TextureCopyLocation srcLocation,
+			const Texture& dest, TextureCopyLocation destLocation, Extent2D regionExtent);
+		void Impl_CopyTextureToReadableTexture(const Texture& src, const Texture& dest);
+		void Impl_CopyTextureSubresourceToReadableTexture(const Texture& src, uint32_t srcFaceIndex, uint32_t srcMipIndex, const Texture& dest);
 
-		void CopyTextureToReadableTexture(const Texture& source, const Texture& destination);
+		void CopyTextureToReadableTexture(const Texture& src, const Texture& dest);
 		static void AssertPushConstants(const void* data, uint32_t sizeInBytes, uint32_t destOffsetInBytes);
 #ifdef IGLO_VULKAN
 		//NOTE: The returned VkRenderingInfo should be considered temporary because
