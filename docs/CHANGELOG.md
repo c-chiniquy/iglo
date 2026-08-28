@@ -1,6 +1,16 @@
 
 # Changelog
 
+## v0.7.5
+
+### Changes
+
+- Improvements:
+  - Global constants in iglo_utility.h and iglo.h now use `inline constexpr`.
+  - Most iglo datatypes in iglo_utility.h now work with `constexpr`.
+- Bug fixes:
+  - Fixed a compile error on Linux debug builds (iglo.h now includes `<atomic>`).
+
 ## v0.7.4
 
 ### Changes
