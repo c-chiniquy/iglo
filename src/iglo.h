@@ -23,6 +23,7 @@
 
 #include <queue>
 #include <mutex>
+#include <atomic>
 
 namespace ig
 {
@@ -101,15 +102,15 @@ namespace ig
 	class IGLOContext;
 
 	// -------------------- Constants --------------------//
-	constexpr uint32_t MAX_SIMULTANEOUS_RENDER_TARGETS = 8;
-	constexpr uint32_t MAX_QUEUED_BARRIERS_PER_TYPE = 16;
-	constexpr uint32_t MAX_VERTEX_BUFFER_BIND_SLOTS = 32;
-	constexpr uint32_t MAX_COMMAND_LISTS_PER_SUBMIT = 64;
+	inline constexpr uint32_t MAX_SIMULTANEOUS_RENDER_TARGETS = 8;
+	inline constexpr uint32_t MAX_QUEUED_BARRIERS_PER_TYPE = 16;
+	inline constexpr uint32_t MAX_VERTEX_BUFFER_BIND_SLOTS = 32;
+	inline constexpr uint32_t MAX_COMMAND_LISTS_PER_SUBMIT = 64;
 
 	// The guaranteed minimum push constant size is 256 bytes in D3D12 and 128 bytes in Vulkan 1.3.
 	// To ensure cross-compatibility, we cap the maximum at 128 bytes.
 	// Push constants should not be used for large data transfers anyway.
-	constexpr uint64_t MAX_PUSH_CONSTANTS_BYTE_SIZE = 128;
+	inline constexpr uint64_t MAX_PUSH_CONSTANTS_BYTE_SIZE = 128;
 
 
 	// -------------------- Pick Graphics API --------------------//
