@@ -517,31 +517,6 @@ namespace ig
 		return s;
 	}
 
-	bool Quaternion::operator == (const Quaternion& a) const
-	{
-		return a.x == x && a.y == y && a.z == z && a.w == w;
-	}
-	bool Quaternion::operator != (const Quaternion& a) const
-	{
-		return !operator==(a);
-	}
-	Quaternion& Quaternion::operator *=(const Quaternion& a)
-	{
-		*this = Quaternion(
-			w * a.x + x * a.w + y * a.z - z * a.y,
-			w * a.y - x * a.z + y * a.w + z * a.x,
-			w * a.z + x * a.y - y * a.x + z * a.w,
-			w * a.w - x * a.x - y * a.y - z * a.z);
-		return *this;
-	}
-	Quaternion& Quaternion::operator *= (const float& a)
-	{
-		x *= a;
-		y *= a;
-		z *= a;
-		w *= a;
-		return *this;
-	}
 	Quaternion Quaternion::AxisAngle(const Vector3& axis, float angleRadians)
 	{
 		Vector3 v = axis.GetNormalized() * std::sin(0.5f * angleRadians);
@@ -801,42 +776,18 @@ namespace ig
 		return s;
 	}
 
-	bool Extent2D::operator == (const Extent2D& a) const
-	{
-		return ((a.width == width) && (a.height == height));
-	}
-	bool Extent2D::operator != (const Extent2D& a) const
-	{
-		return !operator==(a);
-	}
 	std::string Extent2D::ToString() const
 	{
 		std::string s = "(" + std::to_string(width) + ", " + std::to_string(height) + ")";
 		return s;
 	}
 
-	bool Extent3D::operator == (const Extent3D& a) const
-	{
-		return ((a.width == width) && (a.height == height) && (a.depth == depth));
-	}
-	bool Extent3D::operator != (const Extent3D& a) const
-	{
-		return !operator==(a);
-	}
 	std::string Extent3D::ToString() const
 	{
 		std::string s = "(" + std::to_string(width) + ", " + std::to_string(height) + ", " + std::to_string(depth) + ")";
 		return s;
 	}
 
-	bool IntPoint::operator == (const IntPoint& a) const
-	{
-		return ((a.x == x) && (a.y == y));
-	}
-	bool IntPoint::operator != (const IntPoint& a) const
-	{
-		return !operator==(a);
-	}
 	std::string IntPoint::ToString() const
 	{
 		std::string s = "(" + std::to_string(x) + ", " + std::to_string(y) + ")";
@@ -887,16 +838,6 @@ namespace ig
 	bool IntRect::OverlapsWithRect(IntRect rect) const
 	{
 		return (right > rect.left && rect.right > left && bottom > rect.top && rect.bottom > top);
-	}
-
-	bool IntRect::operator == (const IntRect& a) const
-	{
-		return ((a.left == left) && (a.top == top) && (a.right == right) && (a.bottom == bottom));
-	}
-
-	bool IntRect::operator != (const IntRect& a) const
-	{
-		return !operator==(a);
 	}
 
 	bool FloatRect::InclusiveContainsPoint(float pointX, float pointY) const
@@ -964,35 +905,6 @@ namespace ig
 		return out;
 	}
 
-	bool FloatRect::operator == (const FloatRect& a) const
-	{
-		return ((a.left == left) && (a.top == top) && (a.right == right) && (a.bottom == bottom));
-	}
-
-	bool FloatRect::operator != (const FloatRect& a) const
-	{
-		return !operator==(a);
-	}
-
-
-	bool Color32::operator == (const Color32& a) const
-	{
-		return a.rgba == rgba;
-	}
-	bool Color32::operator != (const Color32& a) const
-	{
-		return !operator==(a);
-	}
-
-
-	bool Color::operator == (const Color& a) const
-	{
-		return ((a.red == red) && (a.green == green) && (a.blue == blue) && (a.alpha == alpha));
-	}
-	bool Color::operator != (const Color& a) const
-	{
-		return !operator==(a);
-	}
 	Color32 Color::ToColor32() const
 	{
 		float r = std::clamp(red, 0.0f, 1.0f);
@@ -2511,36 +2423,6 @@ namespace ig
 		bool NextProbability(float probability) { return instance.NextProbability(probability); }
 		float NextFloat(float min, float max) { return instance.NextFloat(min, max); }
 		double NextDouble(double min, double max) { return instance.NextDouble(min, max); }
-	}
-
-	uint64_t AlignUp(uint64_t value, uint64_t alignment)
-	{
-		if (alignment == 0) Fatal("AlignUp: Alignment must be non-zero.");
-		if (alignment & (alignment - 1)) Fatal("AlignUp: Alignment not a power of 2.");
-
-		uint64_t alignMask = alignment - 1;
-		if (value & alignMask) // Not aligned
-		{
-			return (value & ~alignMask) + alignment;
-		}
-		else
-		{
-			return value; // Already aligned
-		}
-	}
-
-	float Lerp(float a, float b, float t)
-	{
-		if (t <= 0.0f) return a;
-		if (t >= 1.0f) return b;
-		return a + (b - a) * t;
-	}
-
-	double Lerp(double a, double b, double t)
-	{
-		if (t <= 0.0) return a;
-		if (t >= 1.0) return b;
-		return a + (b - a) * t;
 	}
 
 } // namespace ig

@@ -10,6 +10,9 @@
 #endif
 
 #include <cmath>
+#include <limits>
+#include <numbers>
+#include <cstdint>
 #include <cstring>
 #include <cassert>
 #include <array>
@@ -20,28 +23,29 @@
 #include <functional>
 #include <filesystem>
 
-constexpr double IGLO_PI = 3.14159265358979323846;
-constexpr double IGLO_SQRT2 = 1.41421356237309504880;
-constexpr float IGLO_FLOAT32_MAX = 3.402823466e+38f;
-constexpr uint32_t IGLO_UINT16_MAX = 0xffff;
-constexpr uint32_t IGLO_UINT32_MAX = 0xffffffff;
-constexpr uint64_t IGLO_UINT64_MAX = 0xffffffffffffffff;
-constexpr uint64_t IGLO_MEGABYTE = 1024 * 1024;
+// Common constants
+inline constexpr double IGLO_PI = std::numbers::pi;
+inline constexpr double IGLO_SQRT2 = std::numbers::sqrt2;
+inline constexpr float IGLO_FLOAT32_MAX = std::numeric_limits<float>::max();
+inline constexpr uint32_t IGLO_UINT16_MAX = std::numeric_limits<uint16_t>::max();
+inline constexpr uint32_t IGLO_UINT32_MAX = std::numeric_limits<uint32_t>::max();
+inline constexpr uint64_t IGLO_UINT64_MAX = std::numeric_limits<uint64_t>::max();
+inline constexpr uint64_t IGLO_MEGABYTE = 1024 * 1024;
 
 #define IGLO_DEFINE_FLAG_OPERATORS(EnumType, UnderlyingType) \
-    constexpr inline EnumType operator|(EnumType a, EnumType b) \
+    inline constexpr EnumType operator|(EnumType a, EnumType b) \
     { \
         return static_cast<EnumType>(static_cast<UnderlyingType>(a) | static_cast<UnderlyingType>(b)); \
     } \
-    constexpr inline EnumType operator&(EnumType a, EnumType b) \
+    inline constexpr EnumType operator&(EnumType a, EnumType b) \
     { \
         return static_cast<EnumType>(static_cast<UnderlyingType>(a) & static_cast<UnderlyingType>(b)); \
     } \
-    constexpr inline EnumType operator~(EnumType a) \
+    inline constexpr EnumType operator~(EnumType a) \
     { \
         return static_cast<EnumType>(~static_cast<UnderlyingType>(a)); \
     } \
-    constexpr inline bool HasFlag(EnumType value, EnumType test) \
+    inline constexpr bool HasFlag(EnumType value, EnumType test) \
     { \
         return (value & test) == test; \
     }
@@ -209,21 +213,21 @@ namespace ig
 	// 2D Vector
 	struct Vector2
 	{
-		Vector2() :x(0), y(0) {}
-		Vector2(float x, float y) :x(x), y(y) {};
+		constexpr Vector2() :x(0), y(0) {}
+		constexpr Vector2(float x, float y) : x(x), y(y) {};
 
 		// Operators
-		Vector2 operator - () const { return Vector2(-x, -y); }
-		Vector2& operator += (const Vector2& a) { x += a.x; y += a.y; return *this; }
-		Vector2& operator -= (const Vector2& a) { x -= a.x; y -= a.y; return *this; }
-		Vector2& operator *= (const float& a) { x *= a; y *= a; return *this; }
-		Vector2& operator /= (const float& a) { x /= a; y /= a; return *this; }
-		Vector2 operator + (const Vector2& a) const { return Vector2(x + a.x, y + a.y); }
-		Vector2 operator - (const Vector2& a) const { return Vector2(x - a.x, y - a.y); }
-		Vector2 operator * (float a) const { return Vector2(x * a, y * a); }
-		Vector2 operator / (float a) const { return Vector2(x / a, y / a); }
-		bool operator == (const Vector2& a) const { return (a.x == x && a.y == y); }
-		bool operator != (const Vector2& a) const { return !(a.x == x && a.y == y); }
+		constexpr Vector2 operator - () const { return Vector2(-x, -y); }
+		constexpr Vector2& operator += (const Vector2& a) { x += a.x; y += a.y; return *this; }
+		constexpr Vector2& operator -= (const Vector2& a) { x -= a.x; y -= a.y; return *this; }
+		constexpr Vector2& operator *= (const float& a) { x *= a; y *= a; return *this; }
+		constexpr Vector2& operator /= (const float& a) { x /= a; y /= a; return *this; }
+		constexpr Vector2 operator + (const Vector2& a) const { return Vector2(x + a.x, y + a.y); }
+		constexpr Vector2 operator - (const Vector2& a) const { return Vector2(x - a.x, y - a.y); }
+		constexpr Vector2 operator * (float a) const { return Vector2(x * a, y * a); }
+		constexpr Vector2 operator / (float a) const { return Vector2(x / a, y / a); }
+		constexpr bool operator == (const Vector2& a) const { return a.x == x && a.y == y; }
+		constexpr bool operator != (const Vector2& a) const { return !operator==(a); }
 
 		static float Distance(float x1, float y1, float x2, float y2);
 		static float Distance(const Vector2& p0, const Vector2& p1);
@@ -243,21 +247,21 @@ namespace ig
 	// 3D Vector
 	struct Vector3
 	{
-		Vector3() :x(0), y(0), z(0) {}
-		Vector3(float x, float y, float z) :x(x), y(y), z(z) {};
+		constexpr Vector3() :x(0), y(0), z(0) {}
+		constexpr Vector3(float x, float y, float z) : x(x), y(y), z(z) {};
 
 		// Operators
-		Vector3 operator - () const { return Vector3(-x, -y, -z); }
-		Vector3& operator += (const Vector3& a) { x += a.x; y += a.y; z += a.z; return *this; }
-		Vector3& operator -= (const Vector3& a) { x -= a.x; y -= a.y; z -= a.z; return *this; }
-		Vector3& operator *= (const float& a) { x *= a; y *= a; z *= a; return *this; }
-		Vector3& operator /= (const float& a) { x /= a; y /= a; z /= a; return *this; }
-		Vector3 operator + (const Vector3& a) const { return Vector3(x + a.x, y + a.y, z + a.z); }
-		Vector3 operator - (const Vector3& a) const { return Vector3(x - a.x, y - a.y, z - a.z); }
-		Vector3 operator * (const float& a) const { return Vector3(x * a, y * a, z * a); }
-		Vector3 operator / (const float& a) const { return Vector3(x / a, y / a, z / a); }
-		bool operator == (const Vector3& a) const { return  (x == a.x && y == a.y && z == a.z); }
-		bool operator != (const Vector3& a) const { return !(x == a.x && y == a.y && z == a.z); }
+		constexpr Vector3 operator - () const { return Vector3(-x, -y, -z); }
+		constexpr Vector3& operator += (const Vector3& a) { x += a.x; y += a.y; z += a.z; return *this; }
+		constexpr Vector3& operator -= (const Vector3& a) { x -= a.x; y -= a.y; z -= a.z; return *this; }
+		constexpr Vector3& operator *= (const float& a) { x *= a; y *= a; z *= a; return *this; }
+		constexpr Vector3& operator /= (const float& a) { x /= a; y /= a; z /= a; return *this; }
+		constexpr Vector3 operator + (const Vector3& a) const { return Vector3(x + a.x, y + a.y, z + a.z); }
+		constexpr Vector3 operator - (const Vector3& a) const { return Vector3(x - a.x, y - a.y, z - a.z); }
+		constexpr Vector3 operator * (const float& a) const { return Vector3(x * a, y * a, z * a); }
+		constexpr Vector3 operator / (const float& a) const { return Vector3(x / a, y / a, z / a); }
+		constexpr bool operator == (const Vector3& a) const { return x == a.x && y == a.y && z == a.z; }
+		constexpr bool operator != (const Vector3& a) const { return !operator==(a); }
 
 		// Assuming clockwise culling
 		static Vector3 CalculateNormal(const Vector3& a, const Vector3& b, const Vector3& c);
@@ -283,21 +287,21 @@ namespace ig
 	// 4D Vector
 	struct Vector4
 	{
-		Vector4() :x(0), y(0), z(0), w(0) {}
-		Vector4(float x, float y, float z, float w) :x(x), y(y), z(z), w(w) {};
+		constexpr Vector4() :x(0), y(0), z(0), w(0) {}
+		constexpr Vector4(float x, float y, float z, float w) : x(x), y(y), z(z), w(w) {};
 
 		// Operators
-		Vector4 operator - () const { return Vector4(-x, -y, -z, -w); }
-		Vector4& operator += (const Vector4& a) { x += a.x; y += a.y; z += a.z; w += a.w; return *this; }
-		Vector4& operator -= (const Vector4& a) { x -= a.x; y -= a.y; z -= a.z; w -= a.w; return *this; }
-		Vector4& operator *= (const float& a) { x *= a; y *= a; z *= a; w *= a; return *this; }
-		Vector4& operator /= (const float& a) { x /= a; y /= a; z /= a; w /= a; return *this; }
-		Vector4 operator + (const Vector4& a) const { return Vector4(x + a.x, y + a.y, z + a.z, w + a.w); }
-		Vector4 operator - (const Vector4& a) const { return Vector4(x - a.x, y - a.y, z - a.z, w - a.w); }
-		Vector4 operator * (const float& a) const { return Vector4(x * a, y * a, z * a, w * a); }
-		Vector4 operator / (const float& a) const { return Vector4(x / a, y / a, z / a, w / a); }
-		bool operator == (const Vector4& a) const { return  (x == a.x && y == a.y && z == a.z && w == a.w); }
-		bool operator != (const Vector4& a) const { return !(x == a.x && y == a.y && z == a.z && w == a.w); }
+		constexpr Vector4 operator - () const { return Vector4(-x, -y, -z, -w); }
+		constexpr Vector4& operator += (const Vector4& a) { x += a.x; y += a.y; z += a.z; w += a.w; return *this; }
+		constexpr Vector4& operator -= (const Vector4& a) { x -= a.x; y -= a.y; z -= a.z; w -= a.w; return *this; }
+		constexpr Vector4& operator *= (const float& a) { x *= a; y *= a; z *= a; w *= a; return *this; }
+		constexpr Vector4& operator /= (const float& a) { x /= a; y /= a; z /= a; w /= a; return *this; }
+		constexpr Vector4 operator + (const Vector4& a) const { return Vector4(x + a.x, y + a.y, z + a.z, w + a.w); }
+		constexpr Vector4 operator - (const Vector4& a) const { return Vector4(x - a.x, y - a.y, z - a.z, w - a.w); }
+		constexpr Vector4 operator * (const float& a) const { return Vector4(x * a, y * a, z * a, w * a); }
+		constexpr Vector4 operator / (const float& a) const { return Vector4(x / a, y / a, z / a, w / a); }
+		constexpr bool operator == (const Vector4& a) const { return x == a.x && y == a.y && z == a.z && w == a.w; }
+		constexpr bool operator != (const Vector4& a) const { return !operator==(a); }
 
 		static Vector4 Transform(const Vector4& v, const Matrix4x4& m);
 
@@ -317,21 +321,29 @@ namespace ig
 	struct Quaternion
 	{
 		// Quaternion identity
-		Quaternion() :x(0), y(0), z(0), w(1) {}
+		constexpr Quaternion() :x(0), y(0), z(0), w(1) {}
 
-		Quaternion(float x, float y, float z, float w) :x(x), y(y), z(z), w(w) {};
+		constexpr Quaternion(float x, float y, float z, float w) : x(x), y(y), z(z), w(w) {};
 
 		const static Quaternion Identity;
 
-		bool operator == (const Quaternion& a) const;
-		bool operator != (const Quaternion& a) const;
-
-		Quaternion& operator *= (const Quaternion& a);
-		Quaternion& operator *= (const float& a);
-		Quaternion operator * (const Quaternion& a) const { return Quaternion(*this) *= a; }
-		Quaternion operator * (const float& a) const { return Quaternion(*this) *= a; }
+		constexpr bool operator == (const Quaternion& a) const { return a.x == x && a.y == y && a.z == z && a.w == w; }
+		constexpr bool operator != (const Quaternion& a) const { return !operator==(a); }
+		constexpr Quaternion& operator *= (const Quaternion& a)
+		{
+			*this = Quaternion(
+				w * a.x + x * a.w + y * a.z - z * a.y,
+				w * a.y - x * a.z + y * a.w + z * a.x,
+				w * a.z + x * a.y - y * a.x + z * a.w,
+				w * a.w - x * a.x - y * a.y - z * a.z);
+			return *this;
+		}
+		constexpr Quaternion& operator *= (const float& a) { x *= a; y *= a; z *= a; w *= a; return *this; }
+		constexpr Quaternion operator * (const Quaternion& a) const { return Quaternion(*this) *= a; }
+		constexpr Quaternion operator * (const float& a) const { return Quaternion(*this) *= a; }
 
 		static Quaternion AxisAngle(const Vector3& axis, float angleRadians);
+
 		// Rotation is in radians
 		static Quaternion Euler(float x, float y, float z);
 		static Quaternion Euler(const Vector3& e) { return Euler(e.x, e.y, e.z); }
@@ -350,14 +362,14 @@ namespace ig
 	struct Matrix4x4
 	{
 		// Matrix4x4 identity
-		Matrix4x4() :
+		constexpr Matrix4x4() :
 			a1(1), a2(0), a3(0), a4(0),
 			b1(0), b2(1), b3(0), b4(0),
 			c1(0), c2(0), c3(1), c4(0),
 			d1(0), d2(0), d3(0), d4(1)
 		{}
 
-		Matrix4x4(
+		constexpr Matrix4x4(
 			float a1, float a2, float a3, float a4,
 			float b1, float b2, float b3, float b4,
 			float c1, float c2, float c3, float c4,
@@ -368,7 +380,7 @@ namespace ig
 			d1(d1), d2(d2), d3(d3), d4(d4)
 		{}
 
-		Matrix4x4(float elements[16]) :
+		constexpr Matrix4x4(const float elements[16]) :
 			a1(elements[0]), a2(elements[1]), a3(elements[2]), a4(elements[3]),
 			b1(elements[4]), b2(elements[5]), b3(elements[6]), b4(elements[7]),
 			c1(elements[8]), c2(elements[9]), c3(elements[10]), c4(elements[11]),
@@ -449,11 +461,11 @@ namespace ig
 
 	struct Extent2D
 	{
-		Extent2D() :width(0), height(0) {};
-		Extent2D(uint32_t width, uint32_t height) :width(width), height(height) {};
+		constexpr Extent2D() :width(0), height(0) {};
+		constexpr Extent2D(uint32_t width, uint32_t height) :width(width), height(height) {};
 
-		bool operator == (const Extent2D& a) const;
-		bool operator != (const Extent2D& a) const;
+		constexpr bool operator == (const Extent2D& a) const { return a.width == width && a.height == height; }
+		constexpr bool operator != (const Extent2D& a) const { return !operator==(a); }
 
 		std::string ToString() const;
 
@@ -463,11 +475,11 @@ namespace ig
 
 	struct Extent3D
 	{
-		Extent3D() :width(0), height(0), depth(0) {};
-		Extent3D(uint32_t width, uint32_t height, uint32_t depth) :width(width), height(height), depth(depth) {};
+		constexpr Extent3D() :width(0), height(0), depth(0) {};
+		constexpr Extent3D(uint32_t width, uint32_t height, uint32_t depth) :width(width), height(height), depth(depth) {};
 
-		bool operator == (const Extent3D& a) const;
-		bool operator != (const Extent3D& a) const;
+		constexpr bool operator == (const Extent3D& a) const { return a.width == width && a.height == height && a.depth == depth; }
+		constexpr bool operator != (const Extent3D& a) const { return !operator==(a); }
 
 		std::string ToString() const;
 
@@ -478,16 +490,16 @@ namespace ig
 
 	struct IntPoint
 	{
-		IntPoint() :x(0), y(0) {}
-		IntPoint(int32_t x, int32_t y) :x(x), y(y) {}
+		constexpr IntPoint() :x(0), y(0) {}
+		constexpr IntPoint(int32_t x, int32_t y) : x(x), y(y) {}
 
-		bool operator == (const IntPoint& a) const;
-		bool operator != (const IntPoint& a) const;
+		constexpr bool operator == (const IntPoint& a) const { return a.x == x && a.y == y; }
+		constexpr bool operator != (const IntPoint& a) const { return !operator==(a); }
 
-		IntPoint& operator += (const IntPoint& a) { x += a.x; y += a.y; return *this; }
-		IntPoint& operator -= (const IntPoint& a) { x -= a.x; y -= a.y; return *this; }
-		IntPoint operator + (const IntPoint& a) const { return IntPoint(x + a.x, y + a.y); }
-		IntPoint operator - (const IntPoint& a) const { return IntPoint(x - a.x, y - a.y); }
+		constexpr IntPoint& operator += (const IntPoint& a) { x += a.x; y += a.y; return *this; }
+		constexpr IntPoint& operator -= (const IntPoint& a) { x -= a.x; y -= a.y; return *this; }
+		constexpr IntPoint operator + (const IntPoint& a) const { return IntPoint(x + a.x, y + a.y); }
+		constexpr IntPoint operator - (const IntPoint& a) const { return IntPoint(x - a.x, y - a.y); }
 
 		std::string ToString() const;
 
@@ -497,11 +509,11 @@ namespace ig
 
 	struct IntRect
 	{
-		IntRect() :left(0), top(0), right(0), bottom(0) {};
-		IntRect(int32_t left, int32_t top, int32_t right, int32_t bottom) :left(left), top(top), right(right), bottom(bottom) {};
+		constexpr IntRect() :left(0), top(0), right(0), bottom(0) {};
+		constexpr IntRect(int32_t left, int32_t top, int32_t right, int32_t bottom) :left(left), top(top), right(right), bottom(bottom) {};
 
-		int32_t GetWidth() const { return right - left; }
-		int32_t GetHeight() const { return bottom - top; }
+		constexpr int32_t GetWidth() const { return right - left; }
+		constexpr int32_t GetHeight() const { return bottom - top; }
 
 		// Returns a rectangle with normalized sides so that top is always at the top, and left is always to the left etc..
 		// Ensures that GetWidth() and GetHeight() do not return negative values.
@@ -515,14 +527,14 @@ namespace ig
 		bool ContainsRect(IntRect rect) const; // Exclusive for top-left point and inclusive for bottom-right point.
 		bool OverlapsWithRect(IntRect rect) const;
 
-		bool operator == (const IntRect& a) const;
-		bool operator != (const IntRect& a) const;
+		constexpr bool operator == (const IntRect& a) const { return a.left == left && a.top == top && a.right == right && a.bottom == bottom; }
+		constexpr bool operator != (const IntRect& a) const { return !operator==(a); }
 
 		// Translation
-		IntRect& operator += (const IntPoint& a) { left += a.x; top += a.y; right += a.x; bottom += a.y; return *this; }
-		IntRect& operator -= (const IntPoint& a) { left -= a.x; top -= a.y; right -= a.x; bottom -= a.y; return *this; }
-		IntRect operator + (const IntPoint& a) const { return IntRect(left + a.x, top + a.y, right + a.x, bottom + a.y); }
-		IntRect operator - (const IntPoint& a) const { return IntRect(left - a.x, top - a.y, right - a.x, bottom - a.y); }
+		constexpr IntRect& operator += (const IntPoint& a) { left += a.x; top += a.y; right += a.x; bottom += a.y; return *this; }
+		constexpr IntRect& operator -= (const IntPoint& a) { left -= a.x; top -= a.y; right -= a.x; bottom -= a.y; return *this; }
+		constexpr IntRect operator + (const IntPoint& a) const { return IntRect(left + a.x, top + a.y, right + a.x, bottom + a.y); }
+		constexpr IntRect operator - (const IntPoint& a) const { return IntRect(left - a.x, top - a.y, right - a.x, bottom - a.y); }
 
 		int32_t left;
 		int32_t top;
@@ -532,16 +544,16 @@ namespace ig
 
 	struct FloatRect
 	{
-		FloatRect() :left(0), top(0), right(0), bottom(0) {};
-		FloatRect(float left, float top, float right, float bottom) :left(left), top(top), right(right), bottom(bottom) {};
-		FloatRect(const IntRect& intRect) :
+		constexpr FloatRect() :left(0), top(0), right(0), bottom(0) {};
+		constexpr FloatRect(float left, float top, float right, float bottom) :left(left), top(top), right(right), bottom(bottom) {};
+		constexpr explicit FloatRect(const IntRect& intRect) :
 			left((float)intRect.left),
 			top((float)intRect.top),
 			right((float)intRect.right),
 			bottom((float)intRect.bottom) {};
 
-		float GetWidth() const { return right - left; }
-		float GetHeight() const { return bottom - top; }
+		constexpr float GetWidth() const { return right - left; }
+		constexpr float GetHeight() const { return bottom - top; }
 
 		FloatRect GetNormalized() const;
 		FloatRect GetExpanded(float amount) const;
@@ -554,14 +566,14 @@ namespace ig
 		bool ContainsRect(FloatRect rect) const; // Exclusive for top-left point and inclusive for bottom-right point.
 		bool OverlapsWithRect(FloatRect rect) const;
 
-		bool operator == (const FloatRect& a) const;
-		bool operator != (const FloatRect& a) const;
+		constexpr bool operator == (const FloatRect& a) const { return a.left == left && a.top == top && a.right == right && a.bottom == bottom; }
+		constexpr bool operator != (const FloatRect& a) const { return !operator==(a); }
 
 		// Translation
-		FloatRect& operator += (const Vector2& a) { left += a.x; top += a.y; right += a.x; bottom += a.y; return *this; }
-		FloatRect& operator -= (const Vector2& a) { left -= a.x; top -= a.y; right -= a.x; bottom -= a.y; return *this; }
-		FloatRect operator + (const Vector2& a) const { return FloatRect(left + a.x, top + a.y, right + a.x, bottom + a.y); }
-		FloatRect operator - (const Vector2& a) const { return FloatRect(left - a.x, top - a.y, right - a.x, bottom - a.y); }
+		constexpr FloatRect& operator += (const Vector2& a) { left += a.x; top += a.y; right += a.x; bottom += a.y; return *this; }
+		constexpr FloatRect& operator -= (const Vector2& a) { left -= a.x; top -= a.y; right -= a.x; bottom -= a.y; return *this; }
+		constexpr FloatRect operator + (const Vector2& a) const { return FloatRect(left + a.x, top + a.y, right + a.x, bottom + a.y); }
+		constexpr FloatRect operator - (const Vector2& a) const { return FloatRect(left - a.x, top - a.y, right - a.x, bottom - a.y); }
 
 		float left;
 		float top;
@@ -572,13 +584,13 @@ namespace ig
 	// 32-bit RGBA color (unsigned integer).
 	struct Color32
 	{
-		Color32() :rgba(0) {}
-		Color32(uint32_t _0xAABBGGRR) :rgba(_0xAABBGGRR) {}
-		Color32(byte red, byte green, byte blue) :red(red), green(green), blue(blue), alpha(255) {};
-		Color32(byte red, byte green, byte blue, byte alpha) :red(red), green(green), blue(blue), alpha(alpha) {};
+		constexpr Color32() :rgba(0) {}
+		constexpr Color32(uint32_t _0xAABBGGRR) : rgba(_0xAABBGGRR) {}
+		constexpr Color32(byte red, byte green, byte blue) : red(red), green(green), blue(blue), alpha(255) {};
+		constexpr Color32(byte red, byte green, byte blue, byte alpha) :red(red), green(green), blue(blue), alpha(alpha) {};
 
-		bool operator == (const Color32& a) const;
-		bool operator != (const Color32& a) const;
+		constexpr bool operator == (const Color32& a) const { return a.rgba == rgba; }
+		constexpr bool operator != (const Color32& a) const { return !operator==(a); }
 
 		union
 		{
@@ -593,18 +605,18 @@ namespace ig
 	// Floating point RGBA color
 	struct Color
 	{
-		Color() :red(0), green(0), blue(0), alpha(0) {};
-		Color(float red, float green, float blue) :red(red), green(green), blue(blue), alpha(1.0f) {};
-		Color(float red, float green, float blue, float alpha) :red(red), green(green), blue(blue), alpha(alpha) {};
-		Color(Color32 color32) :
+		constexpr Color() :red(0), green(0), blue(0), alpha(0) {};
+		constexpr Color(float red, float green, float blue) :red(red), green(green), blue(blue), alpha(1.0f) {};
+		constexpr Color(float red, float green, float blue, float alpha) :red(red), green(green), blue(blue), alpha(alpha) {};
+		constexpr Color(Color32 color32) :
 			red((float)color32.red / 255.0f),
 			green((float)color32.green / 255.0f),
 			blue((float)color32.blue / 255.0f),
 			alpha((float)color32.alpha / 255.0f)
 		{};
 
-		bool operator == (const Color& a) const;
-		bool operator != (const Color& a) const;
+		constexpr bool operator == (const Color& a) const { return a.red == red && a.green == green && a.blue == blue && a.alpha == alpha; }
+		constexpr bool operator != (const Color& a) const { return !operator==(a); }
 
 		Color32 ToColor32() const;
 
@@ -617,19 +629,19 @@ namespace ig
 	// 32 bit RGBA colors
 	namespace Colors
 	{
-		const static Color32 Transparent = Color32(0, 0, 0, 0);
-		const static Color32 White = Color32(255, 255, 255);
-		const static Color32 Black = Color32(0, 0, 0);
-		const static Color32 Red = Color32(255, 0, 0);
-		const static Color32 Green = Color32(0, 255, 0);
-		const static Color32 Blue = Color32(0, 0, 255);
-		const static Color32 LightGray = Color32(192, 192, 192);
-		const static Color32 Gray = Color32(128, 128, 128);
-		const static Color32 DarkGray = Color32(64, 64, 64);
-		const static Color32 Yellow = Color32(255, 255, 0);
-		const static Color32 Pink = Color32(255, 0, 255);
-		const static Color32 Cyan = Color32(0, 255, 255);
-	};
+		inline constexpr Color32 Transparent = Color32(0, 0, 0, 0);
+		inline constexpr Color32 White = Color32(255, 255, 255);
+		inline constexpr Color32 Black = Color32(0, 0, 0);
+		inline constexpr Color32 Red = Color32(255, 0, 0);
+		inline constexpr Color32 Green = Color32(0, 255, 0);
+		inline constexpr Color32 Blue = Color32(0, 0, 255);
+		inline constexpr Color32 LightGray = Color32(192, 192, 192);
+		inline constexpr Color32 Gray = Color32(128, 128, 128);
+		inline constexpr Color32 DarkGray = Color32(64, 64, 64);
+		inline constexpr Color32 Yellow = Color32(255, 255, 0);
+		inline constexpr Color32 Pink = Color32(255, 0, 255);
+		inline constexpr Color32 Cyan = Color32(0, 255, 255);
+	}
 
 	/////////////////////////// Sleep /////////////////////////////
 
@@ -719,7 +731,7 @@ namespace ig
 	std::string GetFileExtension(const std::string& filename);
 	bool FileExists(const std::string& filename);
 	bool DirectoryExists(const std::string& directoryName);
-	
+
 	// Returns true if the directory was created or already exists, false on failure (e.g. access denied).
 	bool CreateDirectory(const std::string& directoryName);
 
@@ -804,7 +816,7 @@ namespace ig
 	// A string conversion function that extends std::to_string() to accept unlimited arguments
 	// and can accept 'char*' and 'const char*' arguments.
 	template<typename T, typename ...Args>
-	constexpr std::string ToString(const T& t, Args&&... args)
+	std::string ToString(const T& t, Args&&... args)
 	{
 		std::string s = ToString(t);
 		((s += ToString(std::forward<Args>(args))), ...);
@@ -892,9 +904,34 @@ namespace ig
 	//////////////////////// Math ////////////////////////
 
 	// The alignment is required to be a power of 2.
-	uint64_t AlignUp(uint64_t value, uint64_t alignment);
-	float Lerp(float a, float b, float t);
-	double Lerp(double a, double b, double t);
+	constexpr uint64_t AlignUp(uint64_t value, uint64_t alignment)
+	{
+		if (alignment == 0) Fatal("AlignUp: Alignment must be non-zero.");
+		if (alignment & (alignment - 1)) Fatal("AlignUp: Alignment not a power of 2.");
+
+		uint64_t alignMask = alignment - 1;
+		if (value & alignMask) // Not aligned
+		{
+			return (value & ~alignMask) + alignment;
+		}
+		else
+		{
+			return value; // Already aligned
+		}
+	}
+
+	constexpr float Lerp(float a, float b, float t)
+	{
+		if (t <= 0.0f) return a;
+		if (t >= 1.0f) return b;
+		return a + (b - a) * t;
+	}
+	constexpr double Lerp(double a, double b, double t)
+	{
+		if (t <= 0.0) return a;
+		if (t >= 1.0) return b;
+		return a + (b - a) * t;
+	}
 
 	constexpr bool IsPowerOf2(uint64_t value)
 	{

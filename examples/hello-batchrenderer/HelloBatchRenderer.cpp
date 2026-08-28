@@ -37,45 +37,18 @@ extern "C" { __declspec(dllexport) extern const char* D3D12SDKPath = ".\\D3D12\\
 #define SHADER_VS(a) ig::Shader(a, sizeof(a), "VSMain")
 #define SHADER_PS(a) ig::Shader(a, sizeof(a), "PSMain")
 
-// A simple button class for the two "Next" and "Prev" demo buttons
+// A simple button class for the "Next" and "Prev" buttons
 class Button
 {
 public:
-	using CallbackOnButtonPress = std::function<void()>;
+	Button(const std::string& text, std::function<void()> onClick)
+		: text(text), onClick(onClick)
+	{}
 
-	Button(const std::string& text, CallbackOnButtonPress callbackOnButtonPress)
-	{
-		this->text = text;
-		this->callbackOnButtonPress = callbackOnButtonPress;
-	}
+	void SetRect(ig::FloatRect rect) { this->rect = rect; }
+	ig::FloatRect GetRect() const { return rect; }
 
-	void SetLocation(ig::IntRect rect)
-	{
-		this->rect = rect;
-	}
-
-	void Draw(ig::BatchRenderer& r, const ig::Texture& buttonTexture, ig::Font& font)
-	{
-		ig::Color32 rectColor = ig::Color32(255, 255, 255, 128);
-		if (mouseHover || (isPressed && mouseHover)) rectColor = ig::Color32(255, 255, 255, 255);
-
-		ig::IntPoint offset = ig::IntPoint(0, 0);
-		if (mouseHover) offset = ig::IntPoint(-1, -1);
-		if (isPressed) offset = ig::IntPoint(1, 1);
-
-		const ig::FloatRect uv = ig::FloatRect(0, 0, (float)buttonTexture.GetWidth(), (float)buttonTexture.GetHeight());
-		r.DrawNineSliceSprite(buttonTexture, rect + offset, uv, rectColor);
-
-		const ig::StringAlignment alignment = ig::StringAlignment::Center;
-		const bool wordWrap = true;
-		const bool pixelAligned = true;
-		ig::DrawAlignedStringInsideRect(r, rect + offset + ig::IntPoint(1, 1),
-			text, font, ig::Colors::Black, alignment, wordWrap, pixelAligned);
-		ig::DrawAlignedStringInsideRect(r, rect + offset,
-			text, font, ig::Colors::White, alignment, wordWrap, pixelAligned);
-	}
-
-	// Returns true if event is handled.
+	// Returns true if event is handled
 	bool OnEvent(const ig::IGLOContext& context, ig::Event e)
 	{
 		if (isPressed)
@@ -83,9 +56,9 @@ public:
 			if (e.type == ig::EventType::MouseButtonUp)
 			{
 				isPressed = false;
-				if (rect.ContainsPoint(ig::IntPoint(e.mouse.x, e.mouse.y)))
+				if (rect.ContainsPoint((float)e.mouse.x, (float)e.mouse.y))
 				{
-					if (callbackOnButtonPress) callbackOnButtonPress();
+					if (onClick) onClick();
 				}
 				else
 				{
@@ -94,33 +67,50 @@ public:
 			}
 			else if (e.type == ig::EventType::MouseMove)
 			{
-				mouseHover = rect.ContainsPoint(ig::IntPoint(e.mouse.x, e.mouse.y));
+				mouseHover = rect.ContainsPoint((float)e.mouse.x, (float)e.mouse.y);
 			}
 			return true;
 		}
 		if (e.type == ig::EventType::MouseButtonDown)
 		{
-			isPressed = rect.ContainsPoint(ig::IntPoint(e.mouse.x, e.mouse.y));
+			isPressed = rect.ContainsPoint((float)e.mouse.x, (float)e.mouse.y);
 			if (isPressed) return true;
 			return false;
 		}
 		if (context.IsMouseButtonDown(ig::MouseButton::Left)) return false;
 		if (e.type == ig::EventType::MouseMove)
 		{
-			mouseHover = rect.ContainsPoint(ig::IntPoint(e.mouse.x, e.mouse.y));
+			mouseHover = rect.ContainsPoint((float)e.mouse.x, (float)e.mouse.y);
 		}
 		return false;
 	}
 
-	ig::IntRect GetRect() const { return rect; }
+	void Draw(ig::BatchRenderer& r, const ig::Texture& buttonTexture, ig::Font& font)
+	{
+		ig::Color32 spriteColor = ig::Color32(255, 255, 255, 128);
+		if (mouseHover || (isPressed && mouseHover)) spriteColor = ig::Color32(255, 255, 255, 255);
+
+		ig::Vector2 offset = ig::Vector2(0, 0);
+		if (mouseHover) offset = ig::Vector2(-1, -1);
+		if (isPressed) offset = ig::Vector2(1, 1);
+
+		const ig::FloatRect uv = ig::FloatRect(0, 0, (float)buttonTexture.GetWidth(), (float)buttonTexture.GetHeight());
+		r.DrawNineSliceSprite(buttonTexture, rect + offset, uv, spriteColor);
+
+		const ig::StringAlignment alignment = ig::StringAlignment::Center;
+		const bool wordWrap = true;
+		const bool pixelAligned = true;
+		const ig::Vector2 shadowOffset = ig::Vector2(1, 1);
+		ig::DrawAlignedStringInsideRect(r, rect + offset + shadowOffset, text, font, ig::Colors::Black, alignment, wordWrap, pixelAligned);
+		ig::DrawAlignedStringInsideRect(r, rect + offset, text, font, ig::Colors::White, alignment, wordWrap, pixelAligned);
+	}
 
 private:
-	ig::IntRect rect;
+	ig::FloatRect rect;
 	bool mouseHover = false;
 	bool isPressed = false;
 	std::string text = "";
-	CallbackOnButtonPress callbackOnButtonPress = nullptr;
-
+	std::function<void()> onClick;
 };
 
 class App
@@ -256,7 +246,7 @@ private:
 	const ig::Color32 clearColor = ig::Color32(32, 32, 32);
 	std::unique_ptr<ig::Texture> rendertarget;
 
-	void OnButtonPressed_PrevDemo()
+	void PrevDemo()
 	{
 		if (currentDemo == 0)
 		{
@@ -267,27 +257,25 @@ private:
 			currentDemo--;
 		}
 	}
-	void OnButtonPressed_NextDemo()
+	void NextDemo()
 	{
 		currentDemo++;
 		if (currentDemo >= numDemos) currentDemo = 0;
 	}
 
-	Button buttonNext = Button("Next", std::bind(&App::OnButtonPressed_NextDemo, this));
-	Button buttonPrev = Button("Prev", std::bind(&App::OnButtonPressed_PrevDemo, this));
+	Button buttonNext = Button("Next", std::bind(&App::NextDemo, this));
+	Button buttonPrev = Button("Prev", std::bind(&App::PrevDemo, this));
 
 	void UpdateButtonLocations()
 	{
-		const int32_t spacing = 15;
-		ig::IntRect rect(0, 0, 120, 32); // Button size
-		rect += ig::IntPoint(
-			context->GetWidth() - rect.GetWidth() - spacing, // X
-			context->GetHeight() - rect.GetHeight() - spacing); // Y
+		const float spacing = 15;
+		const float width = 120;
+		const float height = 32;
+		const float x = (float)context->GetWidth() - width - spacing;
+		const float y = (float)context->GetHeight() - height - spacing;
 
-		buttonNext.SetLocation(rect);
-
-		rect -= ig::IntPoint(rect.GetWidth() + spacing, 0);
-		buttonPrev.SetLocation(rect);
+		buttonNext.SetRect(ig::FloatRect(x, y, x + width, y + height));
+		buttonPrev.SetRect(ig::FloatRect(x, y, x + width, y + height) - ig::Vector2(width + spacing, 0));
 	}
 
 	void Start()
