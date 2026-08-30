@@ -1,6 +1,27 @@
 
 # Changelog
 
+## v0.8.0
+
+### Changes
+
+- Major/breaking changes:
+  - It is now safe to call `IGLOContext::WaitForIdleDevice()` at any time, even in the middle of recording commands,
+    without having to worry about your temp resources being freed before your command list was able to use them.
+    `WaitForIdleDevice()` will no longer free temp resources if there are any pending command lists.
+    A command list is considered pending between `CommandList::Begin()` and `IGLOContext::Submit()`.
+  - Moved `CreateTempConstant()`, `CreateTempStructuredBuffer()` and `CreateTempRawBuffer()` from `ig::IGLOContext` to `ig::CommandList`.
+    This is to encourage users to only create and use temp resources between `CommandList::Begin()` and `CommandList::End()`,
+    where `WaitForIdleDevice()` can't free them prematurely.
+
+- New features:
+  - Added `IGLOContext::WaitForIdleDeviceAndReclaim()`.
+    This function is the same as `WaitForIdleDevice()`, but aborts if temp resources could not be freed because a command list was still pending.
+  - Added `bool CommandList::IsRecording()`.
+
+- Bug fixes:
+  - Fixed bug in `DescriptorHeap::FreeAllTempResources()`.
+
 ## v0.7.5
 
 ### Changes
