@@ -1163,7 +1163,7 @@ private:
 							wobble.intensityX = (float)context->GetMouseX() * 0.1f;
 							wobble.intensityY = (float)context->GetMouseY() * 0.1f;
 						}
-						ig::Descriptor wobbleConstants = context->CreateTempConstant(&wobble, sizeof(wobble));
+						ig::Descriptor wobbleConstants = cmd->CreateTempConstant(&wobble, sizeof(wobble));
 						r.UsingRenderConstants(wobbleConstants);
 						r.UsingBatch(batchCustomPixelShaderSprites);
 						r.UsingTexture(*appleTexture);

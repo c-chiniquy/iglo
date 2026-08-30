@@ -76,7 +76,7 @@ namespace ig
 		textureConstants.inverseTextureSize = Vector2(1.0f / (float)texture.GetWidth(), 1.0f / (float)texture.GetHeight());
 		textureConstants.msaa = (uint32_t)texture.GetMSAA();
 
-		Descriptor tempConstant = context.CreateTempConstant(&textureConstants, sizeof(textureConstants));
+		const Descriptor tempConstant = cmd->CreateTempConstant(&textureConstants, sizeof(textureConstants));
 
 		state.pushConstants.textureConstantsIndex = tempConstant.heapIndex;
 		state.pushConstants.textureIndex = texture.GetDescriptor().heapIndex;
@@ -220,9 +220,9 @@ namespace ig
 	void BatchRenderer::GenerateViewProj2D(Matrix4x4& out_view, Matrix4x4& out_proj,
 		float viewX, float viewY, float viewWidth, float viewHeight, float zNear, float zFar)
 	{
-		Vector3 position = Vector3(viewX, viewY, 1);
-		Vector3 direction = Vector3(0, 0, -1);
-		Vector3 up = Vector3(0, -1, 0);
+		const Vector3 position = Vector3(viewX, viewY, 1);
+		const Vector3 direction = Vector3(0, 0, -1);
+		const Vector3 up = Vector3(0, -1, 0);
 
 		out_view = Matrix4x4::LookToLH(position, direction, up);
 		out_proj = Matrix4x4::OrthoLH(viewWidth, viewHeight, zNear, zFar);
@@ -235,8 +235,8 @@ namespace ig
 		state.view = view;
 		state.proj = projection;
 
-		Matrix4x4 viewProjConstant = (projection * view).GetTransposed();
-		Descriptor tempConstant = context.CreateTempConstant(&viewProjConstant, sizeof(viewProjConstant));
+		const Matrix4x4 viewProjConstant = (projection * view).GetTransposed();
+		const Descriptor tempConstant = cmd->CreateTempConstant(&viewProjConstant, sizeof(viewProjConstant));
 
 		state.pushConstants.viewProjMatrixIndex = tempConstant.heapIndex;
 	}
@@ -259,8 +259,8 @@ namespace ig
 
 		state.world = world;
 
-		Matrix4x4 worldConstant = world.GetTransposed();
-		Descriptor tempConstant = context.CreateTempConstant(&worldConstant, sizeof(worldConstant));
+		const Matrix4x4 worldConstant = world.GetTransposed();
+		const Descriptor tempConstant = cmd->CreateTempConstant(&worldConstant, sizeof(worldConstant));
 
 		state.pushConstants.worldMatrixIndex = tempConstant.heapIndex;
 	}
@@ -539,19 +539,19 @@ namespace ig
 	void BatchRenderer::SetSDFEffect(const SDFEffect& sdf)
 	{
 		FlushPrimitives();
-		state.tempConstantSDFEffect = context.CreateTempConstant(&sdf, sizeof(sdf));
+		state.tempConstantSDFEffect = cmd->CreateTempConstant(&sdf, sizeof(sdf));
 	}
 
 	void BatchRenderer::SetDepthBufferDrawStyle(float zNear, float zFar, bool drawStencilComponent)
 	{
 		FlushPrimitives();
-		DepthBufferDrawStyle style =
+		const DepthBufferDrawStyle style =
 		{
 			.depthOrStencilComponent = drawStencilComponent ? (uint32_t)1 : (uint32_t)0,
 			.zNear = zNear,
 			.zFar = zFar,
 		};
-		state.tempConstantDepthBufferDrawStyle = context.CreateTempConstant(&style, sizeof(style));
+		state.tempConstantDepthBufferDrawStyle = cmd->CreateTempConstant(&style, sizeof(style));
 	}
 
 	Descriptor BatchRenderer::GetSDFEffectRenderConstant()
@@ -623,7 +623,7 @@ namespace ig
 		if (state.batchType >= batchPipelines.size()) Fatal(ToString(errStr, "Invalid batch type"));
 		if (!batchPipelines[state.batchType].pipeline) Fatal(ToString(errStr, "Invalid batch type"));
 
-		uint32_t numVertices = numPrimitives * state.batchDesc.inputVerticesPerPrimitive;
+		const uint32_t numVertices = numPrimitives * state.batchDesc.inputVerticesPerPrimitive;
 
 		cmd->SetPipeline(*(batchPipelines[state.batchType].pipeline.get()));
 
@@ -641,13 +641,13 @@ namespace ig
 
 		if (state.batchDesc.vertGenMethod == BatchDesc::VertexGenerationMethod::VertexPullingStructured)
 		{
-			state.pushConstants.rawOrStructuredBufferIndex = context.CreateTempStructuredBuffer(vertexData,
-				state.batchDesc.bytesPerVertex, numVertices).heapIndex;
+			Descriptor structuredBuffer = cmd->CreateTempStructuredBuffer(vertexData, state.batchDesc.bytesPerVertex, numVertices);
+			state.pushConstants.rawOrStructuredBufferIndex = structuredBuffer.heapIndex;
 		}
 		else if (state.batchDesc.vertGenMethod == BatchDesc::VertexGenerationMethod::VertexPullingRaw)
 		{
-			state.pushConstants.rawOrStructuredBufferIndex = context.CreateTempRawBuffer(vertexData,
-				(uint64_t)state.batchDesc.bytesPerVertex * numVertices).heapIndex;
+			Descriptor rawBuffer = cmd->CreateTempRawBuffer(vertexData, (uint64_t)state.batchDesc.bytesPerVertex * numVertices);
+			state.pushConstants.rawOrStructuredBufferIndex = rawBuffer.heapIndex;
 		}
 
 		cmd->SetPushConstants(&state.pushConstants, sizeof(state.pushConstants));

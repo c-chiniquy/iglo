@@ -8,8 +8,8 @@
 
 // -------------------- Version --------------------//
 #define IGLO_VERSION_MAJOR 0
-#define IGLO_VERSION_MINOR 7
-#define IGLO_VERSION_PATCH 5
+#define IGLO_VERSION_MINOR 8
+#define IGLO_VERSION_PATCH 0
 
 #define IGLO_STRINGIFY_HELPER(x) #x
 #define IGLO_STRINGIFY(x) IGLO_STRINGIFY_HELPER(x)
@@ -804,7 +804,7 @@ namespace ig
 		DEPTHFORMAT_UINT24_BYTE, // 24-bit unsigned normalized integer for depth component, 8-bit unsigned non normalized integer for stencil component.
 		DEPTHFORMAT_FLOAT,  // 32-bit float for depth component
 		DEPTHFORMAT_FLOAT_BYTE, // 32-bit float for depth component, 8-bit unsigned non normalized integer for stencil component.
-	
+
 		COUNT, // Not a format. Used to keep count.
 	};
 
@@ -1140,7 +1140,7 @@ namespace ig
 		void Impl_Destroy();
 		DetailedResult Impl_Create();
 		void Impl_ReadPixels(Image& destImage, uint32_t frameIndex);
-		DetailedResult GenerateMips(CommandList& cmd, const Image& image);
+		void GenerateMips(CommandList& cmd, const Image& image);
 		uint32_t GetPerFrameArrayLength() const;
 		static DetailedResult ValidateMipGeneration(CommandListType, const Image& image);
 	};
@@ -2005,6 +2005,13 @@ namespace ig
 
 		void ResolveTexture(const Texture& src, const Texture& dest);
 
+		// Aborts on failure
+		Descriptor CreateTempConstant(const void* data, uint64_t numBytes) const;
+		// Aborts on failure
+		Descriptor CreateTempStructuredBuffer(const void* data, uint32_t elementStride, uint32_t numElements) const;
+		// Aborts on failure
+		Descriptor CreateTempRawBuffer(const void* data, uint64_t numBytes) const;
+
 		CommandListType GetCommandListType() const { return commandListType; }
 
 #ifdef IGLO_D3D12
@@ -2014,11 +2021,18 @@ namespace ig
 		VkCommandBuffer GetVulkanCommandBuffer() const { return impl.commandBuffer[frameIndex]; }
 #endif
 
+		bool IsRecording() const { return isRecording; }
+		bool IsPending() const { return isPending; }
+
+		void _internal_MarkAsNotPending() const { isPending = false; }
+
 	private:
 		const IGLOContext& context;
 		const CommandListType commandListType = CommandListType::Graphics;
 		const uint32_t maxFrames = 0;
 		uint32_t frameIndex = 0;
+		bool isRecording = false;
+		mutable bool isPending = false;
 
 		Impl_CommandList impl;
 
@@ -2645,11 +2659,16 @@ namespace ig
 		// Null receipts are legal to pass to this function, they will be treated as completed.
 		void WaitForCompletion(Receipt receipt);
 
-		// Waits for the graphics device to finish executing all commands.
-		// NOTE: This frees all temporary resources. Don't call it in the middle of recording commands
-		//       while the command list holds unsubmitted temp resources,
-		//       or those resources will be destroyed before the GPU reads them.
+		// Waits for the graphics device to finish executing all submitted commands.
+		// This is safe to call at any time, from any thread, including while another thread is recording commands.
+		// Will free all temporary resources if it can.
 		void WaitForIdleDevice();
+
+		// Same as WaitForIdleDevice(), except it aborts if temporary resources
+		// could not be freed because a command list was still pending.
+		// Use this when reclaiming the memory actually matters,
+		// such as when unloading a scene before loading a new one.
+		void WaitForIdleDeviceAndReclaim();
 
 		// Destroying a GPU resource while it's still in use by a previous frame
 		// results in undefined behavior and may cause device loss or driver crashes.
@@ -2662,13 +2681,6 @@ namespace ig
 #ifdef IGLO_VULKAN
 		void DelayedDestroyVulkanImageView(VkImageView) const;
 #endif
-
-		// Aborts on failure
-		Descriptor CreateTempConstant(const void* data, uint64_t numBytes) const;
-		// Aborts on failure
-		Descriptor CreateTempStructuredBuffer(const void* data, uint32_t elementStride, uint32_t numElements) const;
-		// Aborts on failure
-		Descriptor CreateTempRawBuffer(const void* data, uint64_t numBytes) const;
 
 		uint32_t GetMaxFramesInFlight() const { return maxFramesInFlight; }
 		uint32_t GetNumFramesInFlight() const { return numFramesInFlight; }
@@ -2713,16 +2725,14 @@ namespace ig
 		VkSurfaceKHR GetVulkanSurface() const { return graphics.surface; }
 		VkSwapchainKHR GetVulkanSwapChain() const { return graphics.swapChain; }
 #endif
-#ifndef NDEBUG
-		void DebugIncrementNumRecordingCommandLists() const { debugNumRecordingCommandLists++; }
-		void DebugDecrementNumRecordingCommandLists() const
-		{
-			if (debugNumRecordingCommandLists.fetch_sub(1) == 0) ig::Fatal("A command list has stopped recording commands one too many times.");
-		}
-#endif
+		void _internal_IncrementNumPendingCommandLists() const;
+		void _internal_DecrementNumPendingCommandLists() const;
+		uint32_t _internal_GetNumPendingCommandLists() const;
 
 	private:
+
 		//------------------ Core ------------------//
+
 		bool isWindowInitialized = false;
 		bool isGraphicsDeviceInitialized = false;
 
@@ -2825,10 +2835,13 @@ namespace ig
 
 		CallbackOnDeviceLost callbackOnDeviceLost = nullptr;
 
-#ifndef NDEBUG
-		mutable std::atomic<uint32_t> debugNumRecordingCommandLists = 0;
-#endif
-		void FreeAllTempResources();
+		mutable std::mutex pendingCommandListMutex;
+		mutable uint32_t numPendingCommandLists = 0;
+
+		// Frees all temp resources if no command lists are pending.
+		// Returns true if resources were freed.
+		// If 'mustSucceed' is true, aborts instead of returning false.
+		bool TryFreeAllTempResources(bool mustSucceed);
 
 #ifdef IGLO_D3D12
 		bool ResizeD3D12SwapChain(Extent2D extent);

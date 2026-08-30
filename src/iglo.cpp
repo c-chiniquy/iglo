@@ -820,9 +820,9 @@ namespace ig
 
 	void DescriptorHeap::FreeAllTempResources()
 	{
-		for (uint32_t i = 0; i < (uint32_t)tempResourceIndices.size(); i++)
+		for (size_t i = 0; i < tempResourceIndices.size(); i++)
 		{
-			tempResourceIndices[frameIndex].FreeAllIndices();
+			tempResourceIndices[i].FreeAllIndices();
 		}
 	}
 
@@ -897,6 +897,11 @@ namespace ig
 
 	CommandList::~CommandList()
 	{
+		if (isPending)
+		{
+			isPending = false;
+			context._internal_DecrementNumPendingCommandLists();
+		}
 		Impl_Destroy();
 	}
 
@@ -918,23 +923,30 @@ namespace ig
 
 	void CommandList::Begin()
 	{
+		if (isRecording)
+		{
+			Fatal("Failed to begin recording command list. Reason: CommandList has already begun recording.");
+		}
+		isRecording = true;
+
+		if (!isPending) context._internal_IncrementNumPendingCommandLists();
+		isPending = true;
+
 		// Advance to next frame
 		frameIndex = (frameIndex + 1) % maxFrames;
-
-#ifndef NDEBUG
-		context.DebugIncrementNumRecordingCommandLists();
-#endif
 
 		Impl_Begin();
 	}
 
 	void CommandList::End()
 	{
-		Impl_End();
+		if (!isRecording)
+		{
+			Fatal("Failed to end recording command list. Reason: CommandList already wasn't recording.");
+		}
+		isRecording = false;
 
-#ifndef NDEBUG
-		context.DebugDecrementNumRecordingCommandLists();
-#endif
+		Impl_End();
 	}
 
 	SimpleBarrierInfo GetSimpleBarrierInfo(SimpleBarrier simpleBarrier, CommandListType queueType)
@@ -1304,6 +1316,107 @@ namespace ig
 		assert(dest.GetUsage() == TextureUsage::Readable && "dest must be Readable");
 
 		Impl_CopyTextureToReadableTexture(src, dest);
+	}
+
+	Descriptor CommandList::CreateTempConstant(const void* data, uint64_t numBytes) const
+	{
+		const char* errStr = "Failed to create temp shader constant. Reason: ";
+
+		if (!data) Fatal(ToString(errStr, "Data can't be null."));
+		if (numBytes == 0) Fatal(ToString(errStr, "Size can't be zero."));
+		if (!isRecording) Fatal(ToString(errStr, "Command list must be recording."));
+
+		DescriptorHeap& descriptorHeap = context.GetDescriptorHeap();
+		UploadHeap& uploadHeap = context.GetUploadHeap();
+		const BufferPlacementAlignments& placementAlignments = context.GetGraphicsSpecs().bufferPlacementAlignments;
+
+		const Descriptor out = descriptorHeap.AllocateTempResource();
+		const TempBuffer tempBuffer = uploadHeap.AllocateTempBuffer(numBytes, placementAlignments.constant);
+
+		memcpy(tempBuffer.data, data, numBytes);
+
+#ifdef IGLO_D3D12
+		D3D12_CONSTANT_BUFFER_VIEW_DESC desc = {};
+		desc.BufferLocation = tempBuffer.impl.resource->GetGPUVirtualAddress() + tempBuffer.offset;
+		desc.SizeInBytes = (UINT)AlignUp(numBytes, placementAlignments.constant);
+		context.GetD3D12Device()->CreateConstantBufferView(&desc, descriptorHeap.GetD3D12CPUHandle(out));
+#endif
+#ifdef IGLO_VULKAN
+		descriptorHeap.WriteBufferDescriptor(out, VulkanDescriptorType::ConstantBuffer_CBV, tempBuffer.impl.buffer, tempBuffer.offset, numBytes);
+#endif
+
+		return out;
+	}
+
+	Descriptor CommandList::CreateTempStructuredBuffer(const void* data, uint32_t elementStride, uint32_t numElements) const
+	{
+		const char* errStr = "Failed to create temp structured buffer. Reason: ";
+
+		const uint64_t numBytes = (uint64_t)elementStride * numElements;
+
+		if (!data) Fatal(ToString(errStr, "Data can't be null."));
+		if (numBytes == 0) Fatal(ToString(errStr, "Size can't be zero."));
+		if (!isRecording) Fatal(ToString(errStr, "Command list must be recording."));
+
+		DescriptorHeap& descriptorHeap = context.GetDescriptorHeap();
+		UploadHeap& uploadHeap = context.GetUploadHeap();
+		const BufferPlacementAlignments& placementAlignments = context.GetGraphicsSpecs().bufferPlacementAlignments;
+
+		const Descriptor out = descriptorHeap.AllocateTempResource();
+
+#ifdef IGLO_D3D12
+		// In D3D12, structured buffers need a special non-power of 2 element stride alignment,
+		// which is why we allocate 1 extra element here.
+		const TempBuffer tempBuffer = uploadHeap.AllocateTempBuffer(numBytes + elementStride, placementAlignments.rawOrStructuredBuffer);
+
+		// We pretend the entire page is an array of elements.
+		// We must figure out the index of our first element, aligned upwards to 'elementStride'.
+		byte* beginningOfPage = (byte*)tempBuffer.data - tempBuffer.offset;
+		uint64_t firstElementIndex = (tempBuffer.offset / elementStride) + 1; // +1 to align upwards
+		uint64_t firstElementOffset = firstElementIndex * elementStride; // Byte offset of our first element
+		memcpy(beginningOfPage + firstElementOffset, data, numBytes);
+
+		D3D12_SHADER_RESOURCE_VIEW_DESC srv = Buffer::GenerateD3D12Desc_SRV_Structured(numElements, elementStride, firstElementIndex);
+		context.GetD3D12Device()->CreateShaderResourceView(tempBuffer.impl.resource, &srv, descriptorHeap.GetD3D12CPUHandle(out));
+#endif
+#ifdef IGLO_VULKAN
+		const TempBuffer tempBuffer = uploadHeap.AllocateTempBuffer(numBytes, placementAlignments.rawOrStructuredBuffer);
+
+		memcpy(tempBuffer.data, data, numBytes);
+
+		descriptorHeap.WriteBufferDescriptor(out, VulkanDescriptorType::RawOrStructuredBuffer_SRV_UAV, tempBuffer.impl.buffer, tempBuffer.offset, numBytes);
+#endif
+
+		return out;
+	}
+
+	Descriptor CommandList::CreateTempRawBuffer(const void* data, uint64_t numBytes) const
+	{
+		const char* errStr = "Failed to create temp raw buffer. Reason: ";
+
+		if (!data) Fatal(ToString(errStr, "Data can't be null."));
+		if (numBytes == 0) Fatal(ToString(errStr, "Size can't be zero."));
+		if (numBytes % 4 != 0) Fatal(ToString(errStr, "Expected size to be a multiple of 4."));
+		if (!isRecording) Fatal(ToString(errStr, "Command list must be recording."));
+
+		DescriptorHeap& descriptorHeap = context.GetDescriptorHeap();
+		UploadHeap& uploadHeap = context.GetUploadHeap();
+		const BufferPlacementAlignments& placementAlignments = context.GetGraphicsSpecs().bufferPlacementAlignments;
+
+		const Descriptor out = descriptorHeap.AllocateTempResource();
+		const TempBuffer tempBuffer = uploadHeap.AllocateTempBuffer(numBytes, placementAlignments.rawOrStructuredBuffer);
+
+		memcpy(tempBuffer.data, data, numBytes);
+
+#ifdef IGLO_D3D12
+		D3D12_SHADER_RESOURCE_VIEW_DESC srv = Buffer::GenerateD3D12Desc_SRV_Raw(numBytes, tempBuffer.offset / 4);
+		context.GetD3D12Device()->CreateShaderResourceView(tempBuffer.impl.resource, &srv, descriptorHeap.GetD3D12CPUHandle(out));
+#endif
+#ifdef IGLO_VULKAN
+		descriptorHeap.WriteBufferDescriptor(out, VulkanDescriptorType::RawOrStructuredBuffer_SRV_UAV, tempBuffer.impl.buffer, tempBuffer.offset, numBytes);
+#endif
+
+		return out;
 	}
 
 	void UploadHeap::Page::Free(const IGLOContext& context)
@@ -1941,10 +2054,24 @@ namespace ig
 			return Receipt();
 		}
 
-		CommandListType cmdType = commandLists[0]->GetCommandListType();
-
+		const CommandListType cmdType = commandLists[0] ? commandLists[0]->GetCommandListType() : CommandListType::Graphics;
 		for (uint32_t i = 0; i < numCommandLists; i++)
 		{
+			if (!commandLists[i])
+			{
+				Log(LogType::Error, ToString(errStr, "A provided command list was nullptr."));
+				return Receipt();
+			}
+			if (commandLists[i]->IsRecording())
+			{
+				Log(LogType::Error, ToString(errStr, "The provided command lists must not be actively recording commands."));
+				return Receipt();
+			}
+			if (!commandLists[i]->IsPending())
+			{
+				Log(LogType::Error, ToString(errStr, "A provided command list has no pending commands."));
+				return Receipt();
+			}
 			if (commandLists[i]->GetCommandListType() != cmdType)
 			{
 				Log(LogType::Error, ToString(errStr, "The provided command lists must share the same command list type."));
@@ -2764,6 +2891,11 @@ namespace ig
 
 	void IGLOContext::MoveToNextFrame()
 	{
+		if (_internal_GetNumPendingCommandLists() > 0)
+		{
+			Fatal("Cannot move to next frame while command lists are still pending.");
+		}
+
 		frameIndex = (frameIndex + 1) % numFramesInFlight;
 
 		assert(numFramesInFlight <= maxFramesInFlight);
@@ -2775,10 +2907,14 @@ namespace ig
 		commandQueue->WaitForCompletion(currentFrame.computeReceipt);
 		commandQueue->WaitForCompletion(currentFrame.copyReceipt);
 
-		currentFrame.DestroyResources(*this);
+		{
+			std::lock_guard<std::mutex> lock(pendingCommandListMutex);
 
-		descriptorHeap->NextFrame();
-		uploadHeap->NextFrame();
+			currentFrame.DestroyResources(*this);
+
+			descriptorHeap->NextFrame();
+			uploadHeap->NextFrame();
+		}
 
 		if (!deviceLost)
 		{
@@ -2824,6 +2960,23 @@ namespace ig
 		if (callbackOnDeviceLost) callbackOnDeviceLost();
 	}
 
+	void IGLOContext::_internal_IncrementNumPendingCommandLists() const
+	{
+		std::lock_guard<std::mutex> lock(pendingCommandListMutex);
+		numPendingCommandLists++;
+	}
+	void IGLOContext::_internal_DecrementNumPendingCommandLists() const
+	{
+		std::lock_guard<std::mutex> lock(pendingCommandListMutex);
+		if (numPendingCommandLists == 0) ig::Fatal("There are now less than 0 pending command lists, somehow?");
+		numPendingCommandLists--;
+	}
+	uint32_t IGLOContext::_internal_GetNumPendingCommandLists() const
+	{
+		std::lock_guard<std::mutex> lock(pendingCommandListMutex);
+		return numPendingCommandLists;
+	}
+
 	Receipt IGLOContext::Submit(const CommandList& commandList)
 	{
 		const CommandList* cmd[] = { &commandList };
@@ -2833,6 +2986,20 @@ namespace ig
 	Receipt IGLOContext::Submit(const CommandList* const* commandLists, uint32_t numCommandLists)
 	{
 		Receipt out = commandQueue->SubmitCommands(commandLists, numCommandLists);
+
+		// An attempted submit is good enough to consider these commands no longer pending
+		if (commandLists)
+		{
+			for (uint32_t i = 0; i < numCommandLists; i++)
+			{
+				if (commandLists[i] && commandLists[i]->IsPending())
+				{
+					commandLists[i]->_internal_MarkAsNotPending();
+					_internal_DecrementNumPendingCommandLists();
+				}
+			}
+		}
+
 		if (!out.IsNull())
 		{
 			switch (commandLists[0]->GetCommandListType())
@@ -2864,8 +3031,8 @@ namespace ig
 
 		if (commandQueue->IsIdle())
 		{
-			// We can safely free all temp resources when GPU is idle.
-			FreeAllTempResources();
+			// The GPU being idle gives us a chance to free temp resources
+			TryFreeAllTempResources(false);
 		}
 	}
 
@@ -2873,26 +3040,41 @@ namespace ig
 	{
 		commandQueue->WaitForIdle();
 
-		// We can safely free all temp resources when GPU is idle.
-		FreeAllTempResources();
+		// The GPU being idle gives us a chance to free temp resources
+		TryFreeAllTempResources(false);
 	}
 
-	void IGLOContext::FreeAllTempResources()
+	void IGLOContext::WaitForIdleDeviceAndReclaim()
 	{
-#ifndef NDEBUG
-		if (debugNumRecordingCommandLists > 0)
+		commandQueue->WaitForIdle();
+		TryFreeAllTempResources(true);
+	}
+
+	bool IGLOContext::TryFreeAllTempResources(bool mustSucceed)
+	{
+		std::lock_guard<std::mutex> lock(pendingCommandListMutex);
+
+		if (numPendingCommandLists > 0)
 		{
-			Fatal(
-				"Don't wait for idle device (or wait for commands to finish) while a command list is actively being recorded!"
-				" This can cause temporary resources belonging to a command list to be freed before those commands are submitted.");
+			if (mustSucceed)
+			{
+				Fatal(ToString(
+					"Failed to free temporary resources because ", numPendingCommandLists, " command list(s) are still pending."
+					" A command list is pending from CommandList::Begin() until IGLOContext::Submit()."
+					" Submit all command lists before calling WaitForIdleDeviceAndReclaim()."));
+			}
+
+			// A pending command list may be referencing some temp resources, so free nothing.
+			return false;
 		}
-#endif
+
 		descriptorHeap->FreeAllTempResources();
 		uploadHeap->FreeAllTempPages();
 		for (size_t i = 0; i < endOfFrame.size(); i++)
 		{
 			endOfFrame[i].DestroyResources(*this);
 		}
+		return true;
 	}
 
 	void IGLOContext::EndOfFrame::DestroyResources(const IGLOContext& context)
@@ -2930,89 +3112,6 @@ namespace ig
 		endOfFrame[frameIndex].delayedDestroyVulkanImageViews.push_back(imageView);
 	}
 #endif
-
-	Descriptor IGLOContext::CreateTempConstant(const void* data, uint64_t numBytes) const
-	{
-		if (numBytes == 0) Fatal("Failed to create temp shader constant. Reason: Size can't be zero.");
-
-		Descriptor out = descriptorHeap->AllocateTempResource();
-		TempBuffer tempBuffer = uploadHeap->AllocateTempBuffer(numBytes, GetGraphicsSpecs().bufferPlacementAlignments.constant);
-
-		memcpy(tempBuffer.data, data, numBytes);
-
-#ifdef IGLO_D3D12
-		D3D12_CONSTANT_BUFFER_VIEW_DESC desc = {};
-		desc.BufferLocation = tempBuffer.impl.resource->GetGPUVirtualAddress() + tempBuffer.offset;
-		desc.SizeInBytes = (UINT)AlignUp(numBytes, GetGraphicsSpecs().bufferPlacementAlignments.constant);
-		graphics.device->CreateConstantBufferView(&desc, descriptorHeap->GetD3D12CPUHandle(out));
-#endif
-#ifdef IGLO_VULKAN
-		descriptorHeap->WriteBufferDescriptor(out, VulkanDescriptorType::ConstantBuffer_CBV,
-			tempBuffer.impl.buffer, tempBuffer.offset, numBytes);
-#endif
-
-		return out;
-	}
-
-	Descriptor IGLOContext::CreateTempStructuredBuffer(const void* data, uint32_t elementStride, uint32_t numElements) const
-	{
-		uint64_t numBytes = (uint64_t)elementStride * numElements;
-
-		if (numBytes == 0) Fatal("Failed to create temp structured buffer. Reason: Size can't be zero.");
-
-		Descriptor out = descriptorHeap->AllocateTempResource();
-
-#ifdef IGLO_D3D12
-		// In D3D12, structured buffers need a special non-power of 2 element stride alignment,
-		// which is why we allocate 1 extra element here.
-		TempBuffer tempBuffer = uploadHeap->AllocateTempBuffer(numBytes + elementStride,
-			GetGraphicsSpecs().bufferPlacementAlignments.rawOrStructuredBuffer);
-
-		// We pretend the entire page is an array of elements.
-		// We must figure out the index of our first element, aligned upwards to 'elementStride'.
-		byte* beginningOfPage = (byte*)tempBuffer.data - tempBuffer.offset;
-		uint64_t firstElementIndex = (tempBuffer.offset / elementStride) + 1; // +1 to align upwards
-		uint64_t firstElementOffset = firstElementIndex * elementStride; // Byte offset of our first element
-		memcpy(beginningOfPage + firstElementOffset, data, numBytes);
-
-		D3D12_SHADER_RESOURCE_VIEW_DESC srv = Buffer::GenerateD3D12Desc_SRV_Structured(numElements, elementStride, firstElementIndex);
-		graphics.device->CreateShaderResourceView(tempBuffer.impl.resource, &srv, descriptorHeap->GetD3D12CPUHandle(out));
-#endif
-#ifdef IGLO_VULKAN
-		TempBuffer tempBuffer = uploadHeap->AllocateTempBuffer(numBytes, GetGraphicsSpecs().bufferPlacementAlignments.rawOrStructuredBuffer);
-
-		memcpy(tempBuffer.data, data, numBytes);
-
-		descriptorHeap->WriteBufferDescriptor(out, VulkanDescriptorType::RawOrStructuredBuffer_SRV_UAV,
-			tempBuffer.impl.buffer, tempBuffer.offset, numBytes);
-#endif
-
-		return out;
-	}
-
-	Descriptor IGLOContext::CreateTempRawBuffer(const void* data, uint64_t numBytes) const
-	{
-		const char* errStr = "Failed to create temp raw buffer. Reason: ";
-
-		if (numBytes == 0) Fatal(ToString(errStr, "Size can't be zero."));
-		if (numBytes % 4 != 0) Fatal(ToString(errStr, "Expected size to be a multiple of 4."));
-
-		Descriptor out = descriptorHeap->AllocateTempResource();
-		TempBuffer tempBuffer = uploadHeap->AllocateTempBuffer(numBytes, GetGraphicsSpecs().bufferPlacementAlignments.rawOrStructuredBuffer);
-
-		memcpy(tempBuffer.data, data, numBytes);
-
-#ifdef IGLO_D3D12
-		D3D12_SHADER_RESOURCE_VIEW_DESC srv = Buffer::GenerateD3D12Desc_SRV_Raw(numBytes, tempBuffer.offset / 4);
-		graphics.device->CreateShaderResourceView(tempBuffer.impl.resource, &srv, descriptorHeap->GetD3D12CPUHandle(out));
-#endif
-#ifdef IGLO_VULKAN
-		descriptorHeap->WriteBufferDescriptor(out, VulkanDescriptorType::RawOrStructuredBuffer_SRV_UAV,
-			tempBuffer.impl.buffer, tempBuffer.offset, numBytes);
-#endif
-
-		return out;
-	}
 
 	Buffer::~Buffer()
 	{
@@ -3407,8 +3506,7 @@ namespace ig
 		return LoadFromMemory(context, cmd, *image, generateMips);
 	}
 
-	std::unique_ptr<Texture> Texture::LoadFromMemory(const IGLOContext& context, CommandList& cmd,
-		const Image& image, bool generateMips)
+	std::unique_ptr<Texture> Texture::LoadFromMemory(const IGLOContext& context, CommandList& cmd, const Image& image, bool generateMips)
 	{
 		const char* errStr = "Failed to create texture from image. Reason: ";
 
@@ -3443,12 +3541,7 @@ namespace ig
 
 		if (proceedWithMipGen)
 		{
-			DetailedResult result = out->GenerateMips(cmd, image);
-			if (!result)
-			{
-				Log(LogType::Error, ToString(errStr, result.errorMessage));
-				return nullptr;
-			}
+			out->GenerateMips(cmd, image);
 		}
 		else
 		{
@@ -3498,7 +3591,7 @@ namespace ig
 		return DetailedResult::Success();
 	}
 
-	DetailedResult Texture::GenerateMips(CommandList& cmd, const Image& image)
+	void Texture::GenerateMips(CommandList& cmd, const Image& image)
 	{
 		if (desc.mipLevels <= 1) Fatal("Unexpected mip gen params");
 		if (image.GetExtent() != desc.extent) Fatal("Unexpected mip gen params");
@@ -3517,13 +3610,11 @@ namespace ig
 		unorderedDesc.numFaces = desc.numFaces;
 		unorderedDesc.mipLevels = desc.mipLevels - 1;
 		unorderedDesc.flags = TextureFlags::SkipDescriptorCreation;
-		std::unique_ptr<Texture> unorderedTexture = Texture::Create(context, unorderedDesc);
-		if (!unorderedTexture)
+		std::unique_ptr<Texture> uavTex = Texture::Create(context, unorderedDesc);
+		if (!uavTex)
 		{
-			return DetailedResult::Fail("Failed to create unordered access texture for mip generation.");
+			Fatal("Failed to create unordered access texture for mip generation.");
 		}
-		const Texture& unorderedRef = *unorderedTexture;
-		context.DelayedDestroyTexture(std::move(unorderedTexture));
 
 		cmd.AddTextureBarrierAtSubresource(*this, SimpleBarrier::Discard, SimpleBarrier::CopyDest, 0, 0);
 		cmd.FlushBarriers();
@@ -3575,7 +3666,7 @@ namespace ig
 			for (uint32_t m = 0; m < numMips; m++)
 			{
 				uavDesc.Texture2D.MipSlice = i + m;
-				device->CreateUnorderedAccessView(unorderedRef.GetD3D12Resource(), nullptr, &uavDesc, heap.GetD3D12CPUHandle(uav[m]));
+				device->CreateUnorderedAccessView(uavTex->GetD3D12Resource(), nullptr, &uavDesc, heap.GetD3D12CPUHandle(uav[m]));
 			}
 #endif
 #ifdef IGLO_VULKAN
@@ -3589,7 +3680,7 @@ namespace ig
 				image.GetFormat(), false, numFaces, baseMip, mipLevels);
 			if (!view_srv)
 			{
-				return DetailedResult::Fail("Failed to create source image view for mip generation.");
+				Fatal("Failed to create source image view for mip generation.");
 			}
 			heap.WriteImageDescriptor(srv, VulkanDescriptorType::Texture_SRV, view_srv, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 			context.DelayedDestroyVulkanImageView(view_srv);
@@ -3597,11 +3688,11 @@ namespace ig
 			// UAV
 			for (uint32_t m = 0; m < numMips; m++)
 			{
-				VkImageView view_uav = Texture::CreateImageView(device, unorderedRef.GetVulkanImage(), VK_IMAGE_ASPECT_COLOR_BIT,
+				VkImageView view_uav = Texture::CreateImageView(device, uavTex->GetVulkanImage(), VK_IMAGE_ASPECT_COLOR_BIT,
 					format_non_sRGB, false, numFaces, baseMip + m, mipLevels);
 				if (!view_uav)
 				{
-					return DetailedResult::Fail("Failed to create destination image view for mip generation.");
+					Fatal("Failed to create destination image view for mip generation.");
 				}
 				heap.WriteImageDescriptor(uav[m], VulkanDescriptorType::Texture_UAV, view_uav, VK_IMAGE_LAYOUT_GENERAL);
 				context.DelayedDestroyVulkanImageView(view_uav);
@@ -3611,7 +3702,7 @@ namespace ig
 			cmd.AddTextureBarrierAtSubresource(*this, SimpleBarrier::CopyDest, SimpleBarrier::ComputeShaderResource, 0, i);
 			for (uint32_t m = 0; m < numMips; m++)
 			{
-				cmd.AddTextureBarrierAtSubresource(unorderedRef, SimpleBarrier::Discard, SimpleBarrier::ComputeShaderUnorderedAccess, 0, i + m);
+				cmd.AddTextureBarrierAtSubresource(*uavTex, SimpleBarrier::Discard, SimpleBarrier::ComputeShaderUnorderedAccess, 0, i + m);
 			}
 			cmd.FlushBarriers();
 
@@ -3682,13 +3773,13 @@ namespace ig
 			for (uint32_t m = 0; m < numMips; m++)
 			{
 				cmd.AddTextureBarrierAtSubresource(*this, SimpleBarrier::Discard, SimpleBarrier::CopyDest, 0, i + m + 1);
-				cmd.AddTextureBarrierAtSubresource(unorderedRef, SimpleBarrier::ComputeShaderUnorderedAccess, SimpleBarrier::CopySource, 0, i + m);
+				cmd.AddTextureBarrierAtSubresource(*uavTex, SimpleBarrier::ComputeShaderUnorderedAccess, SimpleBarrier::CopySource, 0, i + m);
 			}
 			cmd.FlushBarriers();
 
 			for (uint32_t m = 0; m < numMips; m++)
 			{
-				cmd.CopyTextureSubresource(unorderedRef, 0, i + m, *this, 0, i + m + 1);
+				cmd.CopyTextureSubresource(*uavTex, 0, i + m, *this, 0, i + m + 1);
 			}
 
 			const uint32_t nextSrcMip = i + numMips;
@@ -3707,7 +3798,9 @@ namespace ig
 			i += numMips;
 		}
 
-		return DetailedResult::Success();
+		// The unordered access texture won't be destroyed until after the GPU
+		// has finished executing all commands associated with this command list.
+		context.DelayedDestroyTexture(std::move(uavTex));
 	}
 
 	void Texture::SetPixels(CommandList& cmd, const Image& srcImage)
