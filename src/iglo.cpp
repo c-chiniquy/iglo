@@ -1723,7 +1723,7 @@ namespace ig
 			return;
 		}
 
-		WaitForIdleDevice();
+		WaitForIdleDeviceAndReclaim();
 		DetailedResult result = CreateSwapChain(this->swapChain.extent, this->swapChain.format,
 			numBackBuffers, numFramesInFlight, this->swapChain.presentMode);
 		if (!result)
@@ -1751,7 +1751,7 @@ namespace ig
 	{
 		if (swapChain.format == format) return;
 
-		WaitForIdleDevice();
+		WaitForIdleDeviceAndReclaim();
 		DetailedResult result = CreateSwapChain(swapChain.extent, format, swapChain.numBackBuffers,
 			numFramesInFlight, swapChain.presentMode);
 		if (!result)
