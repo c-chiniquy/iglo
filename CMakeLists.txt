@@ -133,8 +133,6 @@ function(add_example name)
              /w14703 # -Wuninitialized
              /w14706 # -Wparentheses
              /w15038 # -Wreorder
-             /wd4477 # -Wno-format
-             /wd4996 # -Wno-deprecated-declarations
         )
 
         # enable multithreaded building
