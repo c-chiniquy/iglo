@@ -135,7 +135,7 @@ function(add_example name)
              /w15038 # -Wreorder
         )
 
-        # enable multithreaded building
+        # enable multi-processor compilation
         target_compile_options(${name} PRIVATE /MP)
 
         # set linker subsystem
