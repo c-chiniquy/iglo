@@ -1,6 +1,13 @@
 
 # Changelog
 
+## v0.8.1
+
+### Changes
+
+- `CMakeLists.txt` now enables /MP (multi-processor compilation) and additional warnings on MSVC.
+- Removed some unused variables.
+
 ## v0.8.0
 
 ### Changes
