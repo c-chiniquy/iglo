@@ -3508,8 +3508,6 @@ namespace ig
 
 	std::unique_ptr<Texture> Texture::LoadFromMemory(const IGLOContext& context, CommandList& cmd, const Image& image, bool generateMips)
 	{
-		const char* errStr = "Failed to create texture from image. Reason: ";
-
 		bool proceedWithMipGen = generateMips;
 
 		if (generateMips)

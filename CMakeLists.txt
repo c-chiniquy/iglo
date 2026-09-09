@@ -117,20 +117,35 @@ function(add_example name)
         list(APPEND sources ${example_fullpath}/${file})
     endforeach()
 
-    if(MSVC)
-        # set warning level
-        add_compile_options(/W3 /WX)
-    endif()
-
     add_executable(${name} ${sources} ${IGLO_SOURCES})
 
     if(MSVC)
+        # set warning level
+        target_compile_options(${name} PRIVATE /W3 /WX)
+
+        # add some additional warnings
+        target_compile_options(${name} PRIVATE
+             /w14062 # -Wswitch
+             /w14189 # -Wunused-variable
+             /w14505 # -Wunused-function
+             /w14555 # -Wunused-value
+             /w14701 # -Wuninitialized
+             /w14703 # -Wuninitialized
+             /w14706 # -Wparentheses
+             /w15038 # -Wreorder
+             /wd4477 # -Wno-format
+             /wd4996 # -Wno-deprecated-declarations
+        )
+
+        # enable multithreaded building
+        target_compile_options(${name} PRIVATE /MP)
+
         # set linker subsystem
         target_link_options(${name} PRIVATE "/SUBSYSTEM:WINDOWS")
+
         # no filter for example project source files
         source_group(" " FILES ${sources})
     endif()
-
 
     target_include_directories(${name} PRIVATE 
         ${CMAKE_CURRENT_SOURCE_DIR}/src

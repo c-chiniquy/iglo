@@ -6,9 +6,9 @@
 namespace ig
 {
 	constexpr UINT windowClassStyle = CS_OWNDC | CS_HREDRAW | CS_VREDRAW | CS_DBLCLKS;
-	constexpr LONG windowStyleWindowed = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_CLIPCHILDREN | WS_CLIPSIBLINGS;
-	constexpr LONG windowStyleWindowedResizable = windowStyleWindowed | WS_THICKFRAME | WS_MAXIMIZEBOX;
-	constexpr LONG windowStyleBorderless = WS_POPUP;
+	constexpr DWORD windowStyleWindowed = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_CLIPCHILDREN | WS_CLIPSIBLINGS;
+	constexpr DWORD windowStyleWindowedResizable = windowStyleWindowed | WS_THICKFRAME | WS_MAXIMIZEBOX;
+	constexpr DWORD windowStyleBorderless = WS_POPUP;
 	const LPCWSTR windowClassName = L"iglo";
 
 	// We must keep track of the number of windows that exist in total because a window class should only be registered once,
@@ -19,7 +19,8 @@ namespace ig
 	void SetWindowState_Win32(Impl_WindowData& window, const WindowState& state, bool topMost, bool gainFocus)
 	{
 		if (!window.hwnd) return;
-		UINT style;
+
+		DWORD style = 0;
 		if (state.bordersVisible)
 		{
 			if (state.resizable) style = windowStyleWindowedResizable;
@@ -30,7 +31,6 @@ namespace ig
 			style = windowStyleBorderless;
 		}
 		if (state.visible) style |= WS_VISIBLE;
-		UINT resizableFlag = state.resizable ? WS_THICKFRAME | WS_MAXIMIZEBOX : 0;
 
 		// Calling SetWindowLongPtr can sometimes send a WM_SIZE event with incorrect size.
 		// We want to ignore these WM_SIZE messages.
@@ -41,10 +41,13 @@ namespace ig
 		RECT rc;
 		SetRect(&rc, 0, 0, (int)state.size.width, (int)state.size.height);
 		AdjustWindowRect(&rc, style, false);
+
 		HWND insertAfter = HWND_NOTOPMOST;
 		if (topMost) insertAfter = HWND_TOPMOST;
+
 		UINT flags = SWP_FRAMECHANGED;
 		if (!gainFocus) flags |= SWP_NOACTIVATE;
+
 		SetWindowPos(window.hwnd, insertAfter, state.pos.x, state.pos.y, rc.right - rc.left, rc.bottom - rc.top, flags);
 	}
 
