@@ -476,7 +476,7 @@ private:
 
 		// Load resources
 		{
-			trimSDF = ig::Font::LoadFromFile(*context, resourceFolder + "trim.ttf", 20, ig::FontSettings(ig::FontType::SDF));
+			trimSDF = ig::Font::LoadFromFile(*context, resourceFolder + "trim.ttf", 20, { .fontType = ig::FontType::SDF });
 			if (!trimSDF)
 			{
 				ig::PopupMessage("Failed to load one or more fonts from: " + resourceFolder, "Error", context.get());

@@ -8,8 +8,8 @@
 
 // -------------------- Version --------------------//
 #define IGLO_VERSION_MAJOR 0
-#define IGLO_VERSION_MINOR 8
-#define IGLO_VERSION_PATCH 1
+#define IGLO_VERSION_MINOR 9
+#define IGLO_VERSION_PATCH 0
 
 #define IGLO_STRINGIFY_HELPER(x) #x
 #define IGLO_STRINGIFY(x) IGLO_STRINGIFY_HELPER(x)
@@ -915,8 +915,8 @@ namespace ig
 		uint32_t GetWidth() const { return desc.extent.width; }
 		uint32_t GetHeight() const { return desc.extent.height; }
 		Format GetFormat() const { return desc.format; }
-		uint32_t GetMipLevels() const { return desc.mipLevels; }
 		uint32_t GetNumFaces() const { return desc.numFaces; }
+		uint32_t GetMipLevels() const { return desc.mipLevels; }
 		bool IsCubemap() const { return desc.isCubemap; }
 
 		// Returns true if using an sRGB format.
@@ -1384,8 +1384,8 @@ namespace ig
 		// Vertex shader bytecode and pixel shader bytecode is loaded from file.
 		// You must provide one blend state (BlendDesc) for each expected render texture.
 		static std::unique_ptr<Pipeline> LoadFromFile(const IGLOContext&,
-			const std::string& filepathVS, const char* entryPointNameVS,
-			const std::string& filepathPS, const char* entryPointNamePS,
+			const std::string& filenameVS, const char* entryPointNameVS,
+			const std::string& filenamePS, const char* entryPointNamePS,
 			const RenderTargetDesc&, const std::vector<VertexElement>&,
 			PrimitiveTopology, DepthDesc, RasterizerDesc, const std::vector<BlendDesc>&);
 
@@ -2435,47 +2435,30 @@ namespace ig
 
 		std::string ToString(int decimals = 2) const
 		{
-			if (totalRAM == 0) return "RAM: N/A";
-
-			const float usage = float(usedRAM) / float(totalRAM);
-
-			return std::format(
-				"RAM: {} / {} ({}) | Available: {}",
-				FormatByteSize(usedRAM, decimals),
-				FormatByteSize(totalRAM, decimals),
-				FormatPercentage(usage, decimals),
-				FormatByteSize(availableRAM, decimals));
+			std::string out = "RAM: " + FormatByteSize(usedRAM, decimals) + " / " + FormatByteSize(totalRAM, decimals);
+			if (totalRAM != 0)
+			{
+				const float usage = float(usedRAM) / float(totalRAM);
+				out += " (" + FormatPercentage(usage, decimals) + ")";
+			}
+			return out;
 		}
 	};
 
 	struct VideoMemoryInfo
 	{
-		uint64_t totalVRAM = 0;
-
-		// These values may be unavailable on some platforms.
-		// (Vulkan requires the VK_EXT_memory_budget extension)
-		std::optional<uint64_t> usedVRAM;
-		std::optional<uint64_t> availableVRAM;
+		uint64_t budgetVRAM = 0;
+		uint64_t usedVRAM = 0;
+		uint64_t availableVRAM = 0;
 
 		std::string ToString(int decimals = 2) const
 		{
-			std::string out = std::format("VRAM: {} / {}",
-				usedVRAM ? FormatByteSize(*usedVRAM, decimals) : "N/A",
-				FormatByteSize(totalVRAM, decimals));
-
-			if (usedVRAM && availableVRAM && totalVRAM != 0)
+			std::string out = "VRAM: " + FormatByteSize(usedVRAM, decimals) + " / " + FormatByteSize(budgetVRAM, decimals);
+			if (budgetVRAM != 0)
 			{
-				const float usage = float(*usedVRAM) / float(totalVRAM);
-
-				out += std::format(" ({}) | Available: {}",
-					FormatPercentage(usage, decimals),
-					FormatByteSize(*availableVRAM, decimals));
+				const float usage = float(usedVRAM) / float(budgetVRAM);
+				out += " (" + FormatPercentage(usage, decimals) + ")";
 			}
-			else
-			{
-				out += " (usage unknown | available: N/A)";
-			}
-
 			return out;
 		}
 	};
@@ -2710,9 +2693,12 @@ namespace ig
 		// Bilinear clamp sampler is needed for the mip gen shaders
 		Descriptor GetSampler_BilinearClamp() const { return sampler_bilinearClamp->GetDescriptor(); }
 
-		// All queried memory info (RAM/VRAM) are estimations and should only be used for debugging/warnings.
-		SystemMemoryInfo QuerySystemMemoryInfo();
-		VideoMemoryInfo QueryVideoMemoryInfo();
+		// Returns std::nullopt if query fails.
+		std::optional<SystemMemoryInfo> QuerySystemMemoryInfo() const;
+
+		// Returns std::nullopt if query fails.
+		// (Vulkan requires the VK_EXT_memory_budget extension)
+		std::optional<VideoMemoryInfo> QueryVideoMemoryInfo() const;
 
 #ifdef IGLO_D3D12
 		ID3D12Device10* GetD3D12Device() const { return graphics.device.Get(); }

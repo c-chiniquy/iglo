@@ -3,13 +3,15 @@
 
 #ifdef IGLO_D3D12
 
+#include <format>
+
 namespace ig
 {
 	constexpr D3D_FEATURE_LEVEL d3d12FeatureLevel = D3D_FEATURE_LEVEL_12_1;
 	constexpr DXGI_SWAP_EFFECT d3d12SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
 	constexpr UINT d3d12SwapChainFlags = DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT | DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
 
-	std::string FeatureLevelToString(D3D_FEATURE_LEVEL featureLevel)
+	static std::string FeatureLevelToString(D3D_FEATURE_LEVEL featureLevel)
 	{
 		uint32_t value = (uint32_t)featureLevel;
 		uint32_t major = (value >> 12) & 0xF;
@@ -17,9 +19,9 @@ namespace ig
 		return ToString(major, "_", minor);
 	}
 
-	std::string D3D12ErrorMsg(const char* functionName, HRESULT hr)
+	static std::string D3D12ErrorMsg(const char* functionName, HRESULT hr)
 	{
-		return ToString(functionName, " returned error code: ", (uint32_t)hr, ".");
+		return std::format("{} returned error code: 0x{:08X}.", functionName, (uint32_t)hr);
 	}
 
 	D3D12TextureFilter ToD3D12TextureFilter(TextureFilter filter)
@@ -2094,19 +2096,22 @@ namespace ig
 		}
 	}
 
-	VideoMemoryInfo IGLOContext::QueryVideoMemoryInfo()
+	std::optional<VideoMemoryInfo> IGLOContext::QueryVideoMemoryInfo() const
 	{
 		ComPtr<IDXGIAdapter3> adapter3;
-		graphics.adapter.As(&adapter3);
+		HRESULT hr = graphics.adapter.As(&adapter3);
+		if (FAILED(hr)) return std::nullopt;
 
 		DXGI_QUERY_VIDEO_MEMORY_INFO info = {};
-		adapter3->QueryVideoMemoryInfo(0, DXGI_MEMORY_SEGMENT_GROUP_LOCAL, &info);
+		hr = adapter3->QueryVideoMemoryInfo(0, DXGI_MEMORY_SEGMENT_GROUP_LOCAL, &info);
+		if (FAILED(hr)) return std::nullopt;
 
-		VideoMemoryInfo out;
-		out.totalVRAM = info.Budget;
-		out.usedVRAM = info.CurrentUsage;
-		out.availableVRAM = info.Budget - info.CurrentUsage;
-		return out;
+		return VideoMemoryInfo
+		{
+			.budgetVRAM = info.Budget,
+			.usedVRAM = info.CurrentUsage,
+			.availableVRAM = (info.Budget > info.CurrentUsage) ? info.Budget - info.CurrentUsage : 0,
+		};
 	}
 
 	uint32_t IGLOContext::Impl_GetMaxMSAA(Format textureFormat) const
@@ -2243,7 +2248,7 @@ namespace ig
 			window.hwnd, &swapChainDesc, nullptr, nullptr, &swapChain1);
 		if (FAILED(hr))
 		{
-			return DetailedResult::Fail(D3D12ErrorMsg("ID3D12Device::CreateSwapChainForHwnd", hr));
+			return DetailedResult::Fail(D3D12ErrorMsg("IDXGIFactory2::CreateSwapChainForHwnd", hr));
 		}
 		hr = swapChain1.As(&graphics.swapChain);
 		if (FAILED(hr))

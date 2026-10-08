@@ -13,6 +13,19 @@ namespace ig
 		SDF, // Signed distance fields. Monochrome.
 	};
 
+	enum class FontWeight : uint16_t
+	{
+		Thin = 100,
+		ExtraLight = 200,
+		Light = 300,
+		Regular = 400,
+		Medium = 500,
+		SemiBold = 600,
+		Bold = 700,
+		ExtraBold = 800,
+		Black = 900,
+	};
+
 	struct FontDesc
 	{
 		std::string fontName = "Unnamed font";
@@ -24,33 +37,27 @@ namespace ig
 
 	struct FontSettings
 	{
-		FontSettings(
-			FontType fontType = FontType::Bitmap,
-			uint16_t sdfOutwardGradientSize = 3,
-			uint16_t glyphPadding = 1,
-			uint32_t startingTextureSize = 128)
-		{
-			this->fontType = fontType;
-			this->sdfOutwardGradientSize = sdfOutwardGradientSize;
-			this->glyphPadding = glyphPadding;
-			this->startingTextureSize = startingTextureSize;
-		}
-
-		FontType fontType;
+		FontType fontType = FontType::Bitmap;
 
 		// Only relevant if font is of type SDF.
 		// This is the number of pixels the SDF gradient will stretch outwards from the glyph.
 		// This determines the range of the outline and glow effects.
 		// A larger gradient increases the size of rasterized glyphs, which leads to a larger glyph atlas texture size.
-		uint16_t sdfOutwardGradientSize;
+		uint16_t sdfOutwardGradientSize = 3;
 
 		// Increases the space between glyphs on the glyph atlas texture to prevent scaling artifacts.
 		// This is the number of pixels each glyph quad will expand at every side (top, left, right, bottom).
 		// For example, a padding of 1 will result in 2 pixels of empty space between every glyph on the texture.
-		uint16_t glyphPadding;
+		uint16_t glyphPadding = 1;
 
 		// The starting width and height of the glyph atlas texture.
-		uint32_t startingTextureSize;
+		uint32_t startingTextureSize = 128;
+	};
+
+	struct FontLocation
+	{
+		std::string filename;
+		uint32_t faceIndex = 0; // Which font to load in font collections (.TTC/.OTC)
 	};
 
 	struct Glyph
@@ -97,8 +104,12 @@ namespace ig
 		bool LoadFromMemory(const byte* fileData, size_t numBytes);
 	};
 
-	// An embedded Vegur15 font.
+	// An embedded Vegur15 font
 	PrebakedFontData GetDefaultFont();
+
+	// Finds an installed font by family name, weight and style.
+	// Returns std::nullopt if no matching font is installed.
+	std::optional<FontLocation> FindSystemFont(const std::string& familyName, FontWeight weight = FontWeight::Regular, bool italic = false);
 
 	class Font
 	{
@@ -111,15 +122,18 @@ namespace ig
 
 	public:
 
-		// Load .TTF/.OTF font from file.
+		// Load .TTF/.OTF/.TTC/.OTC font from file.
 		static std::unique_ptr<Font> LoadFromFile(const IGLOContext&, const std::string& filename,
 			float fontSize, FontSettings fontSettings = FontSettings());
+		static std::unique_ptr<Font> LoadFromFile(const IGLOContext&, const FontLocation& location,
+			float fontSize, FontSettings fontSettings = FontSettings());
 		
-		// Load .TTF/.OTF font from memory.
+		// Load .TTF/.OTF/.TTC/.OTC font from memory.
 		// Font will rely on the file data buffer during its lifetime,
 		// so don't delete the data buffer before destroying this font.
-		static std::unique_ptr<Font> LoadFromMemory(const IGLOContext&, const byte* data, size_t numBytes,
-			std::string fontName, float fontSize, FontSettings fontSettings = FontSettings());
+		// 'faceIndex' decides which font to load in font collections (.TTC/.OTC)
+		static std::unique_ptr<Font> LoadFromMemory(const IGLOContext&, const byte* fileData, size_t numBytes,
+			std::string fontName, float fontSize, FontSettings fontSettings = FontSettings(), uint32_t faceIndex = 0);
 
 		// Create prebaked font. A prebaked font has pre-rasterized glyphs.
 		// You can programmatically fill in the values of PrebakedFontData, or you can load one from file.

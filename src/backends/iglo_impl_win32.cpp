@@ -13,8 +13,8 @@ namespace ig
 
 	// We must keep track of the number of windows that exist in total because a window class should only be registered once,
 	// and unregistered only after the last window is destroyed.
-	unsigned int numWindows = 0;
-	bool windowClassIsRegistered = false;
+	static unsigned int numWindows = 0;
+	static bool windowClassIsRegistered = false;
 
 	void SetWindowState_Win32(Impl_WindowData& window, const WindowState& state, bool topMost, bool gainFocus)
 	{
@@ -208,18 +208,18 @@ namespace ig
 		return DetailedResult::Success();
 	}
 
-	SystemMemoryInfo IGLOContext::QuerySystemMemoryInfo()
+	std::optional<SystemMemoryInfo> IGLOContext::QuerySystemMemoryInfo() const
 	{
 		MEMORYSTATUSEX mem = {};
 		mem.dwLength = sizeof(mem);
-		GlobalMemoryStatusEx(&mem);
+		if (!GlobalMemoryStatusEx(&mem)) return std::nullopt;
 
-		SystemMemoryInfo out;
-		out.totalRAM = mem.ullTotalPhys;
-		out.availableRAM = mem.ullAvailPhys;
-		out.usedRAM = out.totalRAM - out.availableRAM;
-
-		return out;
+		return SystemMemoryInfo
+		{
+			.totalRAM = mem.ullTotalPhys,
+			.usedRAM = mem.ullTotalPhys - mem.ullAvailPhys,
+			.availableRAM = mem.ullAvailPhys,
+		};
 	}
 
 	Extent2D IGLOContext::GetActiveMonitorScreenResolution()

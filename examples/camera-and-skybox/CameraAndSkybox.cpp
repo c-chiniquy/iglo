@@ -387,7 +387,7 @@ private:
 			pointVertexBuffer = ig::Buffer::CreateVertexBuffer(*context, sizeof(Vertex), MaxObjectCount, ig::BufferUsage::Default);
 
 			vegur = ig::Font::LoadFromFile(*context, resourceFolder + "Vegur-Regular.otf", 18);
-			trimSDF = ig::Font::LoadFromFile(*context, resourceFolder + "trim.ttf", 17, ig::FontSettings(ig::FontType::SDF));
+			trimSDF = ig::Font::LoadFromFile(*context, resourceFolder + "trim.ttf", 17, { .fontType = ig::FontType::SDF });
 			if (!vegur || !trimSDF)
 			{
 				ig::PopupMessage("Failed to load fonts from: " + resourceFolder, "Error", context.get());

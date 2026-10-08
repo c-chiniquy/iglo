@@ -717,7 +717,6 @@ namespace ig
 		{
 			switch (codepoint)
 			{
-				//TODO: How should tab characters be handled?
 			case '\r':
 				continue;
 

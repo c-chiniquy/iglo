@@ -621,32 +621,32 @@ namespace ig
 	}
 
 	std::unique_ptr<Pipeline> Pipeline::LoadFromFile(const IGLOContext& context,
-		const std::string& filepathVS, const char* entryPointNameVS,
-		const std::string& filepathPS, const char* entryPointNamePS,
+		const std::string& filenameVS, const char* entryPointNameVS,
+		const std::string& filenamePS, const char* entryPointNamePS,
 		const RenderTargetDesc& renderTargetDesc, const std::vector<VertexElement>& vertexLayout,
 		PrimitiveTopology primitiveTopology, DepthDesc depth, RasterizerDesc rasterizer, const std::vector<BlendDesc>& blend)
 	{
 		const char* errStr = "Failed to create graphics pipeline state. Reason: ";
 
-		if (filepathVS.empty() || filepathPS.empty())
+		if (filenameVS.empty() || filenamePS.empty())
 		{
 			Log(LogType::Error, ToString(errStr, "Couldn't read shader bytecode from file because empty filepath was provided."));
 			return nullptr;
 		}
 
 		// Vertex shader
-		ReadFileResult VS = ReadFile(filepathVS);
+		ReadFileResult VS = ReadFile(filenameVS);
 		if (!VS.success)
 		{
-			Log(LogType::Error, ToString(errStr, "Failed to read shader bytecode from file '", filepathVS, "'."));
+			Log(LogType::Error, ToString(errStr, "Failed to read shader bytecode from file '", filenameVS, "'."));
 			return nullptr;
 		}
 
 		// Pixel shader
-		ReadFileResult PS = ReadFile(filepathPS);
+		ReadFileResult PS = ReadFile(filenamePS);
 		if (!PS.success)
 		{
-			Log(LogType::Error, ToString(errStr, "Failed to read shader bytecode from file '", filepathPS, "'."));
+			Log(LogType::Error, ToString(errStr, "Failed to read shader bytecode from file '", filenamePS, "'."));
 			return nullptr;
 		}
 

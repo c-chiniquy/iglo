@@ -326,7 +326,7 @@ private:
 		context->WaitForCompletion(context->Submit(*cmd));
 
 		vegur = ig::Font::LoadFromFile(*context, resourceFolder + "Vegur-Regular.otf", 17);
-		trimSDF = ig::Font::LoadFromFile(*context, resourceFolder + "trim.ttf", 25, ig::FontSettings(ig::FontType::SDF));
+		trimSDF = ig::Font::LoadFromFile(*context, resourceFolder + "trim.ttf", 25, { .fontType = ig::FontType::SDF });
 		if (!vegur || !trimSDF)
 		{
 			ig::PopupMessage("Failed to load one or more fonts from: " + resourceFolder, "Error", context.get());

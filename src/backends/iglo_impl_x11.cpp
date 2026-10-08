@@ -4,13 +4,14 @@
 
 #include "iglo.h"
 
-#include <sys/sysinfo.h>
 #include <X11/Xatom.h>
 #include <X11/XKBlib.h>
 #include <X11/XF86keysym.h>
 #include <X11/cursorfont.h>
 #include <X11/Xcursor/Xcursor.h>
 #include <cstring>
+#include <fstream>
+#include <sstream>
 
 namespace ig
 {
@@ -19,7 +20,7 @@ namespace ig
 	{
 		char buffer[256];
 		XGetErrorText(display, e->error_code, buffer, sizeof(buffer));
-		Print(ToString("X11 Error: ", buffer, "\n"));
+		Print(ToString("X11 error: ", buffer, " (request code ", (int)e->request_code, ")\n"));
 		return 0;
 	}
 
@@ -512,19 +513,35 @@ namespace ig
 		XFlush(window.display);
 	}
 
-	SystemMemoryInfo IGLOContext::QuerySystemMemoryInfo()
+	std::optional<SystemMemoryInfo> IGLOContext::QuerySystemMemoryInfo() const
 	{
-		struct sysinfo info;
-		if (sysinfo(&info) != 0) return SystemMemoryInfo();
-		
-		const uint64_t unit = (uint64_t)info.mem_unit;
+		std::optional<uint64_t> totalKB;
+		std::optional<uint64_t> availableKB;
+		{
+			std::ifstream file("/proc/meminfo");
+			std::string line;
+			while (std::getline(file, line))
+			{
+				std::istringstream ss(line);
+				std::string key;
+				uint64_t value = 0;
+				if (!(ss >> key >> value)) continue;
 
-		SystemMemoryInfo out;
-		out.totalRAM = (uint64_t)info.totalram * unit;
-		out.availableRAM = (uint64_t)info.freeram * unit;
-		out.usedRAM = out.totalRAM - out.availableRAM; // Used RAM is an estimation
-
-		return out;
+				if (key == "MemTotal:") totalKB = value;
+				else if (key == "MemAvailable:") availableKB = value;
+				if (totalKB && availableKB) break;
+			}
+		}
+		if (totalKB && availableKB && *totalKB >= *availableKB)
+		{
+			return SystemMemoryInfo
+			{
+				.totalRAM = *totalKB * 1024,
+				.usedRAM = (*totalKB - *availableKB) * 1024,
+				.availableRAM = *availableKB * 1024,
+			};
+		}
+		return std::nullopt;
 	}
 
 	std::string IGLOContext::PasteTextFromClipboard() const

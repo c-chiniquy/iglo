@@ -1,8 +1,8 @@
 ﻿#include "iglo_utility.h"
 
+#include <format>
 #include <thread>
 #include <fstream>
-#include <sstream>
 #include <iostream>
 
 #ifdef _WIN32
@@ -60,13 +60,19 @@ namespace ig
 		{
 			std::string typeStr = "IGLO ";
 
-			if (type == LogType::Info) typeStr += "Info: ";
-			else if (type == LogType::Warning) typeStr += "Warning: ";
-			else if (type == LogType::Error) typeStr += "Error: ";
-			else if (type == LogType::FatalError) typeStr += "Fatal error: ";
-			else typeStr += ": ";
+			switch (type)
+			{
+			case LogType::Info: typeStr += "Info"; break;
+			case LogType::Warning: typeStr += "Warning"; break;
+			case LogType::Error: typeStr += "Error"; break;
+			case LogType::FatalError: typeStr += "Fatal error"; break;
 
-			Print(typeStr + message + "\n");
+			default:
+				typeStr += "<Unknown LogType>";
+				break;
+			}
+
+			Print(typeStr + ": " + message + "\n");
 		}
 	}
 
@@ -75,7 +81,7 @@ namespace ig
 		if (in_out_counter >= maxLogCount) return;
 
 		in_out_counter++;
-		
+
 		if (in_out_counter >= maxLogCount)
 		{
 			Log(type, ToString(message, "\n(This message was logged ", maxLogCount, " times and will not be logged again.)"));
@@ -1963,7 +1969,8 @@ namespace ig
 		return out;
 	}
 
-	enum class ByteOrderMark
+	// Byte order mark
+	enum class BOM
 	{
 		None = 0,
 		UTF8,
@@ -1978,7 +1985,7 @@ namespace ig
 	};
 
 	// Looks for a byte order mark in the contents of a file.
-	ByteOrderMark GetByteOrderMark(const byte* fileContents, std::size_t numBytes)
+	static BOM GetBOM(const byte* fileContents, size_t numBytes)
 	{
 		if (numBytes >= 4)
 		{
@@ -1989,7 +1996,7 @@ namespace ig
 				fileContents[3] == 0x00)
 			{
 				// This is either UTF-32 LE or UTF16-LE followed by a null character.
-				return ByteOrderMark::UTF32LE_Or_UTF16LE_WithNullChar;
+				return BOM::UTF32LE_Or_UTF16LE_WithNullChar;
 			}
 			// UTF-32 BE
 			if (fileContents[0] == 0x00 &&
@@ -1998,7 +2005,7 @@ namespace ig
 				fileContents[3] == 0xFF)
 			{
 				// This is either UTF-32 BE or UTF16-BE followed by a null character.
-				return ByteOrderMark::UTF32BE_Or_UTF16BE_WithNullChar;
+				return BOM::UTF32BE_Or_UTF16BE_WithNullChar;
 			}
 		}
 		if (numBytes >= 3)
@@ -2008,7 +2015,7 @@ namespace ig
 				fileContents[1] == 0xBB &&
 				fileContents[2] == 0xBF)
 			{
-				return ByteOrderMark::UTF8;
+				return BOM::UTF8;
 			}
 		}
 		if (numBytes >= 2)
@@ -2017,26 +2024,31 @@ namespace ig
 			if (fileContents[0] == 0xFF &&
 				fileContents[1] == 0xFE)
 			{
-				return ByteOrderMark::UTF16LE;
+				return BOM::UTF16LE;
 			}
 			// UTF-16 BE
 			if (fileContents[0] == 0xFE &&
 				fileContents[1] == 0xFF)
 			{
-				return ByteOrderMark::UTF16BE;
+				return BOM::UTF16BE;
 			}
 		}
-		return ByteOrderMark::None;
+		return BOM::None;
 	}
 
-	uint32_t GetByteOrderMarkLength(ByteOrderMark bom)
+	static uint32_t GetBOMLength(BOM bom)
 	{
-		if (bom == ByteOrderMark::UTF8) return 3;
-		else if (bom == ByteOrderMark::UTF16LE) return 2;
-		else if (bom == ByteOrderMark::UTF16BE) return 2;
-		else if (bom == ByteOrderMark::UTF32LE_Or_UTF16LE_WithNullChar) return 4;
-		else if (bom == ByteOrderMark::UTF32BE_Or_UTF16BE_WithNullChar) return 4;
-		return 0;
+		switch (bom)
+		{
+		case BOM::UTF8: return 3;
+		case BOM::UTF16LE: return 2;
+		case BOM::UTF16BE: return 2;
+		case BOM::UTF32LE_Or_UTF16LE_WithNullChar: return 4;
+		case BOM::UTF32BE_Or_UTF16BE_WithNullChar: return 4;
+
+		default:
+			return 0;
+		}
 	}
 
 	ReadTextFileResult ReadTextFile(const std::string& filename, CharacterEncoding encoding)
@@ -2044,7 +2056,7 @@ namespace ig
 		ReadTextFileResult out;
 		out.success = false;
 
-		ReadFileResult in = ReadFile(filename);
+		const ReadFileResult in = ReadFile(filename);
 		if (!in.success) return out;
 
 		if (in.fileContent.size() == 0)
@@ -2054,30 +2066,30 @@ namespace ig
 			return out;
 		}
 
-		ByteOrderMark bom = GetByteOrderMark(in.fileContent.data(), in.fileContent.size());
+		BOM bom = GetBOM(in.fileContent.data(), in.fileContent.size());
 		CharacterEncoding determinedEncoding = encoding;
 
 		// Unknown encoding.
 		if (determinedEncoding == CharacterEncoding::Unknown)
 		{
 			// UTF-8 BOM
-			if (bom == ByteOrderMark::UTF8)
+			if (bom == BOM::UTF8)
 			{
 				determinedEncoding = CharacterEncoding::UTF8;
 			}
 			else
 			{
 				// UTF-16 LE BOM
-				if (bom == ByteOrderMark::UTF16LE ||
-					bom == ByteOrderMark::UTF32LE_Or_UTF16LE_WithNullChar)
+				if (bom == BOM::UTF16LE ||
+					bom == BOM::UTF32LE_Or_UTF16LE_WithNullChar)
 				{
 					determinedEncoding = CharacterEncoding::UTF16_LE;
 				}
 				else
 				{
 					// UTF-16 BE BOM
-					if (bom == ByteOrderMark::UTF16BE ||
-						bom == ByteOrderMark::UTF32BE_Or_UTF16BE_WithNullChar)
+					if (bom == BOM::UTF16BE ||
+						bom == BOM::UTF32BE_Or_UTF16BE_WithNullChar)
 					{
 						determinedEncoding = CharacterEncoding::UTF16_BE;
 					}
@@ -2098,14 +2110,19 @@ namespace ig
 			}
 		}
 
+		auto FileBytesToString = [&](size_t offset = 0)
+		{
+			return std::string((const char*)in.fileContent.data() + offset, in.fileContent.size() - offset);
+		};
+
 		uint32_t skipBytes = 0; // How many bytes to skip (for skipping byte order mark)
 
 		if (determinedEncoding == CharacterEncoding::UTF32_LE)
 		{
 			// Has byte order mark
-			if (bom == ByteOrderMark::UTF32LE_Or_UTF16LE_WithNullChar) skipBytes = GetByteOrderMarkLength(bom);
+			if (bom == BOM::UTF32LE_Or_UTF16LE_WithNullChar) skipBytes = GetBOMLength(bom);
 			// Remove byte order mark if exists
-			out.text = std::string((char*)&in.fileContent[skipBytes], in.fileContent.size() - skipBytes);
+			out.text = FileBytesToString(skipBytes);
 			// Convert UTF-32 LE --> u32string --> UTF-8
 			out.text = utf32_to_utf8(utf32_to_u32string(out.text, true));
 			out.success = true;
@@ -2114,9 +2131,9 @@ namespace ig
 		else if (determinedEncoding == CharacterEncoding::UTF32_BE)
 		{
 			// Has byte order mark
-			if (bom == ByteOrderMark::UTF32BE_Or_UTF16BE_WithNullChar) skipBytes = GetByteOrderMarkLength(bom);
+			if (bom == BOM::UTF32BE_Or_UTF16BE_WithNullChar) skipBytes = GetBOMLength(bom);
 			// Remove byte order mark if exists
-			out.text = std::string((char*)&in.fileContent[skipBytes], in.fileContent.size() - skipBytes);
+			out.text = FileBytesToString(skipBytes);
 			// Convert UTF-32 BE --> u32string --> UTF-8
 			out.text = utf32_to_utf8(utf32_to_u32string(out.text, false));
 			out.success = true;
@@ -2125,9 +2142,9 @@ namespace ig
 		else if (determinedEncoding == CharacterEncoding::UTF16_LE)
 		{
 			// Has byte order mark
-			if (bom == ByteOrderMark::UTF16LE) skipBytes = GetByteOrderMarkLength(bom);
+			if (bom == BOM::UTF16LE || bom == BOM::UTF32LE_Or_UTF16LE_WithNullChar) skipBytes = GetBOMLength(BOM::UTF16LE);
 			// Remove byte order mark if exists
-			out.text = std::string((char*)&in.fileContent[skipBytes], in.fileContent.size() - skipBytes);
+			out.text = FileBytesToString(skipBytes);
 			// Convert UTF-16 LE --> u16string --> UTF-8
 			out.text = utf16_to_utf8(utf16_to_u16string(out.text, true));
 			out.success = true;
@@ -2136,9 +2153,9 @@ namespace ig
 		else if (determinedEncoding == CharacterEncoding::UTF16_BE)
 		{
 			// Has byte order mark
-			if (bom == ByteOrderMark::UTF16BE) skipBytes = GetByteOrderMarkLength(bom);
+			if (bom == BOM::UTF16BE || bom == BOM::UTF32BE_Or_UTF16BE_WithNullChar) skipBytes = GetBOMLength(BOM::UTF16BE);
 			// Remove byte order mark if exists
-			out.text = std::string((char*)&in.fileContent[skipBytes], in.fileContent.size() - skipBytes);
+			out.text = FileBytesToString(skipBytes);
 			// Convert UTF-16 BE --> u16string --> UTF-8
 			out.text = utf16_to_utf8(utf16_to_u16string(out.text, false));
 			out.success = true;
@@ -2147,9 +2164,9 @@ namespace ig
 		else if (determinedEncoding == CharacterEncoding::UTF8)
 		{
 			// Has byte order mark
-			if (bom == ByteOrderMark::UTF8) skipBytes = GetByteOrderMarkLength(bom);
+			if (bom == BOM::UTF8) skipBytes = GetBOMLength(bom);
 			// Remove byte order mark if exists
-			out.text = std::string((char*)&in.fileContent[skipBytes], in.fileContent.size() - skipBytes);
+			out.text = FileBytesToString(skipBytes);
 			// It's already UTF-8, so nothing more needs to be done.
 			out.success = true;
 			return out;
@@ -2157,7 +2174,7 @@ namespace ig
 		else if (determinedEncoding == CharacterEncoding::CP437)
 		{
 			// Include all bytes
-			out.text = std::string((char*)in.fileContent.data(), in.fileContent.size());
+			out.text = FileBytesToString();
 			// Convert to CP437
 			out.text = CP437_to_utf8(out.text);
 			out.success = true;
@@ -2168,7 +2185,7 @@ namespace ig
 			// CP1252
 
 			// Include all bytes
-			out.text = std::string((char*)in.fileContent.data(), in.fileContent.size());
+			out.text = FileBytesToString();
 			// Convert to Windows-1252 (aka CP1252).
 			out.text = CP1252_to_utf8(out.text);
 			out.success = true;
@@ -2178,28 +2195,48 @@ namespace ig
 
 	ReadFileResult ReadFile(const std::string& filename)
 	{
-		ReadFileResult out;
-		out.success = false;
-		std::ifstream f(utf8_to_path(filename), std::ios::in | std::ios::binary | std::ios::ate);
-		if (!f) return out; // Failed
-		std::streampos end = f.tellg();
+		const std::filesystem::path path = utf8_to_path(filename);
+
+#ifndef _WIN32
+		// To prevent linux (or any other POSIX system) from crashing when attempting to read a folder
+		std::error_code ec;
+		if (std::filesystem::is_directory(path, ec)) return ReadFileResult();
+#endif
+
+		std::ifstream f(path, std::ios::in | std::ios::binary | std::ios::ate);
+		if (!f) return ReadFileResult(); // Failed to open
+
+		const std::streampos end = f.tellg();
+		if (end < 0) return ReadFileResult(); // Failed to get file size
 		f.seekg(0, std::ios::beg);
-		std::size_t length = std::size_t(end - f.tellg());
+
+		ReadFileResult out;
+		const size_t length = size_t(end);
+		if (length > 0)
+		{
+			out.fileContent.resize(length);
+			f.read((char*)out.fileContent.data(), (std::streamsize)length);
+			if (f.gcount() != (std::streamsize)length)
+			{
+				return ReadFileResult(); // Read failed or was incomplete
+			}
+		}
 		out.success = true;
-		if (length == 0) return out; // Length of file is 0. Still counts as success.
-		out.fileContent.clear();
-		out.fileContent.resize(length);
-		f.read(((char*)out.fileContent.data()), length);
 		return out;
+	}
+
+	static bool WriteBytesToFile(const std::string& filename, const byte* fileContent, size_t numBytes, std::ios::openmode mode)
+	{
+		std::ofstream outFile(utf8_to_path(filename), mode);
+		if (!outFile) return false; // Failed to open file
+		outFile.write((const char*)fileContent, (std::streamsize)numBytes);
+		outFile.close();
+		return !outFile.fail(); // Catches failed writes and failed close
 	}
 
 	bool WriteFile(const std::string& filename, const byte* fileContent, size_t numBytes)
 	{
-		std::ofstream outFile(utf8_to_path(filename), std::ios::out | std::ios::binary);
-		if (!outFile) return false; // Failed to open file
-		outFile.write((char*)fileContent, numBytes);
-		outFile.close();
-		return true;
+		return WriteBytesToFile(filename, fileContent, numBytes, std::ios::out | std::ios::binary);
 	}
 	bool WriteFile(const std::string& filename, const std::vector<byte>& fileContent)
 	{
@@ -2207,16 +2244,12 @@ namespace ig
 	}
 	bool WriteFile(const std::string& filename, const std::string& fileContent)
 	{
-		return WriteFile(filename, (byte*)fileContent.data(), fileContent.size());
+		return WriteFile(filename, (const byte*)fileContent.data(), fileContent.size());
 	}
 
 	bool AppendToFile(const std::string& filename, const byte* fileContent, size_t numBytes)
 	{
-		std::ofstream outFile(utf8_to_path(filename), std::ios::out | std::ios::binary | std::ios_base::app);
-		if (!outFile) return false; // Failed to open file
-		outFile.write((char*)fileContent, numBytes);
-		outFile.close();
-		return true;
+		return WriteBytesToFile(filename, fileContent, numBytes, std::ios::out | std::ios::binary | std::ios::app);
 	}
 	bool AppendToFile(const std::string& filename, const std::vector<byte>& fileContent)
 	{
@@ -2224,7 +2257,7 @@ namespace ig
 	}
 	bool AppendToFile(const std::string& filename, const std::string& fileContent)
 	{
-		return AppendToFile(filename, (byte*)fileContent.data(), fileContent.size());
+		return AppendToFile(filename, (const byte*)fileContent.data(), fileContent.size());
 	}
 
 	std::string FormatPercentage(float value, int decimals)
@@ -2379,8 +2412,7 @@ namespace ig
 		do
 		{
 			r = NextUInt32();
-		}
-		while (r < threshold);
+		} while (r < threshold);
 
 		return r % exclusiveMax;
 	}

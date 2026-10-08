@@ -7,8 +7,14 @@
 #include <fstream>
 #include <filesystem>
 
+#ifdef _WIN32
+#include <dwrite.h>
+#include <wrl/client.h>
+#pragma comment(lib, "dwrite.lib")
+#endif
+
 #ifdef __linux__
-#include <cstring>
+#include <dlfcn.h>
 #endif
 
 namespace ig
@@ -303,6 +309,222 @@ namespace ig
 		return out;
 	}
 
+#ifdef __linux__
+	// fontconfig declarations, so the fontconfig headers aren't needed.
+	namespace
+	{
+		struct FcPattern;
+		struct FcConfig;
+		using FcChar8 = unsigned char;
+		using FcBool = int;
+		enum FcResult { FcResultMatch, FcResultNoMatch, FcResultTypeMismatch, FcResultNoId, FcResultOutOfMemory };
+		enum FcMatchKind { FcMatchPattern, FcMatchFont, FcMatchScan };
+
+		constexpr FcBool FcFalse = 0;
+		constexpr FcBool FcTrue = 1;
+		constexpr const char* FC_FAMILY = "family";
+		constexpr const char* FC_WEIGHT = "weight";
+		constexpr const char* FC_SLANT = "slant";
+		constexpr const char* FC_SCALABLE = "scalable";
+		constexpr const char* FC_EMBOLDEN = "embolden";
+		constexpr const char* FC_FILE = "file";
+		constexpr const char* FC_INDEX = "index";
+		constexpr int FC_SLANT_ROMAN = 0;
+		constexpr int FC_SLANT_ITALIC = 100;
+	}
+
+	struct FontconfigFuncs
+	{
+		FcPattern* (*PatternCreate)() = nullptr;
+		void (*PatternDestroy)(FcPattern*) = nullptr;
+		FcBool(*PatternAddString)(FcPattern*, const char*, const FcChar8*) = nullptr;
+		FcBool(*PatternAddInteger)(FcPattern*, const char*, int) = nullptr;
+		FcBool(*PatternAddBool)(FcPattern*, const char*, FcBool) = nullptr;
+		FcResult(*PatternGetString)(const FcPattern*, const char*, int, FcChar8**) = nullptr;
+		FcResult(*PatternGetInteger)(const FcPattern*, const char*, int, int*) = nullptr;
+		FcResult(*PatternGetBool)(const FcPattern*, const char*, int, FcBool*) = nullptr;
+		FcBool(*ConfigSubstitute)(FcConfig*, FcPattern*, FcMatchKind) = nullptr;
+		void (*DefaultSubstitute)(FcPattern*) = nullptr;
+		FcPattern* (*FontMatch)(FcConfig*, FcPattern*, FcResult*) = nullptr;
+		int (*StrCmpIgnoreCase)(const FcChar8*, const FcChar8*) = nullptr;
+		int (*WeightFromOpenType)(int) = nullptr;
+	};
+
+	// Returns nullptr if fontconfig couldn't be loaded.
+	// The library is loaded once (thread-safe) and stays loaded until the app exits.
+	static const FontconfigFuncs* GetFontconfig()
+	{
+		static const std::optional<FontconfigFuncs> fc = []() -> std::optional<FontconfigFuncs>
+		{
+			void* lib = dlopen("libfontconfig.so.1", RTLD_NOW | RTLD_LOCAL);
+			if (!lib) return std::nullopt;
+
+			FontconfigFuncs f;
+			bool allFound = true;
+			auto Load = [&](auto& func, const char* name)
+			{
+				func = (std::remove_reference_t<decltype(func)>)dlsym(lib, name);
+				if (!func) allFound = false;
+			};
+			Load(f.PatternCreate, "FcPatternCreate");
+			Load(f.PatternDestroy, "FcPatternDestroy");
+			Load(f.PatternAddString, "FcPatternAddString");
+			Load(f.PatternAddInteger, "FcPatternAddInteger");
+			Load(f.PatternAddBool, "FcPatternAddBool");
+			Load(f.PatternGetString, "FcPatternGetString");
+			Load(f.PatternGetInteger, "FcPatternGetInteger");
+			Load(f.PatternGetBool, "FcPatternGetBool");
+			Load(f.ConfigSubstitute, "FcConfigSubstitute");
+			Load(f.DefaultSubstitute, "FcDefaultSubstitute");
+			Load(f.FontMatch, "FcFontMatch");
+			Load(f.StrCmpIgnoreCase, "FcStrCmpIgnoreCase");
+			Load(f.WeightFromOpenType, "FcWeightFromOpenType");
+
+			if (!allFound)
+			{
+				dlclose(lib);
+				return std::nullopt;
+			}
+			return f;
+		}();
+		return fc ? &*fc : nullptr;
+	}
+#endif
+
+	std::optional<FontLocation> FindSystemFont(const std::string& familyName, FontWeight weight, bool italic)
+	{
+#ifdef _WIN32
+		using Microsoft::WRL::ComPtr;
+
+		if (familyName.empty()) return std::nullopt;
+
+		ComPtr<IDWriteFactory> factory;
+		HRESULT hr = DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory), (IUnknown**)factory.GetAddressOf());
+		if (FAILED(hr)) return std::nullopt;
+
+		ComPtr<IDWriteFontCollection> collection;
+		hr = factory->GetSystemFontCollection(&collection, FALSE);
+		if (FAILED(hr)) return std::nullopt;
+
+		// Find the font family
+		const std::u16string familyName16 = utf8_to_utf16(familyName);
+		UINT32 familyIndex = 0;
+		BOOL exists = FALSE;
+		hr = collection->FindFamilyName((const wchar_t*)familyName16.c_str(), &familyIndex, &exists);
+		if (FAILED(hr) || !exists) return std::nullopt;
+
+		ComPtr<IDWriteFontFamily> family;
+		hr = collection->GetFontFamily(familyIndex, &family);
+		if (FAILED(hr)) return std::nullopt;
+
+		// Find the closest matching weight and style
+		ComPtr<IDWriteFont> font;
+		hr = family->GetFirstMatchingFont((DWRITE_FONT_WEIGHT)weight, DWRITE_FONT_STRETCH_NORMAL,
+			italic ? DWRITE_FONT_STYLE_ITALIC : DWRITE_FONT_STYLE_NORMAL, &font);
+		if (FAILED(hr)) return std::nullopt;
+
+		// Reject fonts that DirectWrite would fake with synthetic bold/oblique, since stb_truetype can't do that.
+		if (font->GetSimulations() != DWRITE_FONT_SIMULATIONS_NONE) return std::nullopt;
+
+		ComPtr<IDWriteFontFace> face;
+		hr = font->CreateFontFace(&face);
+		if (FAILED(hr)) return std::nullopt;
+
+		// A font face can consist of several files, which is not supported by stb_truetype.
+		UINT32 numFiles = 0;
+		hr = face->GetFiles(&numFiles, nullptr);
+		if (FAILED(hr) || numFiles != 1) return std::nullopt;
+
+		ComPtr<IDWriteFontFile> file;
+		hr = face->GetFiles(&numFiles, file.GetAddressOf());
+		if (FAILED(hr)) return std::nullopt;
+
+		// Get the file path
+		const void* key = nullptr;
+		UINT32 keySize = 0;
+		hr = file->GetReferenceKey(&key, &keySize);
+		if (FAILED(hr)) return std::nullopt;
+
+		ComPtr<IDWriteFontFileLoader> loader;
+		hr = file->GetLoader(&loader);
+		if (FAILED(hr)) return std::nullopt;
+
+		ComPtr<IDWriteLocalFontFileLoader> localLoader;
+		hr = loader.As(&localLoader);
+		if (FAILED(hr)) return std::nullopt;
+
+		UINT32 pathLength = 0;
+		hr = localLoader->GetFilePathLengthFromKey(key, keySize, &pathLength);
+		if (FAILED(hr)) return std::nullopt;
+
+		std::u16string path((size_t)pathLength + 1, u'\0');
+		hr = localLoader->GetFilePathFromKey(key, keySize, (wchar_t*)path.data(), pathLength + 1);
+		if (FAILED(hr)) return std::nullopt;
+		path.resize(pathLength);
+
+		return FontLocation
+		{
+			.filename = utf16_to_utf8(path),
+			.faceIndex = face->GetIndex(),
+		};
+
+#elif defined(__linux__)
+
+		if (familyName.empty()) return std::nullopt;
+
+		const FontconfigFuncs* fc = GetFontconfig();
+		if (!fc) return std::nullopt; // fontconfig not available
+
+		FcPattern* pattern = fc->PatternCreate();
+		if (!pattern) return std::nullopt;
+
+		fc->PatternAddString(pattern, FC_FAMILY, (const FcChar8*)familyName.c_str());
+		fc->PatternAddInteger(pattern, FC_WEIGHT, fc->WeightFromOpenType((int)weight));
+		fc->PatternAddInteger(pattern, FC_SLANT, italic ? FC_SLANT_ITALIC : FC_SLANT_ROMAN);
+		fc->PatternAddBool(pattern, FC_SCALABLE, FcTrue);
+		fc->ConfigSubstitute(nullptr, pattern, FcMatchPattern);
+		fc->DefaultSubstitute(pattern);
+
+		FcResult result = FcResultNoMatch;
+		FcPattern* match = fc->FontMatch(nullptr, pattern, &result);
+		fc->PatternDestroy(pattern);
+		if (!match) return std::nullopt;
+
+		// Verify that the family actually matches (a font can be substituted with another)
+		bool familyMatches = false;
+		FcChar8* matchedFamily = nullptr;
+		for (int i = 0; fc->PatternGetString(match, FC_FAMILY, i, &matchedFamily) == FcResultMatch; i++)
+		{
+			if (fc->StrCmpIgnoreCase(matchedFamily, (const FcChar8*)familyName.c_str()) == 0)
+			{
+				familyMatches = true;
+				break;
+			}
+		}
+
+		// Reject fonts that fontconfig would fake with synthetic bolding, since stb_truetype can't do that.
+		FcBool embolden = FcFalse;
+		fc->PatternGetBool(match, FC_EMBOLDEN, 0, &embolden);
+
+		std::optional<FontLocation> out;
+		FcChar8* file = nullptr;
+		int index = 0;
+		if (familyMatches && !embolden && fc->PatternGetString(match, FC_FILE, 0, &file) == FcResultMatch)
+		{
+			fc->PatternGetInteger(match, FC_INDEX, 0, &index);
+			out = FontLocation
+			{
+				.filename = (const char*)file,
+				.faceIndex = (uint32_t)index & 0xFFFF, // The upper 16 bits select a variable font instance
+			};
+		}
+		fc->PatternDestroy(match);
+		return out;
+
+#else
+		return std::nullopt;
+#endif
+	}
 
 	constexpr uint32_t PrebakedFontFileVersion = 1;
 	struct PrebakedFontFileHeader
@@ -407,6 +629,13 @@ namespace ig
 			outFile.write((char*)&kerns[i].x, sizeof(int16_t));
 		}
 		outFile.write((char*)image->GetPixels(), image->GetSize());
+
+		outFile.close();
+		if (outFile.fail())
+		{
+			Log(LogType::Error, ToString(errStr, "Failed to write to file: ", filename));
+			return false;
+		}
 		return true;
 	}
 
@@ -581,29 +810,37 @@ namespace ig
 
 	std::unique_ptr<Font> Font::LoadFromFile(const IGLOContext& context, const std::string& filename, float fontSize, FontSettings fontSettings)
 	{
-		ReadFileResult file = ReadFile(filename);
+		return LoadFromFile(context, FontLocation{ .filename = filename, .faceIndex = 0 }, fontSize, fontSettings);
+	}
+	std::unique_ptr<Font> Font::LoadFromFile(const IGLOContext& context, const FontLocation& location, float fontSize, FontSettings fontSettings)
+	{
+		ReadFileResult file = ReadFile(location.filename);
 		if (!file.success)
 		{
-			Log(LogType::Error, "Failed to load font from file. Reason: Couldn't open '" + filename + "'.");
+			Log(LogType::Error, "Failed to load font from file. Reason: Couldn't open '" + location.filename + "'.");
 			return nullptr;
 		}
 		if (file.fileContent.size() == 0)
 		{
-			Log(LogType::Error, "Failed to load font from file. Reason: File '" + filename + "' is empty.");
+			Log(LogType::Error, "Failed to load font from file. Reason: File '" + location.filename + "' is empty.");
 			return nullptr;
 		}
 
-		std::unique_ptr<Font> out = LoadFromMemory(context, file.fileContent.data(), file.fileContent.size(), filename, fontSize, fontSettings);
+		std::string fontName = location.filename;
+		if (location.faceIndex != 0) fontName += ToString("#", location.faceIndex);
+
+		std::unique_ptr<Font> out = LoadFromMemory(context, file.fileContent.data(), file.fileContent.size(),
+			fontName, fontSize, fontSettings, location.faceIndex);
 		if (!out) return nullptr;
 
 		out->fileDataOwned.swap(file.fileContent); // This font owns the file data buffer.
 		return out;
 	}
 
-	std::unique_ptr<Font> Font::LoadFromMemory(const IGLOContext& context, const byte* data, size_t numBytes,
-		std::string fontName, float fontSize, FontSettings fontSettings)
+	std::unique_ptr<Font> Font::LoadFromMemory(const IGLOContext& context, const byte* fileData, size_t numBytes,
+		std::string fontName, float fontSize, FontSettings fontSettings, uint32_t faceIndex)
 	{
-		if (data == nullptr || numBytes == 0)
+		if (fileData == nullptr || numBytes == 0)
 		{
 			Log(LogType::Error, "Failed to load font '" + fontName + "'. Reason: No file data provided.");
 			return nullptr;
@@ -618,10 +855,24 @@ namespace ig
 			Log(LogType::Error, "Failed to load SDF font '" + fontName + "'. Reason: sdfOutwardGradientSize is too large.");
 			return nullptr;
 		}
+		if (numBytes < 12)
+		{
+			Log(LogType::Error, "Failed to load font '" + fontName + "'. Reason: File is too small to be a font.");
+			return nullptr;
+		}
+
+		// For font collections (.TTC/.OTC), find where the requested font starts.
+		// For regular font files, this returns 0 for faceIndex 0, and -1 for any other index.
+		const int fontOffset = stbtt_GetFontOffsetForIndex(fileData, (int)faceIndex);
+		if (fontOffset < 0 || (size_t)fontOffset + 12 > numBytes)
+		{
+			Log(LogType::Error, ToString("Failed to load font '", fontName, "'. Reason: Face index ", faceIndex, " not found in file."));
+			return nullptr;
+		}
 
 		std::unique_ptr<Font> out = std::unique_ptr<Font>(new Font(context, fontSettings, false));
 
-		if (!stbtt_InitFont(&out->stbttFontInfo, data, 0))
+		if (!stbtt_InitFont(&out->stbttFontInfo, fileData, fontOffset))
 		{
 			Log(LogType::Error, "Failed to load font '" + fontName + "'. File might be corrupted or unsupported by stb_truetype.");
 			return nullptr;
@@ -629,7 +880,7 @@ namespace ig
 
 		out->fontDesc.fontName = fontName;
 		out->fontDesc.fontSize = fontSize;
-		out->fileDataReadOnly = data;
+		out->fileDataReadOnly = fileData;
 
 		// Get font metrics
 		out->stbttScale = stbtt_ScaleForMappingEmToPixels(&out->stbttFontInfo, fontSize);
