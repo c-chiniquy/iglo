@@ -2,18 +2,8 @@
 TODO: Maybe create an iglo test project that runs a set of tests (ig::Texture DDS loading,
       ig::Font behavior, etc.) to catch accidental breakage in future commits.
 
-TODO: Write iglo tutorials and guides.
-
 TODO: Helper functions/classes for common 3D rendering operations, such as parsing mesh files,
       provide common material shaders/pipelines, etc.
-
-TODO: A tool to convert a BMFont .fnt text file to iglo PrebakedFontData struct or iglo prebaked font file.
-      iglo currently relies on STB's font rasterizer, but BMFont can rasterize glyphs at higher quality,
-      which is especially noticeable at small font sizes.
-      Useful for users who want better looking non-SDF fonts.
-      BMFont webpage: https://www.angelcode.com/products/bmfont/
-
-TODO: Support for BC6 and BC7 block compression formats (when loading DDS textures).
 
 TODO: The BaseCamera class can probably be improved somewhat.
 

@@ -26,7 +26,7 @@ iglo (Intuitive Graphics Layer Open-source) is a cross-platform, public domain C
 - Simple app callbacks: `Start()`, `Update()`, `FixedUpdate()`, `Draw()`, `OnEvent()` and `OnLoopExited()`.
 - Easy 2D rendering via `BatchRenderer` (text, sprites, shapes, etc...)
 - Font rendering
-  - Supports .ttf and .otf files.
+  - Supports .ttf, .otf, .ttc and .otc files.
   - Supports pre-baked font files (pre-rendered glyph atlases).
   - Supports signed distance fields (SDF) with glow & outline effects.
 - Manages the window and handles mouse/keyboard input.

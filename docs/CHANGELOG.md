@@ -1,6 +1,22 @@
 
 # Changelog
 
+## v0.9.0
+
+### Changes
+
+- Major/breaking changes:
+  - `IGLOContext::QuerySystemMemoryInfo()` and `IGLOContext::QueryVideoMemoryInfo()` now return `std::optional`.
+- New features:
+  - Added support for font collections via the `FontLocation` struct and the `faceIndex` parameter of `Font::LoadFromMemory()`.
+  - Added `FindSystemFont()`.
+- Improvements:
+  - `FontSettings` is now a plain data struct.
+  - Shortened `SystemMemoryInfo::ToString()` and `VideoMemoryInfo::ToString()`.
+- Bug fixes:
+  - `ReadFile()` no longer crashes on Linux when attempting to read a folder as if it were a file.
+  - `WriteFile()` and `AppendToFile()` now return false on write failure.
+
 ## v0.8.1
 
 ### Changes
