@@ -4,7 +4,7 @@ TODO: Maybe create an iglo test project that runs a set of tests (ig::Texture DD
 
 TODO: The BaseCamera class can probably be improved somewhat.
 
-TODO: Ability for window to fully capture mouse. This is required for first person shooter games.
+TODO: Ability for window to fully capture mouse. This is required for games that are played in first-person view.
 
 TODO: Multithreaded command recording is not fully supported yet.
       May need to add mutexes for allocating temp descriptors and temp buffers.
