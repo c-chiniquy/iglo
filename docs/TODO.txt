@@ -2,13 +2,28 @@
 TODO: Maybe create an iglo test project that runs a set of tests (ig::Texture DDS loading,
       ig::Font behavior, etc.) to catch accidental breakage in future commits.
 
-TODO: Helper functions/classes for common 3D rendering operations, such as parsing mesh files,
-      provide common material shaders/pipelines, etc.
-
 TODO: The BaseCamera class can probably be improved somewhat.
 
-TODO: In D3D12, using CreatePlacedResource() is faster than using CreateCommittedResource().
-      Since iglo D3D12 currently uses CreateCommittedResource(), it creates textures/buffers a bit slower than it could.
-      To make it faster, we need to write a resource heap memory manager from scratch.
-
 TODO: Ability for window to fully capture mouse. This is required for first person shooter games.
+
+TODO: Multithreaded command recording is not fully supported yet.
+      May need to add mutexes for allocating temp descriptors and temp buffers.
+      May need to lock persistent descriptor allocation (AllocatePersistent / FreePersistent) and the delayed-destroy lists.
+      May need to lock the endOfFrame receipt update in IGLOContext::Submit (keep the highest fence value).
+      May need to add support for reserving a block of temp descriptors and temp buffer memory in cmd.Begin() and sub-allocate from it,
+      to avoid taking a lock on every allocation while doing multithreaded command recording.
+
+TODO: Implement a GPU memory allocator in iglo. Name it ig::GPUMemoryAllocator.
+      Every ig::Texture and ig::Buffer may store a handle returned from the GPU memory allocator,
+      which can be used to get the GPU allocation size in bytes.
+      D3D12's CreatePlacedResource() is faster than CreateCommittedResource(),
+      so this will result in faster texture loading times (same for Vulkan).
+      This GPU memory allocator may also handle upload memory blocks (for Dynamic buffers),
+      as well as readback memory blocks (for Readable textures and buffers). So 3 types of memory in total.
+      ig::UploadHeap is separate because it only handles temporary data, so it won't use the GPU memory allocator at all.
+      Should probably rename 'ig::UploadHeap' back to 'ig::TempBufferAllocator'.
+      NOTE: On D3D12, old graphics cards (GTX 1000 series) may only support Resource Heap Tier 1,
+            which doesn't allow mixing buffers, textures, and render/depth textures in the same heap.
+            On those cards, should it fall back to not using the GPU memory allocator?
+            In that case, it should do: Log(LogType::Info, "Resource Heap Tier 1 detected, using committed resources instead of GPUMemoryAllocator.").
+

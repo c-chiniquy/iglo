@@ -2,16 +2,6 @@
 
 iglo (Intuitive Graphics Layer Open-source) is a cross-platform, public domain C++20 rendering abstraction layer for D3D12 and Vulkan. The aim of iglo is to make these low level graphics APIs more intuitive and fun to use, without limiting their full potential. In addition to rendering, iglo also handles window creation and mouse/keyboard input.
 
-## Roadmap
-
-- [x] Helper components for 2D rendering
-  -  [x] ig::Font
-  -  [x] ig::BatchRenderer
-- [ ] Helper components for 3D rendering
-  -  [ ] Parse 3D mesh files
-  -  [ ] Material shaders and pipelines
-  -  [ ] Improved camera class
-
 ## Features
 
 - Written from scratch with minimal dependencies.
