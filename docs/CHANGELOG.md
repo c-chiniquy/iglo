@@ -10,9 +10,12 @@
 - New features:
   - Added support for font collections via the `FontLocation` struct and the `faceIndex` parameter of `Font::LoadFromMemory()`.
   - Added `FindSystemFont()`.
+  - Added support for loading BC6H and BC7 .dds files.
 - Improvements:
   - `FontSettings` is now a plain data struct.
   - Shortened `SystemMemoryInfo::ToString()` and `VideoMemoryInfo::ToString()`.
+  - `Texture::LoadFromFile()` and `Texture::LoadFromMemory()` no longer log a warning when `generateMips` is true and the image already contains mips.
+    The existing mips are used in such cases.
 - Bug fixes:
   - `ReadFile()` no longer crashes on Linux when attempting to read a folder as if it were a file.
   - `WriteFile()` and `AppendToFile()` now return false on write failure.

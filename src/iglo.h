@@ -874,13 +874,10 @@ namespace ig
 		static Extent2D CalculateMipExtent(Extent2D extent, uint32_t mipIndex);
 		static uint32_t CalculateNumMips(Extent2D extent);
 
-		// Create an image. All pixels are filled with an initial value of 0.
+		// Creates an image. All pixels are filled with an initial value of 0.
 		static std::unique_ptr<Image> Create(uint32_t width, uint32_t height, Format format);
-
-		// Create an image with advanced parameters.
 		static std::unique_ptr<Image> Create(const ImageDesc& desc);
 
-		// Load an image from file.
 		static std::unique_ptr<Image> LoadFromFile(const std::string& filename);
 
 		// Loads an image from a file in memory (PNG, JPEG, GIF, BMP, DDS, etc...).
@@ -961,14 +958,20 @@ namespace ig
 			Wrapped, // Doesn't own any pixel data
 		};
 
+		static constexpr uint32_t DDS_FourCC(char a, char b, char c, char d)
+		{
+			return (uint32_t(a) << 0) | (uint32_t(b) << 8) | (uint32_t(c) << 16) | (uint32_t(d) << 24);
+		}
+		static bool FileIsOfTypeDDS(const byte* fileData, size_t numBytes);
+		static Format DDS_DXGIFormatToFormat(uint32_t dxgiFormat);
+		static std::unique_ptr<Image> LoadFromDDS(const byte* fileData, size_t numBytes, bool guaranteeOwnership);
+
+	private:
 		ImageDesc desc;
 		size_t size = 0; // Byte size of the entire image (including all faces and mipLevels).
 		PixelOwnership ownership = PixelOwnership::Wrapped;
 		std::vector<byte> ownedBuffer; // just pixel data or an entire DDS file.
 		byte* pixelsPtr = nullptr; // A pointer to where the pixel data begins.
-
-		static bool FileIsOfTypeDDS(const byte* fileData, size_t numBytes);
-		static std::unique_ptr<Image> LoadFromDDS(const byte* fileData, size_t numBytes, bool guaranteeOwnership);
 	};
 
 	enum class TextureUsage
@@ -1054,15 +1057,13 @@ namespace ig
 
 		static std::unique_ptr<Texture> Create(const IGLOContext&, uint32_t width, uint32_t height, Format, TextureUsage,
 			MSAA msaa = MSAA::Disabled, ClearValue optimizedClearValue = ClearValue());
-
 		static std::unique_ptr<Texture> Create(const IGLOContext&, const TextureDesc&);
 
+		// If 'generateMips' is true, mips will be generated if the texture doesn't already have mips.
 		static std::unique_ptr<Texture> LoadFromFile(const IGLOContext&, CommandList&,
 			const std::string& filename, bool generateMips = false, bool sRGB = false);
-
 		static std::unique_ptr<Texture> LoadFromMemory(const IGLOContext&, CommandList&,
 			const byte* fileData, size_t numBytes, bool generateMips = false, bool sRGB = false);
-
 		static std::unique_ptr<Texture> LoadFromMemory(const IGLOContext&, CommandList&,
 			const Image& image, bool generateMips = false);
 
@@ -1130,19 +1131,20 @@ namespace ig
 #endif
 
 	private:
-		const IGLOContext& context;
-		const TextureDesc desc;
-		const bool isWrapped = false;
-
-		Impl_Texture impl;
-		std::unique_ptr<Impl_PerFrameTexture[]> implPerFrame; // For Readable usage
-
 		void Impl_Destroy();
 		DetailedResult Impl_Create();
 		void Impl_ReadPixels(Image& destImage, uint32_t frameIndex);
 		void GenerateMips(CommandList& cmd, const Image& image);
 		uint32_t GetPerFrameArrayLength() const;
 		static DetailedResult ValidateMipGeneration(CommandListType, const Image& image);
+
+	private:
+		const IGLOContext& context;
+		const TextureDesc desc;
+		const bool isWrapped = false;
+
+		Impl_Texture impl;
+		std::unique_ptr<Impl_PerFrameTexture[]> implPerFrame; // For Readable usage
 	};
 
 	enum class BufferUsage
@@ -1254,6 +1256,12 @@ namespace ig
 #endif
 
 	private:
+		uint32_t GetPerFrameArrayLength() const;
+		static std::unique_ptr<Buffer> InternalCreate(const IGLOContext& context, const BufferDesc& desc);
+		void Impl_Destroy();
+		DetailedResult Impl_Create();
+
+	private:
 		const IGLOContext& context;
 		const BufferDesc desc;
 
@@ -1261,11 +1269,6 @@ namespace ig
 
 		Impl_Buffer impl;
 		std::unique_ptr<Impl_PerFrameBuffer[]> implPerFrame; // For Dynamic and Readable usage
-
-		uint32_t GetPerFrameArrayLength() const;
-		static std::unique_ptr<Buffer> InternalCreate(const IGLOContext& context, const BufferDesc& desc);
-		void Impl_Destroy();
-		DetailedResult Impl_Create();
 	};
 
 	enum class InputClass
@@ -1403,15 +1406,16 @@ namespace ig
 #endif
 
 	private:
+		void Impl_Destroy();
+		DetailedResult Impl_CreateGraphics(const PipelineDesc&);
+		DetailedResult Impl_CreateCompute(const Shader& CS);
+
+	private:
 		const IGLOContext& context;
 		const PrimitiveTopology primitiveTopology = PrimitiveTopology::Undefined;
 		const bool isComputePipeline = false;
 
 		Impl_Pipeline impl;
-
-		void Impl_Destroy();
-		DetailedResult Impl_CreateGraphics(const PipelineDesc&);
-		DetailedResult Impl_CreateCompute(const Shader& CS);
 	};
 
 	struct DescriptorLimits
@@ -1532,6 +1536,10 @@ namespace ig
 			uint32_t offset = 0;
 		};
 
+		void Impl_Destroy();
+		DetailedResult Impl_Create();
+		static uint32_t CalcTotalDescriptors(uint32_t maxPersistent, uint32_t maxTempPerFrame, uint32_t maxFramesInFlight);
+
 	private:
 		const IGLOContext& context;
 		const DescriptorLimits limits;
@@ -1547,10 +1555,6 @@ namespace ig
 		Stats lastFrameStats;
 
 		Impl_DescriptorHeap impl;
-
-		void Impl_Destroy();
-		DetailedResult Impl_Create();
-		static uint32_t CalcTotalDescriptors(uint32_t maxPersistent, uint32_t maxTempPerFrame, uint32_t maxFramesInFlight);
 	};
 
 	enum class CommandListType
@@ -1614,19 +1618,20 @@ namespace ig
 		VkQueue GetVulkanPresentQueue() const { return impl.presentQueue; }
 		uint32_t GetVulkanQueueFamilyIndex(CommandListType type) const { return impl.queueFamIndices[(uint32_t)type]; }
 #endif
+
 	private:
-		const IGLOContext& context;
-		const uint32_t maxFramesInFlight = 0;
-		const uint32_t numBackBuffers = 0;
-
-		Impl_CommandQueue impl;
-
 		void Impl_Destroy();
 		DetailedResult Impl_Create();
 		Receipt Impl_SubmitCommands(const CommandList* const* commandLists, uint32_t numCommandLists, CommandListType cmdType);
 		bool Impl_IsComplete(Receipt receipt) const;
 		void Impl_WaitForCompletion(Receipt receipt);
 
+	private:
+		const IGLOContext& context;
+		const uint32_t maxFramesInFlight = 0;
+		const uint32_t numBackBuffers = 0;
+
+		Impl_CommandQueue impl;
 	};
 
 	enum class BarrierSync : uint64_t
@@ -2027,15 +2032,6 @@ namespace ig
 		void _internal_MarkAsNotPending() const { isPending = false; }
 
 	private:
-		const IGLOContext& context;
-		const CommandListType commandListType = CommandListType::Graphics;
-		const uint32_t maxFrames = 0;
-		uint32_t frameIndex = 0;
-		bool isRecording = false;
-		mutable bool isPending = false;
-
-		Impl_CommandList impl;
-
 		void Impl_Destroy();
 		DetailedResult Impl_Create();
 		void Impl_Begin();
@@ -2060,12 +2056,23 @@ namespace ig
 		void Impl_CopyTextureSubresourceToReadableTexture(const Texture& src, uint32_t srcFaceIndex, uint32_t srcMipIndex, const Texture& dest);
 
 		void CopyTextureToReadableTexture(const Texture& src, const Texture& dest);
+
 		static void AssertPushConstants(const void* data, uint32_t sizeInBytes, uint32_t destOffsetInBytes);
 #ifdef IGLO_VULKAN
 		//NOTE: The returned VkRenderingInfo should be considered temporary because
 		//      it contains pointers that point to VulkanRenderInfo items.
 		static VkRenderingInfo ConstructTemporaryVkRenderingInfo(const VulkanRenderInfo&);
 #endif
+
+	private:
+		const IGLOContext& context;
+		const CommandListType commandListType = CommandListType::Graphics;
+		const uint32_t maxFrames = 0;
+		uint32_t frameIndex = 0;
+		bool isRecording = false;
+		mutable bool isPending = false;
+
+		Impl_CommandList impl;
 	};
 
 	struct TempBuffer
@@ -2164,6 +2171,8 @@ namespace ig
 			uint64_t linearNextByte = 0; // For the current linear page
 		};
 
+		static void FreeTempPagesAtFrame(const IGLOContext&, PerFrame& perFrame);
+
 	private:
 		const IGLOContext& context;
 		const uint64_t linearPageSize = 0;
@@ -2173,7 +2182,6 @@ namespace ig
 		Stats lastFrameStats;
 
 		static constexpr size_t numPersistentPages = 1;
-		static void FreeTempPagesAtFrame(const IGLOContext&, PerFrame& perFrame);
 	};
 
 	struct Viewport
@@ -2235,13 +2243,14 @@ namespace ig
 #endif
 
 	private:
-		const IGLOContext& context;
-
-		Impl_Cursor impl;
-
 		void Impl_Destroy();
 		DetailedResult Impl_LoadFromSystem(SystemCursor);
 		DetailedResult Impl_LoadFromMemory_BGRA(Extent2D extent, const uint32_t* pixels, IntPoint hotspot);
+
+	private:
+		const IGLOContext& context;
+
+		Impl_Cursor impl;
 	};
 
 	enum class MouseButton
