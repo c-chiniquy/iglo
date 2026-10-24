@@ -272,12 +272,13 @@ int main(int argc, char** argv)
 ## Third Party Libraries
 
 Libraries included with iglo:
-- [stb_truetype.h](https://github.com/nothings/stb/): Font text rasterizer.
+- [stb_truetype.h](https://github.com/nothings/stb/): Default font loader and rasterizer.
 - [stb_image.h](https://github.com/nothings/stb/): Image loader.
 - [stb_image_write.h](https://github.com/nothings/stb/): Image writer.
 
 Libraries *not* included with iglo:
 - [Agility SDK](https://devblogs.microsoft.com/directx/directx12agility/): Adds the newest D3D12 features. The CMake script automatically downloads this if needed.
+- [FreeType](https://freetype.org/): Optional font loader and rasterizer that replaces stb_truetype. Can be enabled with `IGLO_FREETYPE` in `iglo_config.h`.
 
 ## Authors
 

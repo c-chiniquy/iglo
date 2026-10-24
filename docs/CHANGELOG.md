@@ -7,12 +7,19 @@
 
 - Major/breaking changes:
   - `IGLOContext::QuerySystemMemoryInfo()` and `IGLOContext::QueryVideoMemoryInfo()` now return `std::optional`.
+  - Renamed `FontSettings::sdfOutwardGradientSize` to `FontSettings::sdfSpread`.
 - New features:
+  - Added FreeType support for loading and rasterizing fonts.
+    To replace stb_truetype with FreeType, uncomment `IGLO_FREETYPE` in `iglo_config.h`,
+    then add the necessary FreeType include/library paths to project settings.
   - Added support for font collections via the `FontLocation` struct and the `faceIndex` parameter of `Font::LoadFromMemory()`.
   - Added `FindSystemFont()`.
+  - Added `hinting` and `antialiasing` settings to `FontSettings` struct. Both require FreeType.
+  - Added `GetFontRasterizerName()` and `GetFontHintingName()`.
   - Added support for loading BC6H and BC7 .dds files.
 - Improvements:
   - `FontSettings` is now a plain data struct.
+  - `ig::Font` kerning pairs are now stored as a flat hash table, reducing memory usage and resulting in faster lookup times.
   - Shortened `SystemMemoryInfo::ToString()` and `VideoMemoryInfo::ToString()`.
   - `Texture::LoadFromFile()` and `Texture::LoadFromMemory()` no longer log a warning when `generateMips` is true and the image already contains mips.
     The existing mips are used in such cases.
