@@ -1,7 +1,13 @@
 
 #pragma once
 
+#ifdef IGLO_FREETYPE
+typedef struct FT_LibraryRec_* FT_Library;
+typedef struct FT_FaceRec_* FT_Face;
+#else
 #include "stb/stb_truetype.h"
+#endif
+
 #include <unordered_map>
 
 namespace ig
@@ -12,6 +18,16 @@ namespace ig
 		Bitmap = 0, // Can be monochrome or RGBA.
 		SDF, // Signed distance fields. Monochrome.
 	};
+
+	enum class FontHinting
+	{
+		None = 0, // No hinting
+		Light, // Y hinting, using FreeType's auto-hinter
+		Normal, // XY hinting, using FreeType's auto-hinter
+		Native_v35, // XY hinting, using the font's own hinting instructions (like Windows GDI)
+		Native_v40, // Y hinting, using the font's own hinting instructions (like ClearType)
+	};
+	const char* GetFontHintingName(FontHinting);
 
 	enum class FontWeight : uint16_t
 	{
@@ -39,11 +55,11 @@ namespace ig
 	{
 		FontType fontType = FontType::Bitmap;
 
-		// Only relevant if font is of type SDF.
-		// This is the number of pixels the SDF gradient will stretch outwards from the glyph.
+		// For SDF fonts.
+		// This is the number of pixels the SDF gradient will stretch from the glyph edge.
 		// This determines the range of the outline and glow effects.
-		// A larger gradient increases the size of rasterized glyphs, which leads to a larger glyph atlas texture size.
-		uint16_t sdfOutwardGradientSize = 3;
+		// A larger spread increases the size of rasterized glyphs, which leads to a larger glyph atlas texture size.
+		uint16_t sdfSpread = 3;
 
 		// Increases the space between glyphs on the glyph atlas texture to prevent scaling artifacts.
 		// This is the number of pixels each glyph quad will expand at every side (top, left, right, bottom).
@@ -52,6 +68,16 @@ namespace ig
 
 		// The starting width and height of the glyph atlas texture.
 		uint32_t startingTextureSize = 128;
+
+		// For Bitmap fonts.
+		// How glyphs are snapped to pixels.
+		// Any hinting other than 'None' requires FreeType (IGLO_FREETYPE).
+		FontHinting hinting = FontHinting::None;
+
+		// For Bitmap fonts.
+		// If false, glyphs are rasterized in black and white (no smooth edges).
+		// Disabling antialiasing requires FreeType (IGLO_FREETYPE).
+		bool antialiasing = true;
 	};
 
 	struct FontLocation
@@ -104,12 +130,40 @@ namespace ig
 		bool LoadFromMemory(const byte* fileData, size_t numBytes);
 	};
 
+	// The font rasterizer being used. Example: "FreeType 2.15.0" or "stb_truetype".
+	std::string GetFontRasterizerName();
+
 	// An embedded Vegur15 font
 	PrebakedFontData GetDefaultFont();
 
 	// Finds an installed font by family name, weight and style.
 	// Returns std::nullopt if no matching font is installed.
 	std::optional<FontLocation> FindSystemFont(const std::string& familyName, FontWeight weight = FontWeight::Regular, bool italic = false);
+
+	class KerningTable
+	{
+	public:
+		void Build(const std::vector<Kerning>& kernList);
+		void Clear();
+
+		// Returns 0 if this pair has no kerning
+		int16_t Find(uint32_t codepointPrev, uint32_t codepointNext) const;
+
+		// The number of kerning pairs stored in the table
+		uint32_t GetCount() const { return count; }
+
+	private:
+		size_t GetSlot(uint64_t key) const { return (size_t)((key * 0x9E3779B97F4A7C15ull) >> shift); }
+		static uint64_t MakeKey(uint32_t codepointPrev, uint32_t codepointNext) { return ((uint64_t)codepointPrev << 32) | codepointNext; }
+
+	private:
+		static constexpr uint64_t emptyKey = IGLO_UINT64_MAX; // Never a valid key, since codepoints are at most 0x10FFFF.
+
+		std::vector<uint64_t> keys; // Size is a power of two. Empty slots contain 'emptyKey'.
+		std::vector<int16_t> values;
+		uint32_t count = 0;
+		uint32_t shift = 63; // 64 - log2(table size)
+	};
 
 	class Font
 	{
@@ -121,6 +175,7 @@ namespace ig
 		Font(const Font&) = delete;
 
 	public:
+		~Font();
 
 		// Load .TTF/.OTF/.TTC/.OTC font from file.
 		static std::unique_ptr<Font> LoadFromFile(const IGLOContext&, const std::string& filename,
@@ -170,10 +225,10 @@ namespace ig
 
 		const FontDesc& GetFontDesc() const { return fontDesc; }
 
-		// Gets the number of kerning pairs this font contains.
-		uint32_t GetKernCount() const { return atlas.kernCount; }
+		// The number of kerning pairs this font contains
+		uint32_t GetKernCount() const { return atlas.kerning.GetCount(); }
 
-		// Commits any changes made to the texture to the GPU.
+		// Commits any changes made to the texture to the GPU
 		void ApplyChangesToTexture(CommandList&);
 
 		// When new glyphs have been loaded and placed on the glyph atlas texture, the texture is considered 'dirty'
@@ -181,22 +236,22 @@ namespace ig
 		// If this returns true, you need to call ApplyChangesToTexture() before using the glyph atlas texture.
 		bool TextureIsDirty() const { return page.dirty; }
 
-		// Gets the glyph atlas texture for this font.
+		// The glyph atlas texture for this font
 		const Texture* GetTexture() const { return page.texture.get(); }
 
-		// Gets the total number of glyphs this font contains. 
+		// The total number of glyphs this font contains
 		uint32_t GetTotalGlyphCount() const { return atlas.glyphCount; }
 
-		// Gets the number of glyphs that has been loaded and placed on the texture so far.
+		// The number of glyphs that has been loaded and placed on the texture so far
 		uint32_t GetLoadedGlyphCount() const { return atlas.loadedGlyphCount; }
 
-		// Gets the highest codepoint used by any glyph in this font.
+		// The highest codepoint used by any glyph in this font
 		uint32_t GetHighestGlyphCodepoint() const { return atlas.highestGlyphCodepoint; }
 
-		// Gets the highest codepoint used by left side of any kerning pair in this font.
+		// The highest codepoint used by left side of any kerning pair in this font
 		uint32_t GetHighestLeftKernCodepoint() const { return atlas.highestLeftKernCodepoint; }
 
-		// If this font contains a glyph for the given codepoint.
+		// Whether this font contains a glyph for the given codepoint
 		bool HasGlyph(uint32_t codepoint) const;
 
 		// If the font is prebaked then all glyphs are already rasterized and no new glyphs can be placed on the atlas texture.
@@ -205,9 +260,6 @@ namespace ig
 		FontType GetFontType() const { return fontSettings.fontType; }
 
 	private:
-
-		// Places a glyph bitmap on the glyph atlas texture.
-		void PlaceGlyph(const byte* bitmap, uint16_t texPosX, uint16_t texPosY, uint16_t bitmapWidth, uint16_t bitmapHeight);
 
 		void SetKerning(const std::vector<Kerning>& kernList);
 
@@ -221,11 +273,18 @@ namespace ig
 		// This should only be called for glyphs that hasn't already been loaded (or it will rasterize and place the same glyph multiple times).
 		Glyph LoadGlyph(uint32_t codepoint);
 
+		// Places a rasterized glyph on the glyph atlas texture, then returns it.
+		// offsetX is relative to the left edge of the character cell, offsetY is relative to the baseline.
+		Glyph BuildGlyph(const byte* bitmap, uint16_t width, uint16_t height, int16_t offsetX, int16_t offsetY, int16_t advanceX);
+
 		// Allocates an empty rectangle area in the glyph atlas texture so a glyph can be placed there.
 		// Returns IntRect(0, 0, 0, 0) if no more room could be allocated.
-		IntRect AllocateRoomForGlyph(uint16_t glyphWidth, uint16_t glyphHeight);
+		IntRect AllocateRoomForGlyph(uint16_t width, uint16_t height);
 
-		inline uint64_t GetKernKey(uint32_t codepointPrev, uint32_t codepointNext) const;
+		// Places a glyph bitmap on the glyph atlas texture.
+		void PlaceGlyph(const byte* bitmap, uint16_t width, uint16_t height, uint16_t texPosX, uint16_t texPosY);
+
+		uint32_t GetGlyphIndex(uint32_t codepoint) const;
 
 	private:
 		const IGLOContext& context;
@@ -237,15 +296,21 @@ namespace ig
 		const byte* fileDataReadOnly = nullptr; // A read only pointer to font file data. (dont delete this)
 		std::vector<byte> fileDataOwned; // Only used if this font owns the font file data.
 
+#ifdef IGLO_FREETYPE
+		// Each font has its own FreeType library instance, because the SDF spread is a library-wide setting,
+		// and because a FreeType library instance must not be used by multiple threads at once.
+		FT_Library ftLibrary = nullptr;
+		FT_Face ftFace = nullptr;
+#else
 		float stbttScale = 0;
 		stbtt_fontinfo stbttFontInfo = stbtt_fontinfo(); // font identity
+#endif
 
 		struct Atlas
 		{
 			uint32_t highestLeftKernCodepoint = 0; // Any codepoint higher than this doesn't belong to the left side of any kerning pair.
 			uint32_t highestGlyphCodepoint = 0; // Any codepoint higher than this does not belong to any glyph.
 			uint32_t glyphCount = 0; // The total number of glyphs/valid codepoints/characters that exist.
-			uint32_t kernCount = 0; // Total number of kerning pairs that exist
 
 			// Number of glyphs that has been loaded (displayed on the texture).
 			uint32_t loadedGlyphCount = 0;
@@ -260,9 +325,8 @@ namespace ig
 			static constexpr uint32_t glyphTableSize = 592;
 			std::vector<Glyph> glyphTable; // Lower codepoints are stored here.
 			std::unordered_map<uint32_t, Glyph> glyphMap; // Higher codepoints are stored here.
-			std::unordered_map<uint64_t, int16_t> kernMap;
+			KerningTable kerning;
 			Glyph errorGlyph;
-
 		};
 		Atlas atlas;
 

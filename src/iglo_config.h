@@ -7,3 +7,6 @@
 
 // If using Vulkan, enable conservative rasterization extension.
 //#define IGLO_VULKAN_ENABLE_CONSERVATIVE_RASTERIZATION
+
+// Use FreeType instead of stb_truetype for loading and rasterizing fonts.
+//#define IGLO_FREETYPE
