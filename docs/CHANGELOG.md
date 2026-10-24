@@ -24,6 +24,7 @@
   - `Texture::LoadFromFile()` and `Texture::LoadFromMemory()` no longer log a warning when `generateMips` is true and the image already contains mips.
     The existing mips are used in such cases.
 - Bug fixes:
+  - Fixed a bug where dynamically loaded glyphs in `ig::Font` were slightly taller than needed, causing unnecessary overdraw when drawing text.
   - `ReadFile()` no longer crashes on Linux when attempting to read a folder as if it were a file.
   - `WriteFile()` and `AppendToFile()` now return false on write failure.
 
