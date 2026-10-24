@@ -1702,31 +1702,32 @@ namespace ig
 
 		if (!bitmap || width == 0 || height == 0) return out;
 
-		// Padding is added to the glyph rect
-		const IntRect rect = AllocateRoomForGlyph(
-			width + (fontSettings.glyphPadding * 2),
-			height + (fontSettings.glyphPadding * 2));
+		// Allocate room (padded size)
+		const uint16_t paddedWidth = width + (fontSettings.glyphPadding * 2);
+		const uint16_t paddedHeight = height + (fontSettings.glyphPadding * 2);
+		const std::optional<IntPoint> texPos = AllocateRoomForGlyph(paddedWidth, paddedHeight);
 
 		// No room found
-		if (rect == IntRect(0, 0, 0, 0)) return out;
+		if (!texPos) return out;
 
-		// Place glyph
+		// Place glyph on texture (actual bitmap size)
 		PlaceGlyph(bitmap, width, height,
-			rect.left + fontSettings.glyphPadding,
-			rect.top + fontSettings.glyphPadding);
+			(uint16_t)texPos->x + fontSettings.glyphPadding,
+			(uint16_t)texPos->y + fontSettings.glyphPadding);
 
+		// Build glyph (padded size)
 		out.glyphOffsetX = offsetX - fontSettings.glyphPadding;
 		out.glyphOffsetY = (offsetY - fontSettings.glyphPadding) + fontDesc.baseline;
-		out.texturePosX = rect.left;
-		out.texturePosY = rect.top;
-		out.glyphWidth = rect.GetWidth();
-		out.glyphHeight = rect.GetHeight();
+		out.texturePosX = (uint16_t)texPos->x;
+		out.texturePosY = (uint16_t)texPos->y;
+		out.glyphWidth = paddedWidth;
+		out.glyphHeight = paddedHeight;
 		return out;
 	}
 
-	IntRect Font::AllocateRoomForGlyph(uint16_t width, uint16_t height)
+	std::optional<IntPoint> Font::AllocateRoomForGlyph(uint16_t width, uint16_t height)
 	{
-		if (width == 0 || height == 0) return IntRect(0, 0, 0, 0);
+		if (width == 0 || height == 0) return std::nullopt;
 
 		// If pixels are empty, set to starting size
 		if (page.width == 0 || page.height == 0)
@@ -1799,7 +1800,7 @@ namespace ig
 						"Failed to load new glyph for font '", fontDesc.fontName,
 						"'. Reason: Reached max dynamic font texture size (", cappedMaxTextureSize, ")."
 					));
-					return IntRect(0, 0, 0, 0);
+					return std::nullopt;
 				}
 				if (powerOf2 > newWidth) break;
 				if (powerOf2 > newHeight) break;
@@ -1824,18 +1825,17 @@ namespace ig
 			page.dirty = true;
 		}
 
-		// Glyph fits.
+		// Glyph fits
 		if (foundMatch)
 		{
 			page.rects[bestIndex] = extended; // Extended existing rect
 		}
 		else
 		{
-			page.rects.push_back(extended); // Extended a new rect
+			page.rects.push_back(extended); // New rect added
 		}
-		IntRect room = extended;
-		room.left = extended.right - width;
-		return room;
+
+		return IntPoint(extended.right - width, extended.top);
 	}
 
 	void Font::PlaceGlyph(const byte* bitmap, uint16_t width, uint16_t height, uint16_t texPosX, uint16_t texPosY)

@@ -1174,7 +1174,7 @@ namespace ig
 
 		// 'Temporary' is another buffer usage type that exists, but it's not defined in this enum
 		// because the 'Buffer' class doesn't handle temporary buffers by itself.
-		// Temporary buffers are created by IGLOContext and get stale after 1 frame.
+		// Temporary buffers are created by CommandList and get stale after 1 frame.
 	};
 
 	enum class BufferType

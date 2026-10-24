@@ -278,8 +278,8 @@ namespace ig
 		Glyph BuildGlyph(const byte* bitmap, uint16_t width, uint16_t height, int16_t offsetX, int16_t offsetY, int16_t advanceX);
 
 		// Allocates an empty rectangle area in the glyph atlas texture so a glyph can be placed there.
-		// Returns IntRect(0, 0, 0, 0) if no more room could be allocated.
-		IntRect AllocateRoomForGlyph(uint16_t width, uint16_t height);
+		// Returns std::nullopt if no room could be allocated.
+		std::optional<IntPoint> AllocateRoomForGlyph(uint16_t width, uint16_t height);
 
 		// Places a glyph bitmap on the glyph atlas texture.
 		void PlaceGlyph(const byte* bitmap, uint16_t width, uint16_t height, uint16_t texPosX, uint16_t texPosY);
