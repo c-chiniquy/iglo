@@ -1850,7 +1850,7 @@ namespace ig
 		return DetailedResult::Success();
 	}
 
-	void UploadHeap::Page::Impl_Free(const IGLOContext& context)
+	void TempBufferAllocator::Page::Impl_Free(const IGLOContext& context)
 	{
 		if (impl.resource)
 		{
@@ -1859,7 +1859,7 @@ namespace ig
 		}
 	}
 
-	UploadHeap::Page UploadHeap::Page::Create(const IGLOContext& context, uint64_t sizeInBytes)
+	TempBufferAllocator::Page TempBufferAllocator::Page::Create(const IGLOContext& context, uint64_t sizeInBytes)
 	{
 		Page out;
 
@@ -1891,11 +1891,11 @@ namespace ig
 
 		HRESULT hr = context.GetD3D12Device()->CreateCommittedResource3(&heapProp, D3D12_HEAP_FLAG_NONE, &desc, barrierLayout,
 			nullptr, nullptr, 0, nullptr, IID_PPV_ARGS(&out.impl.resource));
-		if (FAILED(hr)) Fatal(ToString("Failed to create upload heap buffer with size ", sizeInBytes, "."));
+		if (FAILED(hr)) Fatal(ToString("Failed to create temp buffer page with size ", sizeInBytes, "."));
 
 		D3D12_RANGE noRead = { 0, 0 };
 		hr = out.impl.resource->Map(0, &noRead, &out.mapped);
-		if (FAILED(hr)) Fatal(ToString("Failed to map upload heap buffer with size ", sizeInBytes, "."));
+		if (FAILED(hr)) Fatal(ToString("Failed to map temp buffer page with size ", sizeInBytes, "."));
 
 		out.sizeInBytes = sizeInBytes;
 		return out;

@@ -48,7 +48,7 @@ namespace ig
 		ComPtr<ID3D12PipelineState> pipeline;
 	};
 
-	struct Impl_BufferAllocatorPage
+	struct Impl_TempBufferAllocatorPage
 	{
 		ComPtr<ID3D12Resource> resource;
 	};
@@ -57,7 +57,7 @@ namespace ig
 	{
 		ID3D12Resource* resource = nullptr;
 
-		void Set(const Impl_BufferAllocatorPage& page)
+		void Set(const Impl_TempBufferAllocatorPage& page)
 		{
 			resource = page.resource.Get();
 		}

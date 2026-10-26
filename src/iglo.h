@@ -83,7 +83,7 @@ namespace ig
 	struct TextureCopyLocation;
 	class CommandList;
 	struct TempBuffer;
-	class UploadHeap;
+	class TempBufferAllocator;
 	struct Viewport;
 	enum class SystemCursor;
 	class Cursor;
@@ -2087,22 +2087,22 @@ namespace ig
 		Impl_TempBuffer impl;
 	};
 
-	// Manages the allocation of upload heaps.
-	// Upload heaps are used for per-frame data (TempBuffer).
-	// The contents on these buffers are temporary (valid for 1 frame).
-	class UploadHeap
+	// Allocates temp buffers for per-frame data.
+	// Temp buffers are suballocated from pages of upload heap memory.
+	// The contents of temp buffers are temporary (valid for 1 frame).
+	class TempBufferAllocator
 	{
 	private:
-		UploadHeap(const IGLOContext& context, uint64_t linearPageSize, uint32_t numFramesInFlight)
+		TempBufferAllocator(const IGLOContext& context, uint64_t linearPageSize, uint32_t numFramesInFlight)
 			:context(context), linearPageSize(linearPageSize), numFramesInFlight(numFramesInFlight) {};
 
-		UploadHeap& operator=(const UploadHeap&) = delete;
-		UploadHeap(const UploadHeap&) = delete;
+		TempBufferAllocator& operator=(const TempBufferAllocator&) = delete;
+		TempBufferAllocator(const TempBufferAllocator&) = delete;
 
 	public:
-		~UploadHeap();
+		~TempBufferAllocator();
 
-		static std::pair<std::unique_ptr<UploadHeap>, DetailedResult> Create(const IGLOContext&,
+		static std::pair<std::unique_ptr<TempBufferAllocator>, DetailedResult> Create(const IGLOContext&,
 			uint64_t linearPageSize, uint32_t numFramesInFlight);
 
 		// Must be called once per frame. Rolls to next frameIndex, frees that frame's temp pages.
@@ -2136,9 +2136,9 @@ namespace ig
 				std::string hint = (overflowAllocations == 0) ? "  (ok)" : "  (warning: per-frame page allocation)";
 				return ig::ToString
 				(
-					"Upload heap pages: ", totalPageCount, " (", FormatByteSize(totalAllocatedBytes), ")\n",
-					"Upload heap capacity: ", FormatPercentage(capacity), "\n",
-					"Upload heap overflow allocations: ", overflowAllocations, hint
+					"Temp buffer pages: ", totalPageCount, " (", FormatByteSize(totalAllocatedBytes), ")\n",
+					"Temp buffer capacity: ", FormatPercentage(capacity), "\n",
+					"Temp buffer overflow allocations: ", overflowAllocations, hint
 				);
 			}
 		};
@@ -2158,7 +2158,7 @@ namespace ig
 			void* mapped = nullptr;
 			uint64_t sizeInBytes = 0;
 
-			Impl_BufferAllocatorPage impl;
+			Impl_TempBufferAllocatorPage impl;
 
 		private:
 			void Impl_Free(const IGLOContext&);
@@ -2374,15 +2374,15 @@ namespace ig
 		uint32_t maxFramesInFlight = 2;
 		uint32_t numBackBuffers = 3;
 
-		// There is 1 persistent upload heap page per frame.
+		// There is 1 persistent temp buffer page per frame.
 		// If a frame fully exhausts its page, additional pages are allocated on demand,
 		// which is slow because these on-demand pages only last for 1 frame before being deallocated.
-		// These activities use the upload heap:
+		// These activities use temp buffers:
 		// •Loading textures
 		// •Uploading data to textures and buffers
 		// •Drawing stuff with BatchRenderer
 		// •Anything that allocates TempBuffers
-		uint64_t uploadHeapPageSize = IGLO_MEGABYTE * 32;
+		uint64_t tempBufferPageSize = IGLO_MEGABYTE * 32;
 
 		// Running out of descriptors will cause the app to abort.
 		// So make sure these max values are large enough for what the app will use.
@@ -2690,7 +2690,7 @@ namespace ig
 		// Gets the current back buffer for this frame.
 		const Texture& GetBackBuffer(bool get_opposite_sRGB_view = false) const;
 		DescriptorHeap& GetDescriptorHeap() const { return *descriptorHeap; }
-		UploadHeap& GetUploadHeap() const { return *uploadHeap; }
+		TempBufferAllocator& GetTempBufferAllocator() const { return *tempBufferAllocator; }
 		CommandQueue& GetCommandQueue() const { return *commandQueue; }
 
 		// Gets the max supported MSAA for the given texture format.
@@ -2824,7 +2824,7 @@ namespace ig
 		std::unique_ptr<Sampler> sampler_bilinearClamp; // For the mip gen shaders
 
 		mutable std::unique_ptr<DescriptorHeap> descriptorHeap;
-		mutable std::unique_ptr<UploadHeap> uploadHeap;
+		mutable std::unique_ptr<TempBufferAllocator> tempBufferAllocator;
 		mutable std::unique_ptr<CommandQueue> commandQueue;
 		mutable std::vector<uint32_t> maxMSAAPerFormat; // A cached list of max MSAA values for all iglo formats.
 

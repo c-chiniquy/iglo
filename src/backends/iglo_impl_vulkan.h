@@ -85,7 +85,7 @@ namespace ig
 		VkPipeline pipeline = VK_NULL_HANDLE;
 	};
 
-	struct Impl_BufferAllocatorPage
+	struct Impl_TempBufferAllocatorPage
 	{
 		VkBuffer buffer = VK_NULL_HANDLE;
 		VkDeviceMemory memory = VK_NULL_HANDLE;
@@ -96,7 +96,7 @@ namespace ig
 		VkBuffer buffer = VK_NULL_HANDLE;
 		VkDeviceMemory memory = VK_NULL_HANDLE;
 
-		void Set(const Impl_BufferAllocatorPage& page)
+		void Set(const Impl_TempBufferAllocatorPage& page)
 		{
 			buffer = page.buffer;
 			memory = page.memory;

@@ -2374,7 +2374,7 @@ namespace ig
 			1, &resolveRegion);
 	}
 
-	void UploadHeap::Page::Impl_Free(const IGLOContext& context)
+	void TempBufferAllocator::Page::Impl_Free(const IGLOContext& context)
 	{
 		if (impl.memory) vkUnmapMemory(context.GetVulkanDevice(), impl.memory);
 		if (impl.buffer) vkDestroyBuffer(context.GetVulkanDevice(), impl.buffer, nullptr);
@@ -2383,7 +2383,7 @@ namespace ig
 		impl.memory = VK_NULL_HANDLE;
 	}
 
-	UploadHeap::Page UploadHeap::Page::Create(const IGLOContext& context, uint64_t sizeInBytes)
+	TempBufferAllocator::Page TempBufferAllocator::Page::Create(const IGLOContext& context, uint64_t sizeInBytes)
 	{
 		Page out;
 		VkDevice device = context.GetVulkanDevice();
@@ -2402,7 +2402,7 @@ namespace ig
 		bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
 		VkResult result = vkCreateBuffer(device, &bufferInfo, nullptr, &out.impl.buffer);
-		if (result != VK_SUCCESS) Fatal(ToString("Failed to create upload heap buffer with size ", sizeInBytes, "."));
+		if (result != VK_SUCCESS) Fatal(ToString("Failed to create temp buffer page with size ", sizeInBytes, "."));
 
 		VkMemoryRequirements memReq = {};
 		vkGetBufferMemoryRequirements(device, out.impl.buffer, &memReq);
@@ -2415,7 +2415,7 @@ namespace ig
 		if (!memTypeIndex.has_value())
 		{
 			vkDestroyBuffer(device, out.impl.buffer, nullptr);
-			Fatal(ToString("Failed to FindVulkanMemoryType of upload heap buffer with size ", sizeInBytes, "."));
+			Fatal(ToString("Failed to FindVulkanMemoryType for temp buffer page with size ", sizeInBytes, "."));
 		}
 
 		VkMemoryAllocateInfo allocInfo = {};
@@ -2427,7 +2427,7 @@ namespace ig
 		if (result != VK_SUCCESS)
 		{
 			vkDestroyBuffer(device, out.impl.buffer, nullptr);
-			Fatal(ToString("Failed to allocate memory of upload heap buffer with size ", sizeInBytes, "."));
+			Fatal(ToString("Failed to allocate memory for temp buffer page with size ", sizeInBytes, "."));
 		}
 
 		result = vkBindBufferMemory(device, out.impl.buffer, out.impl.memory, 0);
@@ -2435,7 +2435,7 @@ namespace ig
 		{
 			vkDestroyBuffer(device, out.impl.buffer, nullptr);
 			vkFreeMemory(device, out.impl.memory, nullptr);
-			Fatal(ToString("Failed to bind memory of upload heap buffer with size ", sizeInBytes, "."));
+			Fatal(ToString("Failed to bind memory to temp buffer page with size ", sizeInBytes, "."));
 		}
 
 		result = vkMapMemory(device, out.impl.memory, 0, sizeInBytes, 0, &out.mapped);
@@ -2443,7 +2443,7 @@ namespace ig
 		{
 			vkDestroyBuffer(device, out.impl.buffer, nullptr);
 			vkFreeMemory(device, out.impl.memory, nullptr);
-			Fatal(ToString("Failed to map memory of upload heap buffer with size ", sizeInBytes, "."));
+			Fatal(ToString("Failed to map memory of temp buffer page with size ", sizeInBytes, "."));
 		}
 
 		out.sizeInBytes = sizeInBytes;
