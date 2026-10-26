@@ -20,8 +20,8 @@ TODO: Implement a GPU memory allocator in iglo. Name it ig::GPUMemoryAllocator.
       so this will result in faster texture loading times (same for Vulkan).
       This GPU memory allocator may also handle upload memory blocks (for Dynamic buffers),
       as well as readback memory blocks (for Readable textures and buffers). So 3 types of memory in total.
-      ig::UploadHeap is separate because it only handles temporary data, so it won't use the GPU memory allocator at all.
-      Should probably rename 'ig::UploadHeap' back to 'ig::TempBufferAllocator'.
+      ig::TempBufferAllocator is separate because it only handles temporary data, so it won't use the GPU memory allocator at all.
+      (ig::UploadHeap has been renamed back to ig::TempBufferAllocator, in anticipation of ig::GPUMemoryAllocator)
       NOTE: On D3D12, old graphics cards (GTX 1000 series) may only support Resource Heap Tier 1,
             which doesn't allow mixing buffers, textures, and render/depth textures in the same heap.
             On those cards, should it fall back to not using the GPU memory allocator?

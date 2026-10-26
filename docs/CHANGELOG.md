@@ -8,6 +8,7 @@
 - Major/breaking changes:
   - `IGLOContext::QuerySystemMemoryInfo()` and `IGLOContext::QueryVideoMemoryInfo()` now return `std::optional`.
   - Renamed `FontSettings::sdfOutwardGradientSize` to `FontSettings::sdfSpread`.
+  - Renamed `ig::UploadHeap` back to `ig::TempBufferAllocator`.
 - New features:
   - Added FreeType support for loading and rasterizing fonts.
     To replace stb_truetype with FreeType, uncomment `IGLO_FREETYPE` in `iglo_config.h`,
