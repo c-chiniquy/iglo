@@ -234,14 +234,14 @@ namespace ig
 		void SetSamplerToPixelatedTextures();
 
 		// Draws a string of utf8 characters.
-		void DrawString(float x, float y, const std::string& utf8string, Font& font, Color32 color, size_t startIndex, size_t endIndex);
-		void DrawString(Vector2 position, const std::string& utf8string, Font& font, Color32 color, size_t startIndex, size_t endIndex);
-		void DrawString(float x, float y, const std::string& utf8string, Font& font, Color32 color);
-		void DrawString(Vector2 position, const std::string& utf8string, Font& font, Color32 color);
+		void DrawString(Vector2 position, const std::string& str, Font& font, Color32 color);
+		void DrawString(float x, float y, const std::string& str, Font& font, Color32 color);
+		void DrawString(Vector2 position, const std::string& str, Font& font, Color32 color, size_t startIndex, size_t endIndex);
+		void DrawString(float x, float y, const std::string& str, Font& font, Color32 color, size_t startIndex, size_t endIndex);
 
 		// Measures the width and height of a string that would be drawn with DrawString().
-		Vector2 MeasureString(const std::string& utf8string, Font& font);
-		Vector2 MeasureString(const std::string& utf8string, Font& font, size_t startIndex, size_t endIndex);
+		Vector2 MeasureString(const std::string& str, Font& font);
+		Vector2 MeasureString(const std::string& str, Font& font, size_t startIndex, size_t endIndex);
 
 		void DrawSprite(const Texture& texture, float x, float y, IntRect uv, Color32 color = Colors::White);
 		void DrawSprite(const Texture& texture, float x, float y, uint16_t width, uint16_t height, uint16_t u, uint16_t v, Color32 color = Colors::White);

@@ -138,16 +138,32 @@ namespace ig
 		PackedBoolArray(const PackedBoolArray&);
 
 		// Returns the boolean value at given index.
-		bool GetAt(uint64_t index) const;
+		bool GetAt(uint64_t index) const
+		{
+			assert(index < booleanCount && "out of bounds");
+			return (data[index / ElementSize] & (1 << (index % ElementSize))) != 0;
+		}
 
 		// Assigns a value to the boolean at 'index'.
-		void Set(uint64_t index, bool value);
+		void Set(uint64_t index, bool value)
+		{
+			if (value) SetTrue(index);
+			else SetFalse(index);
+		}
 
 		// The boolean at 'index' is set to true.
-		void SetTrue(uint64_t index);
+		void SetTrue(uint64_t index)
+		{
+			assert(index < booleanCount && "out of bounds");
+			data[index / ElementSize] |= (1 << (index % ElementSize));
+		}
 
 		// The boolean at 'index' is set to false.
-		void SetFalse(uint64_t index);
+		void SetFalse(uint64_t index)
+		{
+			assert(index < booleanCount && "out of bounds");
+			data[index / ElementSize] &= ~(1 << (index % ElementSize));
+		}
 
 		// Erases all booleans from the array. (The array is deallocated)
 		void Clear();
@@ -162,14 +178,14 @@ namespace ig
 		void AssignValueToAll(bool value);
 
 		// Gets the number of booleans stored in this array.
-		uint64_t GetSize() const { return booleanCount; };
+		uint64_t GetSize() const { return booleanCount; }
 
 	private:
-		static uint64_t GetElementCount(uint64_t numBooleans, uint32_t sizeOfEachElement);
-
-		static constexpr uint32_t ElementSize = 8;
 		uint64_t booleanCount = 0;
 		std::unique_ptr<uint8_t[]> data;
+
+		static constexpr uint32_t ElementSize = 8;
+		static constexpr uint64_t GetElementCount(uint64_t numBooleans) { return (numBooleans + ElementSize - 1) / ElementSize; }
 	};
 
 	// Stopwatch timer

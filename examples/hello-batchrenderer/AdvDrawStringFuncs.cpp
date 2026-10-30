@@ -150,7 +150,7 @@ namespace ig
 		bool encounteredAnyCharacter = false; // If true, any character has been encountered on the current line.
 		size_t anyCharIndex = 0; // The index of the latest encountered character.
 
-		const FloatRect emptyLineRect = FloatRect(rect.left, rect.top, rect.left, rect.top + float(font.GetFontDesc().lineHeight));
+		const FloatRect emptyLineRect = FloatRect(rect.left, rect.top, rect.left, rect.top + float(font.GetDesc().lineHeight));
 
 		std::vector<size_t> newLineIndex; // The index of each new line
 		newLineIndex.push_back(0); // The first line starts at index 0.
@@ -161,7 +161,7 @@ namespace ig
 		// Measure every line
 		{
 			uint32_t codepoint;
-			uint32_t prevCodepoint = 0xffffffff;
+			uint16_t prevGlyphIndex = 0; // For kerning
 			size_t i = 0;
 			size_t endIndex = str.size();
 			while (utf8_next_codepoint(str, i, endIndex, &i, &codepoint))
@@ -172,7 +172,7 @@ namespace ig
 					continue;
 
 				case '\n': // Newline
-					prevCodepoint = 0xffffffff; // Next character will have no kerning, since this is a new line.
+					prevGlyphIndex = 0; // Reset kerning
 					newLineIndex.push_back(i);
 					lines.push_back(emptyLineRect);
 					encounteredSpace = false;
@@ -180,12 +180,12 @@ namespace ig
 					continue;
 
 				default:
-					float glyphAdvanceX = font.GetGlyph(codepoint).advanceX;
-					float kerningX = font.GetKerning(prevCodepoint, codepoint);
+					const Glyph glyph = font.GetGlyph(codepoint);
+					float kerningX = font.GetKerning(prevGlyphIndex, glyph.glyphIndex);
 					if (wordWrap)
 					{
 						// Make a new line if this character is about to reach outside the rectangle.
-						if (encounteredAnyCharacter && lines[lines.size() - 1].right + glyphAdvanceX + kerningX > rect.right)
+						if (encounteredAnyCharacter && lines[lines.size() - 1].right + glyph.advanceX + kerningX > rect.right)
 						{
 							// If a space was encountered earlier...
 							if (encounteredSpace)
@@ -197,7 +197,7 @@ namespace ig
 								i = spaceIndex; // Jump backwards to the character that came after that space
 								encounteredSpace = false;
 								encounteredAnyCharacter = false; // New line will start as empty
-								prevCodepoint = 0xffffffff; // Next character will have no kerning, since this is a new line.
+								prevGlyphIndex = 0; // Next character will have no kerning, since this is a new line.
 								continue;
 							}
 							else
@@ -210,8 +210,8 @@ namespace ig
 							}
 						}
 					}
-					lines[lines.size() - 1].right += (kerningX + glyphAdvanceX);
-					prevCodepoint = codepoint;
+					lines[lines.size() - 1].right += (kerningX + glyph.advanceX);
+					prevGlyphIndex = glyph.glyphIndex;
 
 					encounteredAnyCharacter = true;
 					anyCharIndex = i;
@@ -228,7 +228,7 @@ namespace ig
 		}
 
 		// Position each line
-		AlignStringRectangles(lines, align, rect, (float)font.GetFontDesc().lineGap, pixelAligned);
+		AlignStringRectangles(lines, align, rect, (float)font.GetDesc().lineGap, pixelAligned);
 
 		// Make sure font texture is up to date
 		if (font.TextureIsDirty())
@@ -238,14 +238,14 @@ namespace ig
 			r.GetCurrentCommandList()->SafeResumeRenderPass();
 		}
 
-		if (font.GetFontType() == FontType::SDF)
+		if (font.GetType() == FontType::SDF)
 		{
 			r.UsingBatch((BatchType)StandardBatchType::ScaledSprites_SDF);
 			r.UsingRenderConstants(r.GetSDFEffectRenderConstant());
 		}
 		else
 		{
-			uint32_t colorChannelCount = GetFormatInfo(font.GetTexture()->GetFormat()).elementCount;
+			const uint32_t colorChannelCount = GetFormatInfo(font.GetTexture()->GetFormat()).elementCount;
 			if (colorChannelCount == 1)
 			{
 				r.UsingBatch((BatchType)StandardBatchType::ScaledSprites_MonoTransparent);
@@ -264,7 +264,7 @@ namespace ig
 			float charX = lines[i].left;
 			float charY = lines[i].top;
 			uint32_t codepoint;
-			uint32_t prevCodepoint = 0xffffffff;
+			uint16_t prevGlyphIndex = 0;
 			size_t j = newLineIndex[i];
 			size_t endIndex = str.size();
 			if (i + 1 < newLineIndex.size()) endIndex = newLineIndex[i + 1];
@@ -279,13 +279,13 @@ namespace ig
 					continue;
 
 				default:
-					Glyph glyph = font.GetGlyph(codepoint);
-					charX += font.GetKerning(prevCodepoint, codepoint);
+					const Glyph glyph = font.GetGlyph(codepoint);
+					charX += font.GetKerning(prevGlyphIndex, glyph.glyphIndex);
 
-					float x = charX + (float)glyph.glyphOffsetX;
-					float y = charY + (float)glyph.glyphOffsetY;
-					float width = (float)glyph.glyphWidth;
-					float height = (float)glyph.glyphHeight;
+					float x = charX + (float)glyph.offsetX;
+					float y = charY + (float)glyph.offsetY;
+					float width = (float)glyph.width;
+					float height = (float)glyph.height;
 					float u = (float)glyph.texturePosX;
 					float v = (float)glyph.texturePosY;
 
@@ -325,7 +325,7 @@ namespace ig
 						r.AddPrimitive(&V);
 					}
 					charX += float(glyph.advanceX);
-					prevCodepoint = codepoint;
+					prevGlyphIndex = glyph.glyphIndex;
 					continue;
 				}
 			}
@@ -335,7 +335,7 @@ namespace ig
 	void DrawAlignedString(BatchRenderer& r, FloatRect rect, const std::string& str, Font& font, Color32 color,
 		StringAlignment align, bool pixelAligned)
 	{
-		if (str.length() == 0) return;
+		if (str.empty()) return;
 
 		std::vector<size_t> newLineIndex; // The index of each new line (beginning after the '\n')
 		newLineIndex.push_back(0); // The first line starts at index 0.
@@ -360,12 +360,12 @@ namespace ig
 		{
 			size_t endIndex = str.size();
 			if (i + 1 < newLineIndex.size()) endIndex = newLineIndex[i + 1] - 1;
-			Vector2 area = r.MeasureString(str, font, newLineIndex[i], endIndex);
-			lines[i] = FloatRect(rect.left, 0, rect.left + area.x, (float)font.GetFontDesc().lineHeight);
+			const Vector2 area = r.MeasureString(str, font, newLineIndex[i], endIndex);
+			lines[i] = FloatRect(rect.left, 0, rect.left + area.x, (float)font.GetDesc().lineHeight);
 		}
 
 		// Position each line
-		AlignStringRectangles(lines, align, rect, (float)font.GetFontDesc().lineGap, pixelAligned);
+		AlignStringRectangles(lines, align, rect, (float)font.GetDesc().lineGap, pixelAligned);
 
 		// Draw each line
 		for (size_t i = 0; i < newLineIndex.size(); i++)
@@ -379,7 +379,7 @@ namespace ig
 	void DrawColorfulAnimatedString(BatchRenderer& r, float x, float y, const std::string& str, Font& font,
 		float animationStep, bool pixelAligned)
 	{
-		if (str.length() == 0) return;
+		if (str.empty()) return;
 
 		size_t step = 0;
 
@@ -388,7 +388,7 @@ namespace ig
 		float charX = x;
 		float charY = y;
 		uint32_t codepoint;
-		uint32_t prevCodepoint = 0xffffffff;
+		uint16_t prevGlyphIndex = 0; // For kerning
 		size_t i = 0;
 		while (utf8_next_codepoint(str, i, str.size(), &i, &codepoint))
 		{
@@ -398,14 +398,14 @@ namespace ig
 				continue;
 
 			case '\n': // Newline
-				prevCodepoint = 0xffffffff;
-				charY += float(font.GetFontDesc().lineHeight + font.GetFontDesc().lineGap);
+				prevGlyphIndex = 0; // Reset kerning
+				charY += float(font.GetDesc().lineHeight + font.GetDesc().lineGap);
 				charX = x;
 				continue;
 
 			default:
-				Glyph glyph = font.GetGlyph(codepoint);
-				charX += font.GetKerning(prevCodepoint, codepoint);
+				const Glyph glyph = font.GetGlyph(codepoint);
+				charX += font.GetKerning(prevGlyphIndex, glyph.glyphIndex);
 
 				if (font.TextureIsDirty())
 				{
@@ -419,14 +419,14 @@ namespace ig
 				if (!hasSelectedBatch)
 				{
 					hasSelectedBatch = true;
-					if (font.GetFontType() == FontType::SDF)
+					if (font.GetType() == FontType::SDF)
 					{
 						r.UsingBatch((BatchType)StandardBatchType::Sprites_SDF);
 						r.UsingRenderConstants(r.GetSDFEffectRenderConstant());
 					}
 					else
 					{
-						uint32_t colorChannelCount = GetFormatInfo(font.GetTexture()->GetFormat()).elementCount;
+						const uint32_t colorChannelCount = GetFormatInfo(font.GetTexture()->GetFormat()).elementCount;
 						if (colorChannelCount == 1)
 						{
 							r.UsingBatch((BatchType)StandardBatchType::Sprites_MonoTransparent);
@@ -440,28 +440,28 @@ namespace ig
 				}
 
 				step++;
-				float anim = (float(step) * 0.5f) + (animationStep * 5.0f);
-				float x = sin(anim) * 2.0f;
-				float y = cos(anim) * 2.0f;
-				Color32 color = Color(
+				const float anim = (float(step) * 0.5f) + (animationStep * 5.0f);
+				const Color32 color = Color(
 					cos(anim - ((float(IGLO_PI) / 3.0f) * 1.0f)) + 0.5f,
 					cos(anim - ((float(IGLO_PI) / 3.0f) * 2.0f)) + 0.5f,
 					sin(anim - ((float(IGLO_PI) / 3.0f) * 3.0f)) + 0.5f).ToColor32();
+				float x = sin(anim) * 2.0f;
+				float y = cos(anim) * 2.0f;
 
 
-				x += charX + float(glyph.glyphOffsetX);
-				y += charY + float(glyph.glyphOffsetY);
+				x += charX + float(glyph.offsetX);
+				y += charY + float(glyph.offsetY);
 				if (pixelAligned)
 				{
 					x = float(int(x));
 					y = float(int(y));
 				}
 
-				Vertex_Sprite V = { Vector2(x, y), glyph.glyphWidth, glyph.glyphHeight, glyph.texturePosX, glyph.texturePosY, color };
+				Vertex_Sprite V = { Vector2(x, y), glyph.width, glyph.height, glyph.texturePosX, glyph.texturePosY, color };
 				r.AddPrimitive(&V);
 
 				charX += float(glyph.advanceX);
-				prevCodepoint = codepoint;
+				prevGlyphIndex = glyph.glyphIndex;
 				continue;
 			}
 		}

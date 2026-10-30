@@ -40,11 +40,11 @@ namespace ig
 					r.DrawRectangle(barRect.left, barRect.top, barRect.GetWidth() * progress, barRect.GetHeight(), Colors::Gray);
 					r.DrawRectangleBorder(barRect, Colors::White);
 
-					float totalLineHeight = float(font.GetFontDesc().lineHeight + font.GetFontDesc().lineGap);
+					const float totalLineHeight = float(font.GetDesc().lineHeight + font.GetDesc().lineGap);
 					r.DrawString(roundf(barRect.left), roundf(barRect.top - totalLineHeight - 5), currentTask, font, Colors::White);
 
-					Vector2 strSize = r.MeasureString(progressBarText, font);
-					Vector2 strPos = Vector2(
+					const Vector2 strSize = r.MeasureString(progressBarText, font);
+					const Vector2 strPos = Vector2(
 						((barRect.left + barRect.right) / 2.0f) - (strSize.x / 2.0f), // X
 						((barRect.top + barRect.bottom) / 2.0f) - (strSize.y / 2.0f)); // Y
 					r.DrawString(roundf(strPos.x), roundf(strPos.y), progressBarText, font, Colors::White);

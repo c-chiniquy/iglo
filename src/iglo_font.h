@@ -53,7 +53,7 @@ namespace ig
 
 	struct FontSettings
 	{
-		FontType fontType = FontType::Bitmap;
+		FontType type = FontType::Bitmap;
 
 		// For SDF fonts.
 		// This is the number of pixels the SDF gradient will stretch from the glyph edge.
@@ -91,21 +91,21 @@ namespace ig
 		uint16_t texturePosX = 0;
 		uint16_t texturePosY = 0;
 
-		uint16_t glyphWidth = 0; // The width of the glyph bitmap image
-		uint16_t glyphHeight = 0; // The height of the glyph bitmap image
+		uint16_t width = 0; // The width of the glyph bitmap image
+		uint16_t height = 0; // The height of the glyph bitmap image
 
-		int16_t glyphOffsetX = 0; // Glyph image pos relative to topleft corner of character cell.
-		int16_t glyphOffsetY = 0;
+		int16_t offsetX = 0; // Glyph image pos relative to topleft corner of character cell.
+		int16_t offsetY = 0;
 
 		int16_t advanceX = 0; // The amount of pixels the character advances forward. AKA cell width.
-		uint16_t flags = 0; // Used internally by ig::Font.
+		uint16_t glyphIndex = 0; // Index of this glyph in the font. 0 = error glyph.
 	};
 
 	struct Kerning
 	{
-		uint32_t codepointPrev = 0; // UTF-32 codepoint of the left character
-		uint32_t codepointNext = 0; // UTF-32 codepoint of the right character
-		int16_t x = 0;  // The kerning
+		uint16_t glyphIndexPrev = 0; // Glyph index of the left glyph
+		uint16_t glyphIndexNext = 0; // Glyph index of the right glyph
+		int16_t x = 0; // The kerning
 	};
 
 	struct CodepointGlyph
@@ -114,15 +114,22 @@ namespace ig
 		Glyph glyph;
 	};
 
+	struct CodepointKerning
+	{
+		uint32_t codepointPrev = 0; // UTF-32 codepoint of the left character
+		uint32_t codepointNext = 0; // UTF-32 codepoint of the right character
+		int16_t x = 0; // The kerning
+	};
+
 	// All data needed to create a prebaked font.
 	// A prebaked font has a prefilled glyph atlas texture, where no new glyphs can be rasterized at runtime.
 	struct PrebakedFontData
 	{
-		FontType fontType = FontType::Bitmap;
-		FontDesc fontDesc;
-		std::vector<CodepointGlyph> glyphs;
-		std::vector<Kerning> kerns;
-		Glyph errorGlyph;
+		FontType type = FontType::Bitmap;
+		FontDesc desc;
+		std::vector<CodepointGlyph> glyphs; // 'Glyph::glyphIndex' is ignored
+		std::vector<CodepointKerning> kerns;
+		Glyph errorGlyph; // 'Glyph::glyphIndex' is ignored
 		std::unique_ptr<Image> image;
 
 		bool SaveToFile(const std::string& filename);
@@ -143,33 +150,38 @@ namespace ig
 	class KerningTable
 	{
 	public:
+
+		// Pairs with no kerning (x == 0) and pairs with glyph index 0 are ignored.
 		void Build(const std::vector<Kerning>& kernList);
 		void Clear();
 
 		// Returns 0 if this pair has no kerning
-		int16_t Find(uint32_t codepointPrev, uint32_t codepointNext) const;
+		int16_t Find(uint16_t glyphIndexPrev, uint16_t glyphIndexNext) const;
 
 		// The number of kerning pairs stored in the table
 		uint32_t GetCount() const { return count; }
 
-	private:
-		size_t GetSlot(uint64_t key) const { return (size_t)((key * 0x9E3779B97F4A7C15ull) >> shift); }
-		static uint64_t MakeKey(uint32_t codepointPrev, uint32_t codepointNext) { return ((uint64_t)codepointPrev << 32) | codepointNext; }
+		// Glyph index 0 is the error glyph, which also means "no glyph" (such as no previous glyph), so it never has kerning.
+		static bool IsUsableKerning(const Kerning& k) { return k.x != 0 && k.glyphIndexPrev != 0 && k.glyphIndexNext != 0; }
 
 	private:
-		static constexpr uint64_t emptyKey = IGLO_UINT64_MAX; // Never a valid key, since codepoints are at most 0x10FFFF.
+		size_t GetSlot(uint32_t key) const { return (size_t)((key * 0x9E3779B9u) >> shift); }
+		static uint32_t MakeKey(uint16_t glyphIndexPrev, uint16_t glyphIndexNext) { return ((uint32_t)glyphIndexPrev << 16) | glyphIndexNext; }
 
-		std::vector<uint64_t> keys; // Size is a power of two. Empty slots contain 'emptyKey'.
+	private:
+		static constexpr uint32_t emptyKey = 0; // Never a valid key, since pairs with glyph index 0 are never stored
+
+		std::vector<uint32_t> keys; // Size is a power of two. Empty slots contain 'emptyKey'.
 		std::vector<int16_t> values;
 		uint32_t count = 0;
-		uint32_t shift = 63; // 64 - log2(table size)
+		uint32_t shift = 31; // 32 - log2(table size)
 	};
 
 	class Font
 	{
 	private:
 		Font(const IGLOContext& context, const FontSettings& settings, bool isPrebaked)
-			: context(context), fontSettings(settings), isPrebaked(isPrebaked) {}
+			: context(context), settings(settings), isPrebaked(isPrebaked) {}
 
 		Font& operator=(const Font&) = delete;
 		Font(const Font&) = delete;
@@ -182,7 +194,7 @@ namespace ig
 			float fontSize, FontSettings fontSettings = FontSettings());
 		static std::unique_ptr<Font> LoadFromFile(const IGLOContext&, const FontLocation& location,
 			float fontSize, FontSettings fontSettings = FontSettings());
-		
+
 		// Load .TTF/.OTF/.TTC/.OTC font from memory.
 		// Font will rely on the file data buffer during its lifetime,
 		// so don't delete the data buffer before destroying this font.
@@ -201,97 +213,89 @@ namespace ig
 		// Load prebaked font from memory.
 		static std::unique_ptr<Font> LoadPrebakedFromMemory(const IGLOContext&, CommandList&, const byte* fileData, size_t numBytes);
 
-		// Gets a glyph that corresponds to the specified UTF-32 codepoint.
+		// Gets the glyph that belongs to the given codepoint.
 		// If the glyph hasn't been loaded yet, it is rasterized and placed on the glyph atlas texture.
 		// New glyphs placed on the atlas texture are not immediately visible, calling ApplyChangesToTexture() makes the new glyphs visible.
-		// If this font doesn't contain the requested glyph, an error glyph (usually a square) is returned.
-		Glyph GetGlyph(uint32_t codepoint, bool* out_isErrorGlyph = nullptr);
+		// If the requested glyph does not exist, the error glyph is returned which has a glyph index of 0.
+		Glyph GetGlyph(uint32_t codepoint);
 
-		// Gets the extra X advance per character combination.
-		int16_t GetKerning(uint32_t prev, uint32_t next) const;
+		// Gets the extra X advance between two glyphs.
+		// Glyph index 0 never has kerning, so pass 0 as 'prevGlyphIndex' when there is no previous glyph.
+		int16_t GetKerning(uint16_t prevGlyphIndex, uint16_t nextGlyphIndex) const;
 
-		// Preloads all glyphs contained in the specified string.
+		// Whether this font contains a glyph for the given codepoint.
+		bool HasGlyph(uint32_t codepoint) const;
+
+		// Preloads all glyphs contained in the specified utf8 string.
 		// If this font is prebaked then this function does nothing.
-		void PreloadGlyphs(const std::string& utf8string);
+		void PreloadGlyphs(const std::string& str);
+		void PreloadGlyphs(const std::string& str, size_t startIndex, size_t endIndex);
 
 		// Preloads all glyphs between 'first' codepoint and 'last' codepoint (including first and last).
 		// If this font is prebaked then this function does nothing.
 		void PreloadGlyphs(uint32_t first, uint32_t last);
+
+		// Commits any changes made to the texture to the GPU
+		void ApplyChangesToTexture(CommandList&);
 
 		// Clears the glyph atlas texture and erases all loaded glyphs.
 		// Frees up RAM at the expense of slowing down future glyph rendering for a while as it needs to re render all new glyphs.
 		// If this font is prebaked, then this function does nothing.
 		void ClearTexture();
 
-		const FontDesc& GetFontDesc() const { return fontDesc; }
-
-		// The number of kerning pairs this font contains
-		uint32_t GetKernCount() const { return atlas.kerning.GetCount(); }
-
-		// Commits any changes made to the texture to the GPU
-		void ApplyChangesToTexture(CommandList&);
-
 		// When new glyphs have been loaded and placed on the glyph atlas texture, the texture is considered 'dirty'
 		// until the new texture data is uploaded to the GPU.
 		// If this returns true, you need to call ApplyChangesToTexture() before using the glyph atlas texture.
 		bool TextureIsDirty() const { return page.dirty; }
 
-		// The glyph atlas texture for this font
+		// The glyph atlas texture for this font.
 		const Texture* GetTexture() const { return page.texture.get(); }
 
-		// The total number of glyphs this font contains
-		uint32_t GetTotalGlyphCount() const { return atlas.glyphCount; }
+		// The number of glyphs this font contains, including the error glyph.
+		uint32_t GetGlyphCount() const { return atlas.glyphCount; }
 
-		// The number of glyphs that has been loaded and placed on the texture so far
-		uint32_t GetLoadedGlyphCount() const { return atlas.loadedGlyphCount; }
+		// The number of glyphs that have been rasterized and placed on the texture so far, including the error glyph.
+		// Can exceed the number of glyphs the font contains, if the font has multiple codepoints belonging to the same glyph.
+		uint32_t GetRasterizedGlyphCount() const { return atlas.rasterizedGlyphCount; }
 
-		// The highest codepoint used by any glyph in this font
-		uint32_t GetHighestGlyphCodepoint() const { return atlas.highestGlyphCodepoint; }
-
-		// The highest codepoint used by left side of any kerning pair in this font
-		uint32_t GetHighestLeftKernCodepoint() const { return atlas.highestLeftKernCodepoint; }
-
-		// Whether this font contains a glyph for the given codepoint
-		bool HasGlyph(uint32_t codepoint) const;
+		// The number of kerning pairs this font contains.
+		uint32_t GetKernCount() const { return atlas.kerning.GetCount(); }
 
 		// If the font is prebaked then all glyphs are already rasterized and no new glyphs can be placed on the atlas texture.
 		bool IsPrebaked() const { return isPrebaked; }
 
-		FontType GetFontType() const { return fontSettings.fontType; }
+		const FontDesc& GetDesc() const { return desc; }
+		FontType GetType() const { return settings.type; }
 
 	private:
+		Glyph GetGlyphSlowPath(uint32_t codepoint);
 
-		void SetKerning(const std::vector<Kerning>& kernList);
+		// Returns 0 if the font doesn't have this codepoint.
+		uint16_t QueryFontGlyphIndex(uint32_t codepoint) const;
 
-		// Sets the glyphs for a dynamic font.
-		void SetDynamicGlyphs(const std::vector<uint32_t>& codepoints, const PackedBoolArray& exists, uint32_t totalNumValidCodepoints);
+		void InitDynamicGlyphs(uint32_t numGlyphs);
+		void InitPrebaked(const std::vector<CodepointGlyph>& glyphs, const std::vector<CodepointKerning>& kerns, Glyph errorGlyph);
+		void InitKerning(const std::vector<Kerning>&);
 
-		// Sets the glyphs for a prebaked font.
-		void SetPrebakedGlyphs(const std::vector<CodepointGlyph>& codepointGlyphs, Glyph errorGlyph);
+		// Rasterizes a glyph and adds it to the atlas.
+		Glyph RasterizeGlyph(uint16_t glyphIndex);
 
-		// Rasterizes and places a glyph on the glyph atlas texture, then returns it.
-		// This should only be called for glyphs that hasn't already been loaded (or it will rasterize and place the same glyph multiple times).
-		Glyph LoadGlyph(uint32_t codepoint);
-
-		// Places a rasterized glyph on the glyph atlas texture, then returns it.
 		// offsetX is relative to the left edge of the character cell, offsetY is relative to the baseline.
-		Glyph BuildGlyph(const byte* bitmap, uint16_t width, uint16_t height, int16_t offsetX, int16_t offsetY, int16_t advanceX);
+		Glyph AddGlyphToAtlas(const byte* bitmap, uint16_t width, uint16_t height, int16_t offsetX, int16_t offsetY,
+			int16_t advanceX, uint16_t glyphIndex);
 
 		// Allocates an empty rectangle area in the glyph atlas texture so a glyph can be placed there.
 		// Returns std::nullopt if no room could be allocated.
-		std::optional<IntPoint> AllocateRoomForGlyph(uint16_t width, uint16_t height);
+		std::optional<IntPoint> AllocateAtlasSpace(uint16_t width, uint16_t height);
 
-		// Places a glyph bitmap on the glyph atlas texture.
-		void PlaceGlyph(const byte* bitmap, uint16_t width, uint16_t height, uint16_t texPosX, uint16_t texPosY);
-
-		uint32_t GetGlyphIndex(uint32_t codepoint) const;
+		void CopyBitmapToAtlas(const byte* bitmap, uint16_t width, uint16_t height, uint16_t texPosX, uint16_t texPosY);
 
 	private:
 		const IGLOContext& context;
-		const FontSettings fontSettings;
+		const FontSettings settings;
 		const bool isPrebaked = true; // If true, new glyphs can't be loaded and placed on the glyph atlas texture.
 
-		FontDesc fontDesc;
+		FontDesc desc;
 
 		const byte* fileDataReadOnly = nullptr; // A read only pointer to font file data. (dont delete this)
 		std::vector<byte> fileDataOwned; // Only used if this font owns the font file data.
@@ -308,25 +312,21 @@ namespace ig
 
 		struct Atlas
 		{
-			uint32_t highestLeftKernCodepoint = 0; // Any codepoint higher than this doesn't belong to the left side of any kerning pair.
-			uint32_t highestGlyphCodepoint = 0; // Any codepoint higher than this does not belong to any glyph.
-			uint32_t glyphCount = 0; // The total number of glyphs/valid codepoints/characters that exist.
+			uint32_t glyphCount = 0; // Number of glyph indices in the font (includes error glyph)
+			uint32_t rasterizedGlyphCount = 0; // Number of glyphs placed on the atlas, including the error glyph and duplicates
 
-			// Number of glyphs that has been loaded (displayed on the texture).
-			uint32_t loadedGlyphCount = 0;
+			// Lower codepoint glyphs are stored here.
+			// glyphIndex == 0 means not loaded yet, or not in the font (missing glyphs are not stored).
+			std::array<Glyph, 592> codepointTable = {};
 
-			// These glyph flags are used by the glyphs stored in the glyph table (for lower codepoints only).
-			// This improves the performance for GetGlyph() and GetKerning() for all the lower codepoints.
-			enum class GlyphFlags : uint16_t
-			{
-				IsLoaded = 1, // If this glyph is loaded yet
-				HasLeftKern = 2, // If this glyph belongs to the left side of any kerning pairs
-			};
-			static constexpr uint32_t glyphTableSize = 592;
-			std::vector<Glyph> glyphTable; // Lower codepoints are stored here.
-			std::unordered_map<uint32_t, Glyph> glyphMap; // Higher codepoints are stored here.
-			KerningTable kerning;
+			// Higher codepoint glyphs are stored here.
+			// Only codepoints that exist in the font are stored.
+			std::unordered_map<uint32_t, Glyph> codepointMap;
+
 			Glyph errorGlyph;
+
+			KerningTable kerning;
+			PackedBoolArray hasLeftKern; // Size = highest left-kern glyph index + 1
 		};
 		Atlas atlas;
 

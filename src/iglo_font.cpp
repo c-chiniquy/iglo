@@ -32,6 +32,8 @@
 namespace ig
 {
 	constexpr uint32_t MaxDynamicFontGrowthTextureSize = 16384;
+	constexpr uint32_t MaxValidCodepoint = 0x10FFFF;
+	constexpr uint32_t MaxGlyphCount = 0x10000; // Includes the error glyph at index 0
 
 	const char* GetFontHintingName(FontHinting fontHinting)
 	{
@@ -291,7 +293,7 @@ namespace ig
 			{ 8250, { 102, 79, 5, 7, 0, 7, 4, 0 }}, { 8364, { 36, 57, 9, 12, -1, 3, 7, 0 }},
 		};
 
-		const Kerning kerningData[] =
+		const CodepointKerning kerningData[] =
 		{
 			{ 8217, 252, -1 }, { 8217, 251, -1 }, { 8217, 250, -1 }, { 65, 84, -1 }, { 8217, 249, -1 }, { 65, 86, -1 }, { 65, 87, -1 },
 			{ 65, 89, -1 }, { 65, 118, -1 }, { 8217, 248, -2 }, { 8217, 246, -2 }, { 8217, 245, -2 }, { 8217, 244, -2 }, { 8217, 243, -2 },
@@ -332,15 +334,12 @@ namespace ig
 
 		PrebakedFontData out;
 		out.image = Image::LoadFromMemory(fileData, std::size(fileData));
-		out.fontType = FontType::Bitmap;
+		out.type = FontType::Bitmap;
 		out.errorGlyph = { 130, 31, 10, 13, -1, 2, 8, 0 };
-		out.fontDesc = { "Vegur15", 15, 14, 18, 0 };
+		out.desc = { .fontName = "Vegur15", .fontSize = 15, .baseline = 14, .lineHeight = 18, .lineGap = 0 };
 
-		out.glyphs.resize(std::size(glyphData));
-		memcpy(out.glyphs.data(), glyphData, std::size(glyphData) * sizeof(CodepointGlyph));
-
-		out.kerns.resize(std::size(kerningData));
-		memcpy(out.kerns.data(), kerningData, std::size(kerningData) * sizeof(Kerning));
+		out.glyphs.assign(std::begin(glyphData), std::end(glyphData));
+		out.kerns.assign(std::begin(kerningData), std::end(kerningData));
 
 		return out;
 	}
@@ -562,13 +561,17 @@ namespace ig
 #endif
 	}
 
-	constexpr uint32_t PrebakedFontFileVersion = 1;
+	constexpr uint32_t PrebakedFontFileVersion = 2;
+
+	// CodepointGlyphs get glyph indices 1..N (0 is the error glyph).
+	constexpr uint32_t MaxPrebakedGlyphs = MaxGlyphCount - 1;
+
 	struct PrebakedFontFileHeader
 	{
 		char fileDescriptor[8] = {}; // IGLOFONT
 		uint32_t fileVersion = {};
 		uint32_t numCodepointGlyphs = {};
-		uint32_t numKerns = {};
+		uint32_t numCodepointKerns = {};
 		uint32_t fontType = {};
 
 		uint32_t fontNameStrSize = {};
@@ -582,21 +585,21 @@ namespace ig
 		uint32_t imageWidth = {};
 		uint32_t imageHeight = {};
 		uint32_t imageFormat = {};
-		uint32_t imageMipLevels = {};
 		uint32_t imageNumFaces = {};
+		uint32_t imageMipLevels = {};
 
 
 		uint64_t GetGlyphsByteSize() const
 		{
-			return numCodepointGlyphs * sizeof(CodepointGlyph);
+			return (uint64_t)numCodepointGlyphs * (uint64_t)sizeof(CodepointGlyph);
 		}
-		static constexpr uint64_t GetSingleKernSize()
+		static constexpr uint64_t GetSingleCodepointKernSize()
 		{
 			return sizeof(uint32_t) + sizeof(uint32_t) + sizeof(int16_t);
 		}
 		uint64_t GetKernsByteSize() const
 		{
-			return numKerns * (GetSingleKernSize());
+			return numCodepointKerns * (GetSingleCodepointKernSize());
 		}
 		uint64_t GetTotalFileSize() const
 		{
@@ -621,11 +624,16 @@ namespace ig
 			return false;
 		}
 
-		if (glyphs.size() >= IGLO_UINT32_MAX ||
-			kerns.size() >= IGLO_UINT32_MAX ||
-			fontDesc.fontName.size() >= IGLO_UINT32_MAX)
+		if (glyphs.size() > MaxPrebakedGlyphs)
 		{
-			Log(LogType::Error, ToString(errStr, "One of the following is too large: number of glyphs, number of kerns, or font name."));
+			Log(LogType::Error, ToString(errStr, "Too many glyphs (", glyphs.size(), "). The maximum is ", MaxPrebakedGlyphs, "."));
+			return false;
+		}
+
+		if (kerns.size() >= IGLO_UINT32_MAX ||
+			desc.fontName.size() >= IGLO_UINT32_MAX)
+		{
+			Log(LogType::Error, ToString(errStr, "One of the following is too large: number of kerns, or font name."));
 			return false;
 		}
 
@@ -633,20 +641,20 @@ namespace ig
 		std::memcpy(header.fileDescriptor, "IGLOFONT", 8);
 		header.fileVersion = PrebakedFontFileVersion;
 		header.numCodepointGlyphs = (uint32_t)glyphs.size();
-		header.numKerns = (uint32_t)kerns.size();
-		header.fontType = (uint32_t)fontType;
-		header.fontNameStrSize = (uint32_t)fontDesc.fontName.size();
-		header.fontSize = fontDesc.fontSize;
-		header.baseline = fontDesc.baseline;
-		header.lineHeight = fontDesc.lineHeight;
-		header.lineGap = fontDesc.lineGap;
+		header.numCodepointKerns = (uint32_t)kerns.size();
+		header.fontType = (uint32_t)type;
+		header.fontNameStrSize = (uint32_t)desc.fontName.size();
+		header.fontSize = desc.fontSize;
+		header.baseline = desc.baseline;
+		header.lineHeight = desc.lineHeight;
+		header.lineGap = desc.lineGap;
 		header.errorGlyph = errorGlyph;
 
 		header.imageWidth = image->GetWidth();
 		header.imageHeight = image->GetHeight();
 		header.imageFormat = (uint32_t)image->GetFormat();
-		header.imageMipLevels = image->GetMipLevels();
 		header.imageNumFaces = image->GetNumFaces();
+		header.imageMipLevels = image->GetMipLevels();
 
 		std::ofstream outFile(utf8_to_path(filename), std::ios::out | std::ios::binary);
 		if (!outFile)
@@ -656,9 +664,9 @@ namespace ig
 		}
 
 		outFile.write((char*)&header, sizeof(PrebakedFontFileHeader));
-		outFile.write((char*)fontDesc.fontName.c_str(), header.fontNameStrSize);
+		outFile.write((char*)desc.fontName.c_str(), header.fontNameStrSize);
 		outFile.write((char*)glyphs.data(), header.GetGlyphsByteSize());
-		for (size_t i = 0; i < header.numKerns; i++)
+		for (size_t i = 0; i < header.numCodepointKerns; i++)
 		{
 			outFile.write((char*)&kerns[i].codepointPrev, sizeof(uint32_t));
 			outFile.write((char*)&kerns[i].codepointNext, sizeof(uint32_t));
@@ -702,37 +710,44 @@ namespace ig
 			return false;
 		}
 
-		PrebakedFontFileHeader* header = (PrebakedFontFileHeader*)fileData;
+		PrebakedFontFileHeader header;
+		memcpy(&header, fileData, sizeof(PrebakedFontFileHeader));
 
-		std::string fileDescriptor(header->fileDescriptor, 8);
+		std::string fileDescriptor(header.fileDescriptor, 8);
 		if (fileDescriptor != "IGLOFONT")
 		{
 			Log(LogType::Error, ToString(errStr, "Not an IGLOFONT file."));
 			return false;
 		}
 
-		if (header->fileVersion != PrebakedFontFileVersion)
+		if (header.fileVersion != PrebakedFontFileVersion)
 		{
 			Log(LogType::Error, ToString(errStr, "File uses a newer or older version of the file format."));
 			return false;
 		}
 
+		if (header.numCodepointGlyphs > MaxPrebakedGlyphs)
+		{
+			Log(LogType::Error, ToString(errStr, "Too many glyphs (", header.numCodepointGlyphs, "). The maximum is ", MaxPrebakedGlyphs, "."));
+			return false;
+		}
+
 		const ImageDesc imageDesc =
 		{
-			.extent = Extent2D(header->imageWidth, header->imageHeight),
-			.format = (Format)header->imageFormat,
-			.numFaces = header->imageNumFaces,
-			.mipLevels = header->imageMipLevels,
+			.extent = Extent2D(header.imageWidth, header.imageHeight),
+			.format = (Format)header.imageFormat,
+			.numFaces = header.imageNumFaces,
+			.mipLevels = header.imageMipLevels,
 		};
 
-		DetailedResult descValidationResult = imageDesc.Validate();
+		const DetailedResult descValidationResult = imageDesc.Validate();
 		if (!descValidationResult)
 		{
 			Log(LogType::Error, ToString(errStr, "Invalid image description."));
 			return false;
 		}
 
-		const uint64_t totalFileSize = header->GetTotalFileSize();
+		const uint64_t totalFileSize = header.GetTotalFileSize();
 
 		// Smaller than expected
 		if (numBytes < totalFileSize)
@@ -747,31 +762,31 @@ namespace ig
 			Log(LogType::Warning, "Prebaked font file was larger than expected.");
 		}
 
-		this->fontType = (FontType)header->fontType;
-		this->fontDesc.fontSize = header->fontSize;
-		this->fontDesc.baseline = header->baseline;
-		this->fontDesc.lineHeight = header->lineHeight;
-		this->fontDesc.lineGap = header->lineGap;
-		this->errorGlyph = header->errorGlyph;
+		this->type = (FontType)header.fontType;
+		this->desc.fontSize = header.fontSize;
+		this->desc.baseline = header.baseline;
+		this->desc.lineHeight = header.lineHeight;
+		this->desc.lineGap = header.lineGap;
+		this->errorGlyph = header.errorGlyph;
 
 		const byte* src = fileData;
 		src += sizeof(PrebakedFontFileHeader);
 
-		this->fontDesc.fontName.clear();
-		this->fontDesc.fontName.resize((size_t)header->fontNameStrSize);
-		memcpy(this->fontDesc.fontName.data(), src, header->fontNameStrSize);
-		src += header->fontNameStrSize;
+		this->desc.fontName.clear();
+		this->desc.fontName.resize((size_t)header.fontNameStrSize);
+		memcpy(this->desc.fontName.data(), src, header.fontNameStrSize);
+		src += header.fontNameStrSize;
 
 		this->glyphs.clear();
-		this->glyphs.resize((size_t)header->numCodepointGlyphs);
-		memcpy(this->glyphs.data(), src, header->GetGlyphsByteSize());
-		src += header->GetGlyphsByteSize();
+		this->glyphs.resize((size_t)header.numCodepointGlyphs);
+		memcpy(this->glyphs.data(), src, header.GetGlyphsByteSize());
+		src += header.GetGlyphsByteSize();
 
 		this->kerns.clear();
-		this->kerns.resize((size_t)header->numKerns);
+		this->kerns.resize((size_t)header.numCodepointKerns);
 		for (size_t i = 0; i < this->kerns.size(); i++)
 		{
-			Kerning& k = this->kerns[i];
+			CodepointKerning& k = this->kerns[i];
 
 			memcpy(&k.codepointPrev, src, sizeof(uint32_t));
 			src += sizeof(uint32_t);
@@ -802,36 +817,36 @@ namespace ig
 		values.clear();
 		values.shrink_to_fit();
 		count = 0;
-		shift = 63;
+		shift = 31;
 	}
 
 	void KerningTable::Build(const std::vector<Kerning>& kernList)
 	{
 		Clear();
 
-		size_t numNonZero = 0;
+		size_t numUsable = 0;
 		for (const Kerning& k : kernList)
 		{
-			if (k.x != 0) numNonZero++;
+			if (IsUsableKerning(k)) numUsable++;
 		}
-		if (numNonZero == 0) return;
+		if (numUsable == 0) return;
 
 		uint32_t log2Size = 1;
-		while (((size_t)1 << log2Size) < numNonZero * 2)
+		while (((size_t)1 << log2Size) < numUsable * 2)
 		{
 			log2Size++;
 		}
 		const size_t size = (size_t)1 << log2Size;
 		const size_t mask = size - 1;
-		shift = 64 - log2Size;
+		shift = 32 - log2Size;
 		keys.assign(size, emptyKey);
 		values.assign(size, 0);
 
 		for (const Kerning& k : kernList)
 		{
-			if (k.x == 0) continue;
+			if (!IsUsableKerning(k)) continue;
 
-			const uint64_t key = MakeKey(k.codepointPrev, k.codepointNext);
+			const uint32_t key = MakeKey(k.glyphIndexPrev, k.glyphIndexNext);
 			size_t slot = GetSlot(key);
 
 			// Find empty slot or duplicate pair
@@ -848,18 +863,18 @@ namespace ig
 		}
 	}
 
-	int16_t KerningTable::Find(uint32_t codepointPrev, uint32_t codepointNext) const
+	int16_t KerningTable::Find(uint16_t glyphIndexPrev, uint16_t glyphIndexNext) const
 	{
 		if (count == 0) return 0;
 
-		const uint64_t key = MakeKey(codepointPrev, codepointNext);
+		const uint32_t key = MakeKey(glyphIndexPrev, glyphIndexNext);
 		const size_t mask = keys.size() - 1;
 		size_t slot = GetSlot(key);
 
 		// This always ends, since the table is never full.
 		while (true)
 		{
-			const uint64_t slotKey = keys[slot];
+			const uint32_t slotKey = keys[slot];
 			if (slotKey == key) return values[slot];
 			if (slotKey == emptyKey) return 0;
 			slot = (slot + 1) & mask;
@@ -905,22 +920,26 @@ namespace ig
 			Log(LogType::Error, ToString(errStr, "Invalid image."));
 			return nullptr;
 		}
-		if (data.fontDesc.fontSize < 1)
+		if (data.desc.fontSize < 1)
 		{
 			Log(LogType::Error, ToString(errStr, "Font size smaller than 1 not allowed."));
 			return nullptr;
 		}
+		if (data.glyphs.size() > MaxPrebakedGlyphs)
+		{
+			Log(LogType::Error, ToString(errStr, "Too many glyphs (", data.glyphs.size(), "). The maximum is ", MaxPrebakedGlyphs, "."));
+			return nullptr;
+		}
 
 		FontSettings fontSettings = FontSettings();
-		fontSettings.fontType = data.fontType;
+		fontSettings.type = data.type;
 
 		std::unique_ptr<Font> out = std::unique_ptr<Font>(new Font(context, fontSettings, true));
 
-		out->fontDesc = data.fontDesc;
+		out->desc = data.desc;
 		out->fileDataReadOnly = nullptr;
 
-		out->SetPrebakedGlyphs(data.glyphs, data.errorGlyph);
-		out->SetKerning(data.kerns);
+		out->InitPrebaked(data.glyphs, data.kerns, data.errorGlyph);
 
 		out->page.texture = Texture::LoadFromMemory(context, cmd, *data.image, false);
 		if (!out->page.texture)
@@ -973,7 +992,7 @@ namespace ig
 			Log(LogType::Error, "Failed to load font '" + fontName + "'. Reason: Font size smaller than 1 not allowed.");
 			return nullptr;
 		}
-		if (fontSettings.fontType == FontType::SDF && (int16_t)fontSettings.sdfSpread < 0)
+		if (fontSettings.type == FontType::SDF && (int16_t)fontSettings.sdfSpread < 0)
 		{
 			Log(LogType::Error, "Failed to load SDF font '" + fontName + "'. Reason: sdfSpread is too large.");
 			return nullptr;
@@ -985,7 +1004,7 @@ namespace ig
 		}
 
 #ifndef IGLO_FREETYPE
-		if (fontSettings.fontType == FontType::Bitmap)
+		if (fontSettings.type == FontType::Bitmap)
 		{
 			if (fontSettings.hinting != FontHinting::None)
 			{
@@ -1001,13 +1020,11 @@ namespace ig
 #endif
 
 		std::unique_ptr<Font> out = std::unique_ptr<Font>(new Font(context, fontSettings, false));
-		out->fontDesc.fontName = fontName;
-		out->fontDesc.fontSize = fontSize;
+		out->desc.fontName = fontName;
+		out->desc.fontSize = fontSize;
 		out->fileDataReadOnly = fileData;
 
-		std::vector<uint32_t> tableCodepoints;
-		PackedBoolArray exists; // One bool value for each element in 'tableCodepoints', indicating whether it exists.
-		uint32_t totalNumValidCodepoints = 0;
+		uint32_t numGlyphs = 0;
 		std::vector<Kerning> kerning;
 
 #ifdef IGLO_FREETYPE
@@ -1018,7 +1035,7 @@ namespace ig
 			return nullptr;
 		}
 
-		if (fontSettings.fontType == FontType::SDF)
+		if (fontSettings.type == FontType::SDF)
 		{
 			FT_Int spread = (FT_Int)fontSettings.sdfSpread;
 			if (spread < 2 || spread > 32)
@@ -1097,27 +1114,15 @@ namespace ig
 			descender = hhea->Descender;
 			lineGap = hhea->Line_Gap;
 		}
-		out->fontDesc.lineHeight = int(ceilf(float(ascender - descender) * scale));
-		out->fontDesc.baseline = int(ceilf(float(ascender) * scale));
-		out->fontDesc.lineGap = int(ceilf(float(lineGap) * scale));
+		out->desc.lineHeight = int(ceilf(float(ascender - descender) * scale));
+		out->desc.baseline = int(ceilf(float(ascender) * scale));
+		out->desc.lineGap = int(ceilf(float(lineGap) * scale));
 
-		// Map glyph indices to codepoints
-		tableCodepoints.resize((size_t)face->num_glyphs + 1);
-		exists.Resize(tableCodepoints.size());
+		numGlyphs = (uint32_t)std::clamp<FT_Long>(face->num_glyphs, 0, MaxGlyphCount);
+		if (face->num_glyphs > MaxGlyphCount)
 		{
-			FT_UInt index = 0;
-			FT_ULong codepoint = FT_Get_First_Char(face, &index);
-			while (index != 0)
-			{
-				// Multiple codepoints can point to the same glyph indices.
-				if (codepoint <= 0x10FFFF && index < tableCodepoints.size())
-				{
-					totalNumValidCodepoints++;
-					tableCodepoints[index] = (uint32_t)codepoint;
-					exists.SetTrue(index);
-				}
-				codepoint = FT_Get_Next_Char(face, codepoint, &index);
-			}
+			Log(LogType::Warning, ToString("Font '", fontName, "' has ", face->num_glyphs,
+				" glyphs. Only the first ", numGlyphs, " glyphs can be used."));
 		}
 
 		// Read kerning pairs from the 'kern' table.
@@ -1143,13 +1148,13 @@ namespace ig
 							const uint16_t glyph1 = readU16(18 + i * 6);
 							const uint16_t glyph2 = readU16(20 + i * 6);
 							const int16_t advance = (int16_t)readU16(22 + i * 6);
-							if (glyph1 >= tableCodepoints.size() || glyph2 >= tableCodepoints.size())
+							if (glyph1 >= numGlyphs || glyph2 >= numGlyphs)
 							{
 								Log(LogType::Error, "Failed to load font '" + fontName + "'. Reason: Font contains invalid kerning pairs.");
 								return nullptr;
 							}
-							kerning[i].codepointPrev = tableCodepoints[glyph1];
-							kerning[i].codepointNext = tableCodepoints[glyph2];
+							kerning[i].glyphIndexPrev = glyph1;
+							kerning[i].glyphIndexNext = glyph2;
 							kerning[i].x = int16_t(roundf(float(advance) * scale));
 						}
 					}
@@ -1176,161 +1181,152 @@ namespace ig
 		// Get font metrics
 		out->stbttScale = stbtt_ScaleForMappingEmToPixels(&out->stbttFontInfo, fontSize);
 		const float scaleForPixelHeight = stbtt_ScaleForPixelHeight(&out->stbttFontInfo, fontSize);
-		out->fontDesc.lineHeight = int(ceilf(fontSize * (out->stbttScale / scaleForPixelHeight)));
+		out->desc.lineHeight = int(ceilf(fontSize * (out->stbttScale / scaleForPixelHeight)));
 		int descender = 0;
-		stbtt_GetFontVMetrics(&out->stbttFontInfo, &out->fontDesc.baseline, &descender, &out->fontDesc.lineGap);
-		out->fontDesc.baseline = int(ceilf(((float)out->fontDesc.baseline) * out->stbttScale));
-		out->fontDesc.lineGap = int(ceilf(((float)out->fontDesc.lineGap) * out->stbttScale));
+		stbtt_GetFontVMetrics(&out->stbttFontInfo, &out->desc.baseline, &descender, &out->desc.lineGap);
+		out->desc.baseline = int(ceilf(((float)out->desc.baseline) * out->stbttScale));
+		out->desc.lineGap = int(ceilf(((float)out->desc.lineGap) * out->stbttScale));
 
-		// Extract glyph and kerning info so we can map them to codepoints
+		numGlyphs = (uint32_t)std::max(out->stbttFontInfo.numGlyphs, 0);
+
+		// Read kerning pairs from the 'kern' table
 		const int kernTableLength = stbtt_GetKerningTableLength(&out->stbttFontInfo);
-		std::vector<stbtt_kerningentry> kernEntry;
-		kernEntry.resize(kernTableLength);
+		std::vector<stbtt_kerningentry> kernEntry(kernTableLength);
 		stbtt_GetKerningTable(&out->stbttFontInfo, kernEntry.data(), kernTableLength);
-		tableCodepoints.resize((size_t)out->stbttFontInfo.numGlyphs + 1);
-		exists.Resize(tableCodepoints.size());
-		for (uint32_t codepoint = 0; codepoint <= 0x10FFFF; codepoint++)
-		{
-			const int index = stbtt_FindGlyphIndex(&out->stbttFontInfo, codepoint);
-			if (index != 0)
-			{
-				// Multiple codepoints can point to the same glyph indices.
-				totalNumValidCodepoints++;
-				tableCodepoints[index] = codepoint;
-				exists.SetTrue(index);
-			}
-		}
 		kerning.resize(kernEntry.size());
 		for (size_t i = 0; i < kernEntry.size(); i++)
 		{
-			if ((uint32_t)kernEntry[i].glyph1 >= tableCodepoints.size() ||
-				(uint32_t)kernEntry[i].glyph2 >= tableCodepoints.size())
+			if (kernEntry[i].glyph1 < 0 || (uint32_t)kernEntry[i].glyph1 >= numGlyphs ||
+				kernEntry[i].glyph2 < 0 || (uint32_t)kernEntry[i].glyph2 >= numGlyphs)
 			{
 				Log(LogType::Error, "Failed to load font '" + fontName + "'. Reason: Font contains invalid kerning pairs.");
 				return nullptr;
 			}
-			kerning[i].codepointPrev = tableCodepoints[kernEntry[i].glyph1];
-			kerning[i].codepointNext = tableCodepoints[kernEntry[i].glyph2];
+			kerning[i].glyphIndexPrev = (uint16_t)kernEntry[i].glyph1;
+			kerning[i].glyphIndexNext = (uint16_t)kernEntry[i].glyph2;
 			kerning[i].x = int16_t(roundf(float(kernEntry[i].advance) * out->stbttScale));
 		}
 #endif
 
-		out->SetDynamicGlyphs(tableCodepoints, exists, totalNumValidCodepoints);
-		out->SetKerning(kerning);
+		out->InitDynamicGlyphs(numGlyphs);
+		out->InitKerning(kerning);
 
 		return out;
 	}
 
-	uint32_t Font::GetGlyphIndex(uint32_t codepoint) const
+	uint16_t Font::QueryFontGlyphIndex(uint32_t codepoint) const
 	{
 #ifdef IGLO_FREETYPE
-		return ftFace ? (uint32_t)FT_Get_Char_Index(ftFace, codepoint) : 0;
+		const uint32_t index = ftFace ? (uint32_t)FT_Get_Char_Index(ftFace, codepoint) : 0;
 #else
-		return (uint32_t)stbtt_FindGlyphIndex(&stbttFontInfo, (int)codepoint);
+		const uint32_t index = (codepoint <= MaxValidCodepoint) ? (uint32_t)stbtt_FindGlyphIndex(&stbttFontInfo, (int)codepoint) : 0;
 #endif
+		if (index >= atlas.glyphCount) return 0;
+		return (uint16_t)index;
 	}
 
-	void Font::SetKerning(const std::vector<Kerning>& kernList)
+	void Font::InitDynamicGlyphs(uint32_t numGlyphs)
 	{
-		atlas.highestLeftKernCodepoint = 0;
-		for (const Kerning& k : kernList)
-		{
-			// If there is no kerning
-			if (k.x == 0) continue;
+		atlas.glyphCount = numGlyphs;
+		atlas.rasterizedGlyphCount = 0;
 
-			if (k.codepointPrev > atlas.highestLeftKernCodepoint)
-			{
-				// Highest left kern codepoint found so far
-				atlas.highestLeftKernCodepoint = k.codepointPrev;
-			}
-			if (k.codepointPrev < atlas.glyphTableSize)
-			{
-				// Glyph on left side of this kerning should be marked as belonging to atleast one kerning pair (on left side).
-				atlas.glyphTable[k.codepointPrev].flags |= (uint16_t)Atlas::GlyphFlags::HasLeftKern;
-			}
-		}
-		atlas.kerning.Build(kernList);
+		atlas.codepointTable.fill(Glyph());
+		atlas.codepointMap.clear();
+
+		atlas.errorGlyph = RasterizeGlyph(0);
 	}
 
-	void Font::SetDynamicGlyphs(const std::vector<uint32_t>& codepoints, const PackedBoolArray& exists, uint32_t totalNumValidCodepoints)
+	void Font::InitPrebaked(const std::vector<CodepointGlyph>& glyphs, const std::vector<CodepointKerning>& kerns, Glyph errorGlyph)
 	{
-		// Some fonts have multiple codepoints bound to the same glyph index,
-		// which results in a higher number of valid codepoints than there are glyphs in the font.
-		// glyphCount is set to number of valid codepoints instead of number of valid glyphs,
-		// because loadedGlyphCount increases by 1 for every new codepoint loaded.
-		// This way, loadedGlyphCount will never go above glyphCount.
-		atlas.glyphCount = totalNumValidCodepoints;
-		atlas.highestGlyphCodepoint = 0;
-		atlas.loadedGlyphCount = 0;
-		atlas.glyphMap.clear();
+		// Each CodepointGlyph gets its own glyph index (1, 2, 3...). The error glyph is glyph index 0.
+		atlas.glyphCount = (uint32_t)glyphs.size() + 1;
+		atlas.rasterizedGlyphCount = atlas.glyphCount;
 
-		atlas.glyphTable.clear();
-		atlas.glyphTable.shrink_to_fit();
-		atlas.glyphTable.resize(atlas.glyphTableSize);
+		atlas.errorGlyph = errorGlyph;
+		atlas.errorGlyph.glyphIndex = 0;
 
-		for (size_t i = 0; i < codepoints.size(); i++)
+		atlas.codepointTable.fill(atlas.errorGlyph);
+		atlas.codepointMap.clear();
+
+		// Store the glyphs
+		uint32_t numDuplicates = 0;
+		for (size_t i = 0; i < glyphs.size(); i++)
 		{
-			// If this codepoint does not belong to any glyph
-			if (!exists.GetAt(i)) continue;
+			const uint32_t codepoint = glyphs[i].codepoint;
+			Glyph glyph = glyphs[i].glyph;
+			glyph.glyphIndex = (uint16_t)(i + 1);
 
-			if (codepoints[i] > atlas.highestGlyphCodepoint)
+			// Overwrite last codepoint if exists
+			if (codepoint < atlas.codepointTable.size())
 			{
-				// Highest codepoint found so far
-				atlas.highestGlyphCodepoint = codepoints[i];
-			}
-		}
-
-		// Codepoint 0xffff is guaranteed to result in an error glyph.
-		atlas.errorGlyph = LoadGlyph(0xffff);
-	}
-
-	void Font::SetPrebakedGlyphs(const std::vector<CodepointGlyph>& codepointGlyphs, Glyph errorGlyph)
-	{
-		atlas.glyphCount = 0;
-		atlas.highestGlyphCodepoint = 0;
-		atlas.loadedGlyphCount = 0;
-		atlas.glyphMap.clear();
-
-		atlas.glyphTable.clear();
-		atlas.glyphTable.shrink_to_fit();
-		atlas.glyphTable.resize(atlas.glyphTableSize);
-
-		for (size_t i = 0; i < codepointGlyphs.size(); i++)
-		{
-			atlas.glyphCount++; // Glyph counted
-			atlas.loadedGlyphCount++; // Loaded glyph counted
-			if (codepointGlyphs[i].codepoint > atlas.highestGlyphCodepoint)
-			{
-				// Set the highest codepoint found so far
-				atlas.highestGlyphCodepoint = codepointGlyphs[i].codepoint;
-			}
-			if (codepointGlyphs[i].codepoint < atlas.glyphTableSize)
-			{
-				// Put this glyph in the glyph table, with a flag saying it's loaded.
-				atlas.glyphTable[codepointGlyphs[i].codepoint] = codepointGlyphs[i].glyph;
-				atlas.glyphTable[codepointGlyphs[i].codepoint].flags = (uint16_t)Atlas::GlyphFlags::IsLoaded;
+				if (atlas.codepointTable[codepoint].glyphIndex != 0) numDuplicates++;
+				atlas.codepointTable[codepoint] = glyph;
 			}
 			else
 			{
-				// Put this glyph in the glyph map, flag not needed
-				atlas.glyphMap[codepointGlyphs[i].codepoint] = codepointGlyphs[i].glyph;
+				auto [pos, inserted] = atlas.codepointMap.insert_or_assign(codepoint, glyph);
+				if (!inserted) numDuplicates++;
 			}
 		}
+		if (numDuplicates > 0)
+		{
+			Log(LogType::Warning, ToString("Prebaked font '", desc.fontName, "' contains ", numDuplicates,
+				" duplicate codepoint(s). The last glyph of each duplicate codepoint is used."));
+		}
 
-		atlas.errorGlyph = errorGlyph;
+		// Convert codepoint kerning to glyph index kerning
+		std::vector<Kerning> kerning;
+		kerning.reserve(kerns.size());
+		uint32_t numDroppedKerns = 0;
+		for (const CodepointKerning& k : kerns)
+		{
+			const uint16_t prev = GetGlyph(k.codepointPrev).glyphIndex;
+			const uint16_t next = GetGlyph(k.codepointNext).glyphIndex;
+			// 'glyphIndex == 0' means the given codepoint does not belong to any glyph
+			if (prev == 0 || next == 0)
+			{
+				numDroppedKerns++;
+				continue;
+			}
+			kerning.push_back({ .glyphIndexPrev = prev, .glyphIndexNext = next, .x = k.x });
+		}
+		if (numDroppedKerns > 0)
+		{
+			Log(LogType::Warning, ToString("Prebaked font '", desc.fontName, "' contains ", numDroppedKerns,
+				" kerning pair(s) with codepoints that have no glyph. These kerning pairs are ignored."));
+		}
+		InitKerning(kerning);
+	}
+
+	void Font::InitKerning(const std::vector<Kerning>& kernList)
+	{
+		uint32_t highestLeftKernGlyphIndex = 0;
+		bool anyKerning = false;
+		for (const Kerning& k : kernList)
+		{
+			if (!KerningTable::IsUsableKerning(k)) continue;
+			anyKerning = true;
+			if (k.glyphIndexPrev > highestLeftKernGlyphIndex) highestLeftKernGlyphIndex = k.glyphIndexPrev;
+		}
+
+		atlas.hasLeftKern.Clear();
+		if (anyKerning) atlas.hasLeftKern.Resize((uint64_t)highestLeftKernGlyphIndex + 1, false);
+		for (const Kerning& k : kernList)
+		{
+			if (!KerningTable::IsUsableKerning(k)) continue;
+			atlas.hasLeftKern.SetTrue(k.glyphIndexPrev);
+		}
+
+		atlas.kerning.Build(kernList);
 	}
 
 	void Font::ClearTexture()
 	{
 		if (IsPrebaked()) return;
 
-		atlas.loadedGlyphCount = 0;
-		for (size_t i = 0; i < atlas.glyphTableSize; i++)
-		{
-			// Unset the IsLoaded flag for all glyphs in the table
-			atlas.glyphTable[i].flags &= ~(uint16_t)Atlas::GlyphFlags::IsLoaded;
-		}
-		atlas.glyphMap.clear();
+		atlas.codepointTable.fill(Glyph());
+		atlas.codepointMap.clear();
+		atlas.rasterizedGlyphCount = 0;
 
 		context.DelayedDestroyTexture(std::move(page.texture));
 		page.rects.clear();
@@ -1341,60 +1337,62 @@ namespace ig
 		page.height = 0;
 		page.dirty = false;
 
-		// Codepoint 0xffff is guaranteed to result in an error glyph.
-		atlas.errorGlyph = LoadGlyph(0xffff);
+		atlas.errorGlyph = RasterizeGlyph(0);
 	}
 
 	void Font::PreloadGlyphs(uint32_t first, uint32_t last)
 	{
 		if (IsPrebaked()) return;
+		if (first > last) return;
 
-		// As an optimization, cap to highest valid codepoint.
-		uint32_t cappedLast = last;
-		if (cappedLast > atlas.highestGlyphCodepoint) cappedLast = atlas.highestGlyphCodepoint;
-
-		for (uint64_t i = first; i <= (uint64_t)cappedLast; i++)
+#ifdef IGLO_FREETYPE
+		// Only visit the codepoints this font maps.
+		FT_UInt index = 0;
+		FT_ULong codepoint = (first == 0) ? FT_Get_First_Char(ftFace, &index) : FT_Get_Next_Char(ftFace, first - 1, &index);
+		while (index != 0 && codepoint <= last)
 		{
-			GetGlyph((uint32_t)i);
+			GetGlyph((uint32_t)codepoint);
+			codepoint = FT_Get_Next_Char(ftFace, codepoint, &index);
 		}
+#else
+		const uint32_t cappedLast = std::min(last, MaxValidCodepoint);
+		for (uint32_t i = first; i <= cappedLast; i++)
+		{
+			GetGlyph(i);
+		}
+#endif
 	}
 
-	void Font::PreloadGlyphs(const std::string& utf8string)
+	void Font::PreloadGlyphs(const std::string& str)
+	{
+		PreloadGlyphs(str, 0, str.size());
+	}
+
+	void Font::PreloadGlyphs(const std::string& str, size_t startIndex, size_t endIndex)
 	{
 		if (IsPrebaked()) return;
-		std::u32string codepoints = utf8_to_utf32(utf8string);
-		for (size_t i = 0; i < codepoints.size(); i++)
+		if (endIndex > str.size()) endIndex = str.size();
+		uint32_t codepoint;
+		size_t i = startIndex;
+		while (utf8_next_codepoint(str, i, endIndex, &i, &codepoint))
 		{
-			GetGlyph(codepoints[i]);
+			GetGlyph(codepoint);
 		}
 	}
 
 	bool Font::HasGlyph(uint32_t codepoint) const
 	{
-		if (codepoint < atlas.glyphTableSize)
+		if (codepoint < atlas.codepointTable.size())
 		{
-			uint16_t flag = (uint16_t)Atlas::GlyphFlags::IsLoaded;
-			if ((atlas.glyphTable[codepoint].flags & flag) == flag)
-			{
-				return true; // Glyph is loaded according to its flag value
-			}
+			if (atlas.codepointTable[codepoint].glyphIndex != 0) return true;
 		}
 		else
 		{
-			auto pos = atlas.glyphMap.find(codepoint);
-			if (pos != atlas.glyphMap.end())
-			{
-				return true; // Glyph is loaded because it exists in the glyph map
-			}
+			if (atlas.codepointMap.find(codepoint) != atlas.codepointMap.end()) return true;
 		}
 
-		// Glyph isn't loaded. If prebaked, can't load new glyphs, so glyph can't exist.
 		if (isPrebaked) return false;
-
-		// If glyph exists in font file
-		if (GetGlyphIndex(codepoint) != 0) return true;
-
-		return false;
+		return QueryFontGlyphIndex(codepoint) != 0;
 	}
 
 	void Font::ApplyChangesToTexture(CommandList& cmd)
@@ -1449,57 +1447,36 @@ namespace ig
 		cmd.FlushBarriers();
 	}
 
-	int16_t Font::GetKerning(uint32_t prev, uint32_t next) const
+	int16_t Font::GetKerning(uint16_t prevGlyphIndex, uint16_t nextGlyphIndex) const
 	{
-		// If codepoint is low enough, we can optimize by checking if a kerning pair exists before using the map
-		if (prev < atlas.glyphTableSize)
-		{
-			const uint16_t flag = (uint16_t)Atlas::GlyphFlags::HasLeftKern;
-			const bool hasKern = ((atlas.glyphTable[prev].flags & flag) == flag);
-			if (!hasKern) return 0;
-		}
+		if (prevGlyphIndex >= atlas.hasLeftKern.GetSize()) return 0;
+		if (!atlas.hasLeftKern.GetAt(prevGlyphIndex)) return 0;
 
-		// If codepoint is too high
-		if (prev > atlas.highestLeftKernCodepoint) return 0;
-
-		return atlas.kerning.Find(prev, next);
+		return atlas.kerning.Find(prevGlyphIndex, nextGlyphIndex);
 	}
 
-	Glyph Font::GetGlyph(uint32_t codepoint, bool* out_isErrorGlyph)
+	Glyph Font::GetGlyph(uint32_t codepoint)
 	{
-		// If codepoint is too high
-		if (codepoint > atlas.highestGlyphCodepoint)
+		// If codepoint is low enough, use the fast codepoint table
+		if (codepoint < atlas.codepointTable.size())
 		{
-			if (out_isErrorGlyph) *out_isErrorGlyph = true;
-			return atlas.errorGlyph;
+			const Glyph& glyph = atlas.codepointTable[codepoint];
+			if (glyph.glyphIndex != 0) return glyph; // Glyph is already loaded
 		}
+		return GetGlyphSlowPath(codepoint);
+	}
 
-		// If codepoint is low enough, use the fast glyph table
-		if (codepoint < atlas.glyphTableSize)
+	Glyph Font::GetGlyphSlowPath(uint32_t codepoint)
+	{
+		if (codepoint >= atlas.codepointTable.size())
 		{
-			// If this glyph is loaded
-			uint16_t flag = (uint16_t)Atlas::GlyphFlags::IsLoaded;
-			if ((atlas.glyphTable[codepoint].flags & flag) == flag)
-			{
-				if (out_isErrorGlyph) *out_isErrorGlyph = false;
-				return atlas.glyphTable[codepoint];
-			}
-		}
-		else
-		{
-			// Use the glyph map
-			auto pos = atlas.glyphMap.find(codepoint);
-			if (pos != atlas.glyphMap.end())
-			{
-				if (out_isErrorGlyph) *out_isErrorGlyph = false;
-				return pos->second;
-			}
+			auto pos = atlas.codepointMap.find(codepoint);
+			if (pos != atlas.codepointMap.end()) return pos->second;
 		}
 
 		if (isPrebaked)
 		{
 			// If font is prebaked, can't load new glyphs, so return error glyph
-			if (out_isErrorGlyph) *out_isErrorGlyph = true;
 			return atlas.errorGlyph;
 		}
 		else
@@ -1512,54 +1489,42 @@ namespace ig
 				Fatal("Font doesn't have a font file to read from. This should be impossible.");
 			}
 
-			// If font does not contain glyph
-			if (GetGlyphIndex(codepoint) == 0)
-			{
-				if (out_isErrorGlyph) *out_isErrorGlyph = true;
-				return atlas.errorGlyph;
-			}
+			const uint16_t glyphIndex = QueryFontGlyphIndex(codepoint);
+			if (glyphIndex == 0) return atlas.errorGlyph; // Don't store missing codepoints
 
-			Glyph out = LoadGlyph(codepoint);
-			atlas.loadedGlyphCount++;
-
-			if (codepoint < atlas.glyphTableSize)
+			const Glyph glyph = RasterizeGlyph(glyphIndex);
+			if (codepoint < atlas.codepointTable.size())
 			{
-				// The glyph in the glyph table may contain info in its flag about whether it has kerning or not.
-				// Make sure this flag does not get overwritten.
-				uint16_t oldFlag = atlas.glyphTable[codepoint].flags;
-				atlas.glyphTable[codepoint] = out;
-				atlas.glyphTable[codepoint].flags = oldFlag;
-				// Mark this glyph as being loaded
-				atlas.glyphTable[codepoint].flags |= (uint16_t)Atlas::GlyphFlags::IsLoaded;
+				atlas.codepointTable[codepoint] = glyph;
 			}
 			else
 			{
-				atlas.glyphMap[codepoint] = out;
+				atlas.codepointMap[codepoint] = glyph;
 			}
-			if (out_isErrorGlyph) *out_isErrorGlyph = false;
-			return out;
+			return glyph;
 		}
 	}
 
-	Glyph Font::LoadGlyph(uint32_t codepoint)
+	Glyph Font::RasterizeGlyph(uint16_t glyphIndex)
 	{
-		Glyph out; // Must always return advanceX even if rasterization fails
 		if (isPrebaked) return Glyph();
+		atlas.rasterizedGlyphCount++;
 
-		const uint32_t glyphIndex = GetGlyphIndex(codepoint);
+		Glyph out; // Must always return advanceX and glyphIndex even if rasterization fails
+		out.glyphIndex = glyphIndex;
 
 #ifdef IGLO_FREETYPE
 		FT_Int32 loadFlags = FT_LOAD_NO_BITMAP;
 		FT_Render_Mode renderMode = FT_RENDER_MODE_NORMAL;
-		if (fontSettings.fontType == FontType::SDF)
+		if (settings.type == FontType::SDF)
 		{
 			loadFlags |= FT_LOAD_NO_HINTING;
 			renderMode = FT_RENDER_MODE_SDF;
 		}
-		else if (fontSettings.fontType == FontType::Bitmap)
+		else if (settings.type == FontType::Bitmap)
 		{
-			const bool aa = fontSettings.antialiasing;
-			FontHinting hinting = fontSettings.hinting;
+			const bool aa = settings.antialiasing;
+			FontHinting hinting = settings.hinting;
 
 			if (hinting == FontHinting::Native_v35 ||
 				hinting == FontHinting::Native_v40)
@@ -1615,10 +1580,10 @@ namespace ig
 		const FT_GlyphSlot slot = ftFace->glyph;
 		out.advanceX = int16_t((slot->advance.x + 32) >> 6);
 
-		if (fontSettings.fontType == FontType::SDF)
+		if (settings.type == FontType::SDF)
 		{
 			// Use FreeType's bsdf renderer instead of its sdf renderer.
-			// This requires that we render the glyph normally first.
+			// This requires that we render the glyph normally (as a bitmap) first.
 			// The bsdf renderer is faster and produces fewer artifacts than the sdf renderer.
 			if (FT_Render_Glyph(slot, FT_RENDER_MODE_NORMAL) != 0) return out;
 		}
@@ -1633,7 +1598,7 @@ namespace ig
 		if (ftBitmap.pixel_mode == FT_PIXEL_MODE_GRAY && ftBitmap.pitch == (int)ftBitmap.width)
 		{
 			// 1 byte per pixel
-			return BuildGlyph(ftBitmap.buffer, width, height, offsetX, offsetY, out.advanceX);
+			return AddGlyphToAtlas(ftBitmap.buffer, width, height, offsetX, offsetY, out.advanceX, glyphIndex);
 		}
 		else if (ftBitmap.pixel_mode == FT_PIXEL_MODE_MONO && ftBitmap.pitch >= 0)
 		{
@@ -1648,29 +1613,29 @@ namespace ig
 					dst[x] = (src[x >> 3] & (0x80 >> (x & 7))) ? 255 : 0;
 				}
 			}
-			return BuildGlyph(bitmap.data(), width, height, offsetX, offsetY, out.advanceX);
+			return AddGlyphToAtlas(bitmap.data(), width, height, offsetX, offsetY, out.advanceX, glyphIndex);
 		}
 #else
 		int rawAdvX = 0;
 		stbtt_GetGlyphHMetrics(&stbttFontInfo, (int)glyphIndex, &rawAdvX, 0);
 		out.advanceX = (int16_t)roundf((float)rawAdvX * stbttScale);
 
-		if (fontSettings.fontType == FontType::SDF) // Signed distance field
+		if (settings.type == FontType::SDF) // Signed distance field
 		{
 			const unsigned char onEdgeValue = 128;
-			const float pixelDistScale = float(onEdgeValue) / float(fontSettings.sdfSpread);
-			const int padding = fontSettings.sdfSpread;
+			const float pixelDistScale = float(onEdgeValue) / float(settings.sdfSpread);
+			const int padding = settings.sdfSpread;
 
 			// Rasterize and get glyph metrics
 			int gw = 0, gh = 0, gofx = 0, gofy = 0;
 			unsigned char* bitmap = stbtt_GetGlyphSDF(&stbttFontInfo, stbttScale, (int)glyphIndex, padding, onEdgeValue, pixelDistScale,
 				&gw, &gh, &gofx, &gofy);
 
-			out = BuildGlyph(bitmap, (uint16_t)gw, (uint16_t)gh, (int16_t)gofx, (int16_t)gofy, out.advanceX);
+			out = AddGlyphToAtlas(bitmap, (uint16_t)gw, (uint16_t)gh, (int16_t)gofx, (int16_t)gofy, out.advanceX, glyphIndex);
 			stbtt_FreeSDF(bitmap, nullptr);
 			return out;
 		}
-		else if (fontSettings.fontType == FontType::Bitmap)
+		else if (settings.type == FontType::Bitmap)
 		{
 			// Get glyph metrics
 			int x1 = 0, y1 = 0, x2 = 0, y2 = 0;
@@ -1688,51 +1653,53 @@ namespace ig
 			stbtt_MakeGlyphBitmapSubpixel(&stbttFontInfo, bitmap.data(), width, height, stride,
 				stbttScale, stbttScale, shiftX, shiftY, (int)glyphIndex);
 
-			return BuildGlyph(bitmap.data(), width, height, (int16_t)x1, (int16_t)y1, out.advanceX);
+			return AddGlyphToAtlas(bitmap.data(), width, height, (int16_t)x1, (int16_t)y1, out.advanceX, glyphIndex);
 		}
 #endif
 
 		return out;
 	}
 
-	Glyph Font::BuildGlyph(const byte* bitmap, uint16_t width, uint16_t height, int16_t offsetX, int16_t offsetY, int16_t advanceX)
+	Glyph Font::AddGlyphToAtlas(const byte* bitmap, uint16_t width, uint16_t height, int16_t offsetX, int16_t offsetY,
+		int16_t advanceX, uint16_t glyphIndex)
 	{
 		Glyph out;
 		out.advanceX = advanceX;
+		out.glyphIndex = glyphIndex;
 
 		if (!bitmap || width == 0 || height == 0) return out;
 
 		// Allocate room (padded size)
-		const uint16_t paddedWidth = width + (fontSettings.glyphPadding * 2);
-		const uint16_t paddedHeight = height + (fontSettings.glyphPadding * 2);
-		const std::optional<IntPoint> texPos = AllocateRoomForGlyph(paddedWidth, paddedHeight);
+		const uint16_t paddedWidth = width + (settings.glyphPadding * 2);
+		const uint16_t paddedHeight = height + (settings.glyphPadding * 2);
+		const std::optional<IntPoint> texPos = AllocateAtlasSpace(paddedWidth, paddedHeight);
 
 		// No room found
 		if (!texPos) return out;
 
 		// Place glyph on texture (actual bitmap size)
-		PlaceGlyph(bitmap, width, height,
-			(uint16_t)texPos->x + fontSettings.glyphPadding,
-			(uint16_t)texPos->y + fontSettings.glyphPadding);
+		CopyBitmapToAtlas(bitmap, width, height,
+			(uint16_t)texPos->x + settings.glyphPadding,
+			(uint16_t)texPos->y + settings.glyphPadding);
 
 		// Build glyph (padded size)
-		out.glyphOffsetX = offsetX - fontSettings.glyphPadding;
-		out.glyphOffsetY = (offsetY - fontSettings.glyphPadding) + fontDesc.baseline;
+		out.offsetX = offsetX - settings.glyphPadding;
+		out.offsetY = (offsetY - settings.glyphPadding) + desc.baseline;
 		out.texturePosX = (uint16_t)texPos->x;
 		out.texturePosY = (uint16_t)texPos->y;
-		out.glyphWidth = paddedWidth;
-		out.glyphHeight = paddedHeight;
+		out.width = paddedWidth;
+		out.height = paddedHeight;
 		return out;
 	}
 
-	std::optional<IntPoint> Font::AllocateRoomForGlyph(uint16_t width, uint16_t height)
+	std::optional<IntPoint> Font::AllocateAtlasSpace(uint16_t width, uint16_t height)
 	{
 		if (width == 0 || height == 0) return std::nullopt;
 
 		// If pixels are empty, set to starting size
 		if (page.width == 0 || page.height == 0)
 		{
-			uint32_t startSize = fontSettings.startingTextureSize;
+			uint32_t startSize = settings.startingTextureSize;
 			if (startSize == 0) startSize = 1;
 			page.width = startSize;
 			page.height = startSize;
@@ -1797,7 +1764,7 @@ namespace ig
 					static uint32_t logCounter = 0;
 					LogLimited(logCounter, LogType::Warning, ToString
 					(
-						"Failed to load new glyph for font '", fontDesc.fontName,
+						"Failed to load new glyph for font '", desc.fontName,
 						"'. Reason: Reached max dynamic font texture size (", cappedMaxTextureSize, ")."
 					));
 					return std::nullopt;
@@ -1838,7 +1805,7 @@ namespace ig
 		return IntPoint(extended.right - width, extended.top);
 	}
 
-	void Font::PlaceGlyph(const byte* bitmap, uint16_t width, uint16_t height, uint16_t texPosX, uint16_t texPosY)
+	void Font::CopyBitmapToAtlas(const byte* bitmap, uint16_t width, uint16_t height, uint16_t texPosX, uint16_t texPosY)
 	{
 		if (isPrebaked) return;
 		if (!bitmap || width == 0 || height == 0) return;

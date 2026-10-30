@@ -122,42 +122,11 @@ namespace ig
 			this->Clear();
 			return *this;
 		}
-		uint64_t newElementCount = GetElementCount(a.booleanCount, ElementSize);
+		uint64_t newElementCount = GetElementCount(a.booleanCount);
 		this->booleanCount = a.booleanCount;
 		this->data = std::make_unique<uint8_t[]>(newElementCount);
 		memcpy(this->data.get(), a.data.get(), newElementCount);
 		return *this;
-	}
-
-	bool PackedBoolArray::GetAt(uint64_t index) const
-	{
-		assert(index < booleanCount && "out of bounds");
-		const uint64_t whatElement = index / ElementSize;
-		const uint32_t whatBit = index % ElementSize;
-		const bool isTrue = (data[whatElement] & (1 << whatBit));
-		return isTrue;
-	}
-
-	void PackedBoolArray::Set(uint64_t index, bool value)
-	{
-		if (value == true) SetTrue(index);
-		else SetFalse(index);
-	}
-
-	void PackedBoolArray::SetTrue(uint64_t index)
-	{
-		assert(index < booleanCount && "out of bounds");
-		const uint64_t whatElement = index / ElementSize;
-		const uint32_t whatBit = index % ElementSize;
-		data[whatElement] |= (1 << whatBit);
-	}
-
-	void PackedBoolArray::SetFalse(uint64_t index)
-	{
-		assert(index < booleanCount && "out of bounds");
-		const uint64_t whatElement = index / ElementSize;
-		const uint32_t whatBit = index % ElementSize;
-		data[whatElement] &= ~(1 << whatBit);
 	}
 
 	void PackedBoolArray::Clear()
@@ -181,15 +150,15 @@ namespace ig
 		if (booleanCount == 0)
 		{
 			booleanCount = size;
-			data = std::make_unique<uint8_t[]>(GetElementCount(size, ElementSize));
+			data = std::make_unique<uint8_t[]>(GetElementCount(size));
 			AssignValueToAll(initialValue);
 			return;
 		}
 		// If size is expanded...
 		if (size > booleanCount)
 		{
-			const uint64_t elemCountOld = GetElementCount(booleanCount, ElementSize);
-			const uint64_t elemCountNew = GetElementCount(size, ElementSize);
+			const uint64_t elemCountOld = GetElementCount(booleanCount);
+			const uint64_t elemCountNew = GetElementCount(size);
 
 			// If there is no need to add any more elements, just assign the new values
 			if (elemCountOld == elemCountNew)
@@ -245,8 +214,8 @@ namespace ig
 		// If size is reduced...
 		else if (size < booleanCount)
 		{
-			uint64_t elemCountOld = GetElementCount(booleanCount, ElementSize);
-			uint64_t elemCountNew = GetElementCount(size, ElementSize);
+			uint64_t elemCountOld = GetElementCount(booleanCount);
+			uint64_t elemCountNew = GetElementCount(size);
 
 			// If there is no need to remove any elements, do nothing
 			if (elemCountOld == elemCountNew)
@@ -272,15 +241,10 @@ namespace ig
 	void PackedBoolArray::AssignValueToAll(bool value)
 	{
 		if (booleanCount == 0) return;
-		uint64_t numElements = GetElementCount(booleanCount, ElementSize);
+		uint64_t numElements = GetElementCount(booleanCount);
 		uint8_t fillValue = value ? 0xff : 0;
 		std::fill(data.get(), data.get() + numElements, fillValue);
 	}
-
-	uint64_t PackedBoolArray::GetElementCount(uint64_t numBooleans, uint32_t sizeOfEachElement)
-	{
-		return (numBooleans + sizeOfEachElement - 1) / sizeOfEachElement;
-	};
 
 	void Timer::Reset()
 	{

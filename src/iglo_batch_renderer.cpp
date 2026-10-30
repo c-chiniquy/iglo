@@ -686,24 +686,22 @@ namespace ig
 		nextPrimitive = 0;
 	}
 
-	void BatchRenderer::DrawString(float x, float y, const std::string& utf8string, Font& font, Color32 color)
+	void BatchRenderer::DrawString(Vector2 position, const std::string& str, Font& font, Color32 color)
 	{
-		DrawString(x, y, utf8string, font, color, 0, utf8string.size());
+		DrawString(position.x, position.y, str, font, color, 0, str.size());
 	}
-
-	void BatchRenderer::DrawString(Vector2 position, const std::string& utf8string, Font& font, Color32 color)
+	void BatchRenderer::DrawString(float x, float y, const std::string& str, Font& font, Color32 color)
 	{
-		DrawString(position.x, position.y, utf8string, font, color, 0, utf8string.size());
+		DrawString(x, y, str, font, color, 0, str.size());
 	}
-
-	void BatchRenderer::DrawString(Vector2 position, const std::string& utf8string, Font& font, Color32 color, size_t startIndex, size_t endIndex)
+	void BatchRenderer::DrawString(Vector2 position, const std::string& str, Font& font, Color32 color, size_t startIndex, size_t endIndex)
 	{
-		DrawString(position.x, position.y, utf8string, font, color, startIndex, endIndex);
+		DrawString(position.x, position.y, str, font, color, startIndex, endIndex);
 	}
-
-	void BatchRenderer::DrawString(float x, float y, const std::string& utf8string, Font& font, Color32 color, size_t startIndex, size_t endIndex)
+	void BatchRenderer::DrawString(float x, float y, const std::string& str, Font& font, Color32 color, size_t startIndex, size_t endIndex)
 	{
-		if (utf8string.length() == 0) return;
+		if (str.empty()) return;
+		if (endIndex > str.size()) endIndex = str.size();
 
 		// Must select batch type atleast once
 		bool hasSelectedBatch = false;
@@ -711,9 +709,9 @@ namespace ig
 		float charX = x;
 		float charY = y;
 		uint32_t codepoint;
-		uint32_t prevCodepoint = 0xffffffff;
+		uint16_t prevGlyphIndex = 0; // For kerning
 		size_t i = startIndex;
-		while (utf8_next_codepoint(utf8string, i, endIndex, &i, &codepoint)) // Iterate each codepoint in the text
+		while (utf8_next_codepoint(str, i, endIndex, &i, &codepoint)) // Iterate each codepoint in the text
 		{
 			switch (codepoint)
 			{
@@ -721,19 +719,19 @@ namespace ig
 				continue;
 
 			case '\n': // Newline
-				prevCodepoint = 0xffffffff;
-				charY += float(font.GetFontDesc().lineHeight + font.GetFontDesc().lineGap);
+				prevGlyphIndex = 0; // Reset kerning
+				charY += float(font.GetDesc().lineHeight + font.GetDesc().lineGap);
 				charX = x;
 				continue;
 
 			default:
-				Glyph glyph = font.GetGlyph(codepoint);
-				charX += font.GetKerning(prevCodepoint, codepoint); // Add kerning
+				const Glyph glyph = font.GetGlyph(codepoint);
+				charX += font.GetKerning(prevGlyphIndex, glyph.glyphIndex);
 
 				if (font.TextureIsDirty())
 				{
 					// Give all glyphs in the string a chance to be rasterized.
-					font.PreloadGlyphs(utf8string);
+					font.PreloadGlyphs(str, startIndex, endIndex);
 
 					// Update the font texture.
 					cmd->SafePauseRenderPass();
@@ -749,14 +747,14 @@ namespace ig
 				if (!hasSelectedBatch)
 				{
 					hasSelectedBatch = true;
-					if (font.GetFontType() == FontType::SDF)
+					if (font.GetType() == FontType::SDF)
 					{
 						UsingBatch((BatchType)StandardBatchType::Sprites_SDF);
 						UsingRenderConstants(GetSDFEffectRenderConstant());
 					}
 					else
 					{
-						uint32_t colorChannelCount = GetFormatInfo(font.GetTexture()->GetFormat()).elementCount;
+						const uint32_t colorChannelCount = GetFormatInfo(font.GetTexture()->GetFormat()).elementCount;
 						if (colorChannelCount == 1)
 						{
 							UsingBatch((BatchType)StandardBatchType::Sprites_MonoTransparent);
@@ -769,30 +767,31 @@ namespace ig
 					UsingTexture(*font.GetTexture());
 				}
 
-				float quadX = charX + float(glyph.glyphOffsetX);
-				float quadY = charY + float(glyph.glyphOffsetY);
-				Vertex_Sprite V = { Vector2(quadX, quadY), glyph.glyphWidth, glyph.glyphHeight, glyph.texturePosX, glyph.texturePosY, color };
+				const float quadX = charX + float(glyph.offsetX);
+				const float quadY = charY + float(glyph.offsetY);
+				Vertex_Sprite V = { Vector2(quadX, quadY), glyph.width, glyph.height, glyph.texturePosX, glyph.texturePosY, color };
 				AddPrimitive(&V);
 
 				charX += float(glyph.advanceX);
-				prevCodepoint = codepoint;
+				prevGlyphIndex = glyph.glyphIndex;
 				continue;
 			}
 		}
 	}
 
-	Vector2 BatchRenderer::MeasureString(const std::string& utf8string, Font& font)
+	Vector2 BatchRenderer::MeasureString(const std::string& str, Font& font)
 	{
-		return MeasureString(utf8string, font, 0, utf8string.size());
+		return MeasureString(str, font, 0, str.size());
 	}
-	Vector2 BatchRenderer::MeasureString(const std::string& utf8string, Font& font, size_t startIndex, size_t endIndex)
+	Vector2 BatchRenderer::MeasureString(const std::string& str, Font& font, size_t startIndex, size_t endIndex)
 	{
+		if (endIndex > str.size()) endIndex = str.size();
 		float charX = 0;
-		Vector2 boundingBox = Vector2(0, (float)font.GetFontDesc().lineHeight);
+		Vector2 boundingBox = Vector2(0, (float)font.GetDesc().lineHeight);
 		uint32_t codepoint;
-		uint32_t prevCodepoint = 0xffffffff;
+		uint16_t prevGlyphIndex = 0; // For kerning
 		size_t i = startIndex;
-		while (utf8_next_codepoint(utf8string, i, endIndex, &i, &codepoint)) // Iterate each codepoint in the text
+		while (utf8_next_codepoint(str, i, endIndex, &i, &codepoint)) // Iterate each codepoint in the text
 		{
 			switch (codepoint)
 			{
@@ -800,16 +799,16 @@ namespace ig
 				continue;
 
 			case '\n': // Newline
-				prevCodepoint = 0xffffffff;
-				boundingBox.y += float(font.GetFontDesc().lineHeight + font.GetFontDesc().lineGap);
+				prevGlyphIndex = 0; // Reset kerning
+				boundingBox.y += float(font.GetDesc().lineHeight + font.GetDesc().lineGap);
 				charX = 0;
 				continue;
 
 			default:
-				Glyph glyph = font.GetGlyph(codepoint);
-				charX += font.GetKerning(prevCodepoint, codepoint); // Add kerning
+				const Glyph glyph = font.GetGlyph(codepoint);
+				charX += font.GetKerning(prevGlyphIndex, glyph.glyphIndex);
 				charX += float(glyph.advanceX);
-				prevCodepoint = codepoint;
+				prevGlyphIndex = glyph.glyphIndex;
 
 				if (charX > boundingBox.x) boundingBox.x = charX;
 				continue;
