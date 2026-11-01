@@ -1328,7 +1328,7 @@ namespace ig
 		AddPrimitive(&V);
 	}
 
-	void BatchRenderer::DrawNineSliceSprite(const Texture& texture, ig::FloatRect quad, ig::FloatRect uv, Color32 color)
+	void BatchRenderer::DrawNineSliceSprite(const Texture& texture, FloatRect quad, FloatRect uv, Color32 color)
 	{
 		/*
 				  stretched                not stretched

@@ -80,7 +80,7 @@ namespace ig
 	{
 		Color outlineColor = Colors::Black;
 		Color glowColor = Color(0.0f, 0.0f, 0.0f, 0.5f);
-		Vector2 glowOffset = ig::Vector2(1.0f, 1.0f);
+		Vector2 glowOffset = Vector2(1.0f, 1.0f);
 		float glowSize = 0.25f;
 		float outlineThickness = 0.15f;
 		float smoothing = 0.11f; // For anti alias. Larger value makes it look smoother.
@@ -233,7 +233,7 @@ namespace ig
 		// Use point sampling for textures.
 		void SetSamplerToPixelatedTextures();
 
-		// Draws a string of utf8 characters.
+		// Draws a utf8 string
 		void DrawString(Vector2 position, const std::string& str, Font& font, Color32 color);
 		void DrawString(float x, float y, const std::string& str, Font& font, Color32 color);
 		void DrawString(Vector2 position, const std::string& str, Font& font, Color32 color, size_t startIndex, size_t endIndex);
@@ -247,7 +247,7 @@ namespace ig
 		void DrawSprite(const Texture& texture, float x, float y, uint16_t width, uint16_t height, uint16_t u, uint16_t v, Color32 color = Colors::White);
 		void DrawScaledSprite(const Texture& texture, float x, float y, float width, float height, FloatRect uv, Color32 color = Colors::White);
 		void DrawTransformedSprite(const Texture& texture, const TransformedSpriteParams&);
-		void DrawNineSliceSprite(const Texture& texture, ig::FloatRect quad, ig::FloatRect uv, Color32 color = ig::Colors::White);
+		void DrawNineSliceSprite(const Texture& texture, FloatRect quad, FloatRect uv, Color32 color = Colors::White);
 
 		void DrawTriangle(float x0, float y0, float x1, float y1, float x2, float y2, Color32 color);
 		void DrawTriangle(Vector2 pos0, Vector2 pos1, Vector2 pos2, Color32 color);
