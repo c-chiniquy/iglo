@@ -7,8 +7,20 @@
 
 - Major/breaking changes:
   - `IGLOContext::QuerySystemMemoryInfo()` and `IGLOContext::QueryVideoMemoryInfo()` now return `std::optional`.
-  - Renamed `FontSettings::sdfOutwardGradientSize` to `FontSettings::sdfSpread`.
   - Renamed `ig::UploadHeap` back to `ig::TempBufferAllocator`.
+  - `ig::Font` has been refactored.
+    - `Font::GetKerning()` now takes glyph indices instead of codepoints. Pass 0 as the previous glyph index when there is no previous glyph.
+    - `ig::Kerning` now holds glyph indices instead of codepoints. `ig::CodepointKerning` holds codepoints.
+    - `ig::Glyph::flags` has been replaced with `glyphIndex` (0 = error glyph).
+    - Removed the `out_isErrorGlyph` parameter from `Font::GetGlyph()`. An error glyph has a `glyphIndex` of 0.
+    - Renames in `ig::Glyph`: `glyphWidth`, `glyphHeight`, `glyphOffsetX`, `glyphOffsetY` -> `width`, `height`, `offsetX`, `offsetY`.
+    - Renames in `ig::FontSettings`: `fontType`, `sdfOutwardGradientSize` -> `type`, `sdfSpread`.
+    - Renames in `ig::Font`: `GetFontDesc()`, `GetFontType()`, `GetLoadedGlyphCount()`, `GetTotalGlyphCount()` -> `GetDesc()`, `GetType()`, `GetRasterizedGlyphCount()`, `GetGlyphCount()`.
+    - Renames in `ig::PrebakedFontData`: `fontType`, `fontDesc` -> `type`, `desc`.
+    - `Font::GetGlyphCount()` now returns the number of glyphs in the font (glyph indices), including the error glyph.
+      (The old function `Font::GetTotalGlyphCount()` returned the number of valid codepoints in the font.)
+    - `PrebakedFontData::kerns` is now a `std::vector<CodepointKerning>`. Still stores codepoint kerning like before.
+    - Prebaked font file format is now version 2.
 - New features:
   - Added FreeType support for loading and rasterizing fonts.
     To replace stb_truetype with FreeType, uncomment `IGLO_FREETYPE` in `iglo_config.h`,
@@ -17,15 +29,22 @@
   - Added `FindSystemFont()`.
   - Added `hinting` and `antialiasing` settings to `FontSettings` struct. Both require FreeType.
   - Added `GetFontRasterizerName()` and `GetFontHintingName()`.
+  - Added `Font::PreloadGlyphs(str, startIndex, endIndex)` for preloading the glyphs of part of a string.
   - Added support for loading BC6H and BC7 .dds files.
 - Improvements:
-  - `FontSettings` is now a plain data struct.
+  - `ig::FontSettings` is now a plain data struct.
   - `ig::Font` kerning pairs are now stored as a flat hash table, reducing memory usage and resulting in faster lookup times.
+  - Improved font file loading times (the font's codepoints and/or glyphs are no longer scanned when loading).
+  - `Font::GetGlyph()` and `Font::GetKerning()` are faster.
+  - `BatchRenderer::DrawString()` now only preloads the glyphs for the part of the string being drawn, instead of the whole string.
+  - `ig::PackedBoolArray` element accessors are now inline (making them faster).
   - Shortened `SystemMemoryInfo::ToString()` and `VideoMemoryInfo::ToString()`.
   - `Texture::LoadFromFile()` and `Texture::LoadFromMemory()` no longer log a warning when `generateMips` is true and the image already contains mips.
     The existing mips are used in such cases.
 - Bug fixes:
   - Fixed a bug where dynamically loaded glyphs in `ig::Font` were slightly taller than needed, causing unnecessary overdraw when drawing text.
+  - Fixed missing kerning in `ig::Font` for codepoints that share a glyph with another codepoint.
+  - Fixed kerning pairs for glyphs without a codepoint being applied to codepoint 0.
   - `ReadFile()` no longer crashes on Linux when attempting to read a folder as if it were a file.
   - `WriteFile()` and `AppendToFile()` now return false on write failure.
 
