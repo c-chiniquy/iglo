@@ -1,6 +1,12 @@
 
 # Changelog
 
+## v0.9.1
+
+### Changes
+
+- The D3D12 backend no longer uses `std::format` to format its error messages. This reduces binary size by ~180 KB for apps that don't use `std::format` elsewhere.
+
 ## v0.9.0
 
 ### Changes
