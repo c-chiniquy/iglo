@@ -3,7 +3,7 @@
 
 #ifdef IGLO_D3D12
 
-#include <format>
+#include <charconv>
 
 namespace ig
 {
@@ -19,9 +19,17 @@ namespace ig
 		return ToString(major, "_", minor);
 	}
 
+	// Uses std::to_chars instead of std::format because std::format increases the binary size by ~180 KB.
+	static std::string HResultToString(HRESULT hr)
+	{
+		char buf[10] = { '0', 'x' };
+		char* end = std::to_chars(buf + 2, buf + 10, static_cast<uint32_t>(hr), 16).ptr;
+		return std::string(buf, end);
+	}
+
 	static std::string D3D12ErrorMsg(const char* functionName, HRESULT hr)
 	{
-		return std::format("{} returned error code: 0x{:08X}.", functionName, (uint32_t)hr);
+		return std::string(functionName) + " returned error code: " + HResultToString(hr) + ".";
 	}
 
 	D3D12TextureFilter ToD3D12TextureFilter(TextureFilter filter)
